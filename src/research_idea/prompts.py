@@ -10,6 +10,8 @@ def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
     if stage == 'paper_card':
         return '9'
+    if stage == 'review':
+        return '12'
     return "8" if stage in {"read_section", "extract", "inspect_source", "paper_card", "audit_claims"} else PROMPT_VERSION
 
 
@@ -45,6 +47,9 @@ Enumerate ALL required_signals and when needed (training/inference/evaluation): 
 """
 INSTRUCTIONS['paper_card'] += """
 The controller supplies citation_groups to prevent citation-type mixups. Each experiments entry MUST cite at least one reported_result_ids ID; each author_limitations entry MUST cite at least one author_limitation_ids ID. If a group is empty, leave the corresponding array empty. Describe author assertions in the framework, and put your own concerns in analyst_concerns. Do not relabel evidence or invent a result to fill a section. Keep each framework summary to one or two focused sentences; normally choose at most three central components, experiments and opportunities. Spend detail on what changes the user's idea, rather than repeating the same caveats in every field.
+"""
+INSTRUCTIONS['review'] += """
+Before attributing failure to missing learning or proposing more diagnostic experience, inspect the actual observation/action contract. If the current observation already exposes the decision-relevant state, compare a minimal reactive policy that uses it. Where stale experience is the proposed cause, consider the same agent without that old experience. Identify what must genuinely be inferred beyond visible state, and whether a simpler existing procedure already achieves the objective. If it does, improve or reframe the research question; do not manufacture difficulty by hiding normally available information or weakening the baseline. Keep these checks within the three consequential issues, and account for the cost of any added comparisons.
 """
 MOTIVATION_CHECKS = """
 In develop/refine return an explicit motivation object as the current version of the rationale. Explain deliberate reframing in review_responses and assess the current method_spec.motivation; the original candidate records the starting point, not a ban on improving its story.
