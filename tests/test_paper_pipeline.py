@@ -140,7 +140,7 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertLess(first_audit, first_map)
         self.assertLess(first_map, trace.index(("model", "propose")))
         self.assertEqual(len(self.store.rows("papers")), 5)
-        self.assertEqual(sum(call.kwargs["limit"] for call in search.call_args_list), 5)
+        self.assertEqual(sum(call.kwargs["limit"] for call in search.call_args_list), 60)
         map_payload = next(payload for stage, payload in backend.calls if stage == "map")
         self.assertEqual(len(map_payload["paper_claim_audits"]), 5)
         self.assertEqual(len(map_payload["paper_cards"]), 5)
@@ -163,8 +163,8 @@ class PaperPipelineTests(unittest.TestCase):
             candidate = {"id": "candidate-1", "proposal": {"title": "Matched feedback routing", "closest_work_ids": ["batch1-0"]}}
             controller.search_for_candidate(candidate)
         self.assertEqual(len(self.store.rows("papers")), 7)
-        self.assertEqual(search.call_args_list[-1].args[0], "candidate routing matched budget")
-        self.assertEqual(search.call_args_list[-1].kwargs["limit"], 2)
+        self.assertEqual(search.call_args_list[-1].args[0], "candidate routing counterexamples")
+        self.assertEqual(search.call_args_list[-1].kwargs["limit"], 20)
         self.assertIn("candidate", [payload for stage, payload in backend.calls if stage == "plan_search"][-1])
         self.assertEqual(set(self.store.get("search_plans")), {"initial", "candidate-1"})
 
@@ -194,7 +194,8 @@ class PaperPipelineTests(unittest.TestCase):
         with patch("research_idea.literature.discover", side_effect=[[paper("first")], KeyboardInterrupt()]):
             with self.assertRaises(KeyboardInterrupt):
                 self.controller(first, max_papers=6).initial_search()
-        self.assertEqual(len(self.store.rows("papers")), 1)
+        self.assertEqual(len(self.store.rows("papers")), 0)
+        self.assertEqual(len(next(iter(self.store.get("search_ledger").values()))["metadata"]), 1)
         resumed = PipelineBackend()
         with patch("research_idea.literature.discover", side_effect=[[paper("second")], [paper("third")]]) as search:
             self.controller(resumed, max_papers=6).initial_search()

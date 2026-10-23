@@ -15,9 +15,10 @@ DEFAULTS = {
     "max_output_tokens": 8192, "api_max_tokens_field": "max_completion_tokens",
     "codex_bin": "codex", "codex_profile": "", "reasoning_effort": "",
     "skill_paths": [], "skill_roots": [], "skill_max_chars": 48000, "builtin_skills": True,
-    "max_candidates": 3, "max_rounds": 2, "max_papers": 12,
+    "max_candidates": 3, "max_rounds": 2, "max_papers": 6, "search_results_per_query": 20,
     "source_chars": 24000, "search_source": "arxiv", "auto_search": True,
     "deep_reading": True, "max_paper_read_chunks": 3, "max_followup_reads": 2,
+    "search_date_mode": "rolling", "strategy_months": 12, "novelty_months": 6,
     "search_venues": [], "fetch_full_text": True,
     "search_api_key_env": "", "constraints": "Resources unspecified; do not assume GPU access, model weights, logits, labels, or unlimited API budget.",
     **recent_defaults(),
@@ -44,6 +45,16 @@ def _validated_settings(supplied: dict) -> dict:
         raise ValueError(f"Unknown configuration keys: {', '.join(sorted(unknown))}")
     data = {key: list(value) if isinstance(value, list) else value for key, value in DEFAULTS.items()}
     data.update(supplied)
+    # Existing date-only projects retain their explicit window until opted in.
+    if 'search_date_mode' not in supplied and any(key in supplied for key in ('search_since', 'search_until')):
+        data['search_date_mode'] = 'fixed'
+    if data['search_date_mode'] not in {'rolling', 'fixed'}:
+        raise ValueError('search_date_mode must be rolling or fixed')
+    for key in ('strategy_months', 'novelty_months'):
+        if type(data[key]) is not int or not 1 <= data[key] <= 120:
+            raise ValueError(key + ' must be an integer from 1 to 120')
+    if data['novelty_months'] > data['strategy_months']:
+        raise ValueError('novelty_months must not exceed strategy_months')
     for key in ("backend", "model", "api_provider", "base_url", "api_key_env",
                 "api_max_tokens_field", "search_source", "search_api_key_env", "constraints",
                 "codex_bin", "codex_profile", "reasoning_effort"):
@@ -74,9 +85,11 @@ def _validated_settings(supplied: dict) -> dict:
     if data["reasoning_effort"] and data["backend"] != "codex":
         raise ValueError("reasoning_effort currently requires backend=codex; use --reasoning-effort inherit when switching backends")
     for key in ("timeout_s", "max_calls", "max_seconds", "max_candidates", "max_rounds",
-                "max_papers", "source_chars", "max_output_tokens", "skill_max_chars", "max_paper_read_chunks"):
+                "max_papers", "search_results_per_query", "source_chars", "max_output_tokens", "skill_max_chars", "max_paper_read_chunks"):
         if isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] <= 0:
             raise ValueError(f"{key} must be a positive integer")
+    if data["search_results_per_query"] > 100:
+        raise ValueError("search_results_per_query must not exceed 100")
     if data["max_candidates"] > 10 or data["max_rounds"] > 10 or data["max_papers"] > 100:
         raise ValueError("Maximum limits: 10 candidates, 10 rounds, 100 papers")
     if type(data["max_followup_reads"]) is not int or not 0 <= data["max_followup_reads"] <= 10:

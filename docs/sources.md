@@ -28,7 +28,7 @@
 - [OpenReview accepted-note retrieval](https://docs.openreview.net/how-to-guides/data-retrieval-and-modification/how-to-get-all-notes-for-submissions-reviews-rebuttals-etc) / [API v2](https://docs.openreview.net/reference/api-v2/openapi-definition)：COLM 使用录用的 `content.venueid`，保留年份与有限分页范围。
 - [COLM 2026](https://colm.cc/Conferences/2026/CallForPapers)：官方会议与 OpenReview 入口。
 - [ACL Anthology metadata example](https://aclanthology.org/2025.naacl-long.1/)：出版来源、NAACL 全称、DOI 与 PDF 的对应方式。
-- [CCF 人工智能目录](https://www.ccf.org.cn/Academic_Evaluation/AI/)：代码中的 `ccf-a-ai-2022` 固定于 2022 目录的人工智能 A 类七会；网站和后续目录可能更新，因此该预设不声称当前评级或完整 CCF-A 覆盖。
+- [CCF 人工智能目录](https://www.ccf.org.cn/Academic_Evaluation/AI/)：默认使用 CCF 2026 第七版。ICLR 为 A、IJCAI 为 B；2022 预设仅保留兼容。
 
 后端采用已核对文档的接口；2026-10-23 已用真实 Codex CLI 与 `gpt-6.1-sol` 核对结构化输出和重连恢复。Claude/API 真实账户兼容性仍待验证。以后复制第三方代码时，应单独核实许可证、固定版本并保留必要声明。
 
@@ -63,3 +63,24 @@
 | [Karpathy autoresearch，228791f](https://github.com/karpathy/autoresearch/blob/228791fb499afffb54b46200aca536f79142f117/program.md) | 指定固定训练、评测和实验循环；该文件没有文献检索流程 | 实验预算思路；不将它当作文献检索实现 |
 
 核对源码不能证明这些系统的总体研究质量。当前实现仍需评估检索召回、会议索引覆盖、全文读取和实际 idea 的质量。
+
+
+## 本轮构思机制与选文改进（2026-10-23）
+
+以下固定版本作为设计资料阅读，未执行其技能或复制代码。重点是问题与动机，而不是增加角色数量或输出篇幅。
+
+| 参考 | 核对的机制 | 本轮落地 |
+| --- | --- | --- |
+| [IdeaScientist roles，82a98a0](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py) 与 [gap rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py) | 同问题近邻用于找具体缺口，其他问题中的方法用于迁移；阅读摘要是角色间的接口；逐项检查缺口的价值和依据 | 将问题诊断先于方法组合，要求具体失败条件、最强已有替代方案和影响；证据卡跨阶段复用。未移植其 RL 训练或结果屏蔽语料 |
+| [ResearchStudio IdeaSpark，063f100](https://github.com/microsoft/ResearchStudio/blob/063f10088af49909e1a4a7ea8d29efe19633f34e/ResearchStudio-Idea/skills/idea_spark/SKILL.md) | 先构思，再检查已有工作与实施连贯性，修订后核对；独立简单基线；资源上限不因评审改变 | motivation-first 候选复查与必要性测试；报告先显示问题和方法，审计细节折叠。未把文字审阅说成已经执行其公式/实现检查 |
+| [Supervisor-Skills idea-evaluator，a20d76e](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 与 [search strategy](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/deep-research/references/search-strategy.md) | 按研究范式与阶段判断价值、资源和方法；多种关键词视角与未选资料中的盲区线索 | 保留元数据候选池和选文原因，不把未入选资料当作不存在；审查问题价值与原因，而非只检查表格完整 |
+| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | 多源检索，近期与经典工作结合，针对缺口重新查询 | 12/6 个月动态窗口，候选阶段单独检索，保留已知旧近邻；继续使用 gpt-6.1-sol，不暗中引入其他模型 |
+
+## 目录与会议来源核对
+
+- [CCF 2026 目录原文副本](https://dengpingfan.github.io/papers/CCF-Recommend-2026.pdf)：第 57–58 页；[CCF 官方目录入口](https://www.ccf.org.cn/Academic_Evaluation/By_category/)。官方页面当前有浏览器验证，本轮以目录原文核对分级。
+- [清华 TH-CPL 校内原文](https://numbda.cs.tsinghua.edu.cn/~yuwj/TH-CPL.pdf)：2019-08-13 通过，第 11 页人工智能与模式识别 A 类会议。没有把 2019 文件称为 2026 版本。
+- [ICORE2026 官方数据库](https://portal.core.edu.au/conf-ranks/?search=&by=all&source=ICORE2026&sort=arank&page=1)：按等级排序前两页共 62 个 A*。默认仅启用用户指定的 LLM/NLP/Agent 子集。
+- [CCFDDL](https://github.com/ccfddl/ccf-deadlines)：提供 CCF/CORE/THCPL 三套筛选和会议主页、时间，作为人工查阅入口；评级采用上述明确版本的原文。
+- [OpenAlex 错误说明](https://help.openalex.org/api/errors/)：429 可能是速率或每日额度；403 不应无限重试。本轮实测 429 的剩余额度为 0，Retry-After 超过十小时。
+- [COLM 2026 官方录用列表](https://colm.cc/Conferences/2026/AcceptedPapers)、[ICLR 2026 论文列表](https://iclr.cc/virtual/2026/papers.html)、[ACL 2026 长文集](https://aclanthology.org/2026.acl-long/)、[PMLR 目录](https://proceedings.mlr.press/)、[NeurIPS 2025 主会](https://papers.nips.cc/paper_files/paper/2025/vol38-main-conference)：索引 API 受限时的公开替代来源。只记录目录实际提供的信息。

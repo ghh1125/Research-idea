@@ -10,11 +10,13 @@ Use the supplied topic, constraints, evidence, candidate, and current task schem
 ## Steps
 
 1. Identify one observable bottleneck and its conditions. Separate source-backed observations from author interpretations and your inferred explanation. Attach existing evidence IDs to supported facts; state missing evidence explicitly.
-2. Establish the consequence: what important capability, practical use, or scientific understanding is blocked? Describe why resolving this problem would matter even if the favored technique failed. Do not manufacture a problem around that technique.
+2. Before proposing a method, describe a concrete case: input/situation, current response, observed failure and consequence. A paper not trying a certain combination is not evidence of a problem. Establish the consequence: what important capability, practical use, or scientific understanding is blocked? Describe why resolving this problem would matter even if the favored technique failed. Do not manufacture a problem around that technique.
 3. Reconstruct the strongest available alternative. Identify its assumption, what it already explains, and the specific remaining limitation. Similar titles trigger comparison, not abandonment; unknown full-text details remain unknown.
+   Separate motivation novelty from method novelty. The main overlap question is whether the same observed difficulty, causal rationale and intended scientific claim are already addressed. Reusing an existing method is acceptable. Reframe the story around a different evidence-backed problem, explanation or boundary when justified; state the change and a discriminating prediction rather than merely changing terminology.
 4. Connect the proposed intervention to a testable cause. Ask which observable should change if that cause is correct, and which competing explanation predicts something else. Treat the causal link as a hypothesis until supported.
 5. Explain expected progress beyond an arbitrary metric delta. Efficiency can be substantive when it removes a binding constraint; a new explanation or failure boundary can matter without improving accuracy. Neither an added module nor a renamed tradeoff establishes progress alone.
-6. Specify the simplest alternative and a necessity test that could show the proposed mechanism adds nothing. During refinement preserve the original problem, hypothesis, and prediction; expose any required change rather than silently reframing success.
+6. Challenge the motivation with the strongest plausible counterargument: misread evidence, a low-value failure, an existing simple solution, or an intervention unrelated to the cause. Resolve the specific objection before polishing the story. Do not replace this reasoning with an overall score.
+7. Specify the simplest alternative and a necessity test that could show the proposed mechanism adds nothing. During refinement preserve the original problem, hypothesis, and prediction; expose any required change rather than silently reframing success.
 
 ## Output
 

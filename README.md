@@ -72,6 +72,11 @@ research-idea chat --project ./research-projects/my-idea
 | `/constraints 单卡24GB，两周` | 保存资源限制 |
 | `/scope ai-recent`、`/scope local` | 最近 AI 会议加 CS arXiv，或仅本地资料 |
 | `/scope 2025-01-01 2026-10-23` | 指定发表日期范围 |
+| `/date`、`/date rolling 12 6` | 找方法看近 12 个月，动机查重看近 6 个月；运行时动态计算 |
+| `/date fixed 2025-01-01 2026-10-23` | 使用固定时间范围；查重在该范围内取最近 6 个月 |
+| `/venues`、`/venues ACL COLM ICLR` | 查看分级来源，或选择会议 |
+| `/budget search_results_per_query 20` | 每个检索式召回的元数据量，不会全部精读 |
+| `/budget max_papers 6` | 全流程论文阅读上限；默认初轮 3 篇，候选阶段再补最多 3 篇 |
 | `/budget`、`/budget max_calls 100` | 查看/修改预算；讨论与研究共用调用与时间预算 |
 | `/config`、`/open 项目目录` | 查看配置、打开已有或新项目 |
 | `/help`、`/exit` | 帮助和退出 |
@@ -288,7 +293,8 @@ research-idea start "conflicting evidence in language models" \
 ```
 
 - `--venues` 自动选择 OpenAlex 路由；会议身份来自出版来源元数据，不从论文标题推测。COLM 按 OpenReview 的已录用 `venueid` 读取，最近最多三届、每届有限分页，再用标题和摘要的英文关键词匹配排序。这不是完整语义检索。
-- 支持 ACL、AAAI、IJCAI、NeurIPS、ICML、CVPR、ICCV，也支持 EMNLP、NAACL、COLM 和 ICLR。`ccf-a-ai-2022` 是明确带年份的 **CCF 2022 人工智能 A 类会议子集**；不代表全部 CCF-A 或实时评级。默认不限会议的检索也可返回其他出版来源。
+- `ai-recent` / `ai-recommended` 默认限定为 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI、AAMAS。ICAPS、KR、UAI 不在默认范围。其他会议可显式选择，不自动把整个评级目录加入任务。
+- 分别记录 CCF 2026、ICORE2026、TH-CPL 2019 评级来源。CCF 2026 的 ICLR 为 A、IJCAI 为 B；COLM 为单独关注会议。清华版本对应已核实的校内公开文件，不声称是 2026 修订。`ccf-a-ai-2026`、`tsinghua-a-ai-2019`、`core-astar-ai-2026` 是有版本的范围预设；`core-astar-2026` 提供完整 62 个 A* 会议供显式选择。`ccf-a-ai-2022` 只为旧配置兼容保留。
 - 显式会议筛选针对主会议；Findings、workshop、demo、industry 等不被冒认为主会。解析不到会议来源、分页截断或服务失败会记录在 `coverage.gaps`，不会退回无过滤搜索并冒称命中指定会议。
 - `search --full-text` 尝试下载允许的公开学术来源 PDF 并提取正文；未加此参数的手动搜索只导入元数据和摘要。需要 Poppler `pdftotext`。OpenReview 等来源可能要求浏览器校验；无法直接读取时记录缺口，可自行取得 PDF 后用 `add` 导入。
 - `start/run` 默认尝试获取摘要记录对应的全文；`--no-fetch-full-text` 关闭下载，`--no-search` 只使用已导入材料，也关闭自动全文下载。
@@ -367,6 +373,14 @@ max_output_tokens = 8192
 
 使用原生 `/messages` 和结构化输出协议。更换 provider 时应同步修改已写入配置的 endpoint/key；用户显式配置值会被保留。
 
+## 先筛选，再围绕问题阅读
+
+默认每个检索式召回最多 20 篇元数据；1–3 个检索式合并去重，先用标题/摘要与英文检索式的词项相关度分档，再在同档内按发表时间倒序。该排序不调用模型，也不作创新性判断。只给入选的 top-k 获取全文；默认总量 6 篇，初轮 3 篇用于形成问题与方法，剩余名额用于候选 motivation 的针对性检索。已知较老近邻不会因滚动时间窗口而删除。读取仍有每篇分块与补读预算。
+
+找方法与查重共享已读证据，但问题不同：前者找可迁移策略，后者比较问题现象、限制条件、原因解释与研究主张。方法相似不淘汰候选；新的故事必须形成不同的研究问题或可检验预测。输出优先说明问题、动机、现有方法不足、原因解释、具体方法和第一步验证；内部审阅状态保留在详细记录中。
+
+HTTP 429 遵守 `Retry-After`；较长配额等待不阻塞本轮，而是暂停该服务并使用替代来源。403 不反复重试。成功元数据缓存 24 小时，相同项目多次查询复用会议目录。OpenAlex/OpenReview 索引不可用时，可回退 ACL Anthology、PMLR、NeurIPS 主会目录、ICLR 论文列表及 COLM 官方录用列表。仅入选的 ICLR/COLM 论文再解析全文链接；COLM 的预印本匹配要求标题精确规范化相等。会议目录有时只给月份或年份，保留原始精度，不编造日级日期。
+
 ## 论文怎么分析
 
 全文阅读默认启用。先定位章节及图表/公式标记，分块读取方法、实验和可用附录，再形成九维分析卡：**问题、动机、洞见、方法、已有工作差异、实验设计、结果、结论边界、研究启发**。每个维度区分原文支持、模型分析、证据不足和不适用；不会要求理论论文提供不存在的实验。
@@ -388,7 +402,11 @@ PDF 使用 Poppler 的默认阅读顺序抽取，保留分页；不使用会把�
 ```toml
 max_candidates = 3
 max_rounds = 2
-max_papers = 12
+max_papers = 6
+search_results_per_query = 20
+search_date_mode = "rolling"
+strategy_months = 12
+novelty_months = 6
 max_calls = 80
 max_seconds = 3600
 timeout_s = 180

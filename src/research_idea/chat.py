@@ -38,6 +38,8 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /status                 研究状态      /report       显示 idea 方案
 /config                 当前设置      /constraints [文字] 资源限制
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
+/venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
+/date                   时间窗口：动态策略/查重窗口，或固定日期
 /open 项目目录           切换项目      /history      最近对话
 /help                   命令说明      /exit         退出
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止/清空'''
@@ -48,7 +50,8 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'evidence': 'ansigreen', 'analysis': 'ansiyellow', 'thinking': 'ansiyellow',
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
-BUDGET_KEYS = ('max_papers', 'max_candidates', 'max_rounds', 'max_calls', 'max_seconds', 'timeout_s')
+COLORS.update(strategy='ansicyan', novelty='ansimagenta')
+BUDGET_KEYS = ('search_results_per_query', 'max_papers', 'max_candidates', 'max_rounds', 'max_calls', 'max_seconds', 'timeout_s')
 BRAND = r'''             R E S E A R C H
 
        ___ ____  _____    _
@@ -396,17 +399,51 @@ class Chat:
                 self.settings(**{key: int(number)})
             else:
                 self.show('system', '\n'.join(f'{k} = {self.cfg[k]}' for k in BUDGET_KEYS) + '\n例如 /budget max_calls 100')
+        elif command == '/venues':
+            from .venues import normalize_venues, supported_venues
+            if value:
+                self.idle_required()
+                self.settings(search_venues=normalize_venues(value.split()), search_source='hybrid')
+            else:
+                selected = set(self.cfg['search_venues'])
+                rows = [row for row in supported_venues() if row['code'] in selected]
+                self.show('search', '\n'.join(f"{r['code']}: CCF2026 {r.get('ccf_2026_ai_grade') or '—'} · CORE2026 {r.get('core_2026_grade') or '—'} · THCPL2019 {r.get('tsinghua_2019_ai_grade') or '—'}" for r in rows)
+                          + '\n预设：ai-recommended / ccf-a-ai-2026 / tsinghua-a-ai-2019 / core-astar-ai-2026；也可 /venues ACL COLM ICLR')
+        elif command == '/date':
+            self.idle_required()
+            from .search_scope import config_scope
+            strategy, novelty = config_scope(self.cfg), config_scope(self.cfg, 'novelty')
+            self.show('system', f"日期模式：{self.cfg['search_date_mode']}\n找策略：{self.cfg['strategy_months']} 个月 · {strategy['since']} → {strategy['until']}\n查重：{self.cfg['novelty_months']} 个月 · {novelty['since']} → {novelty['until']}\n动态窗口每次运行按当天计算；已知机制近邻仍保留。")
+            if not value:
+                choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期'])
+                if choice == '动态窗口':
+                    months = await self.session.prompt_async('策略月数 查重月数 [12 6] › ')
+                    value = 'rolling ' + (months.strip() or '12 6')
+                elif choice == '固定日期':
+                    dates = await self.session.prompt_async('起始日期 截止日期 YYYY-MM-DD › ')
+                    value = 'fixed ' + dates.strip()
+                elif choice not in {'', '返回'}:
+                    raise ValueError('请选择编号，或 /date rolling 12 6、/date fixed 起始日期 截止日期')
+            if value:
+                fields = shlex.split(value)
+                if fields[0] == 'rolling' and len(fields) in {1, 3}:
+                    strategy_months, novelty_months = map(int, fields[1:] or [12, 6])
+                    self.settings(search_date_mode='rolling', strategy_months=strategy_months, novelty_months=novelty_months)
+                elif fields[0] == 'fixed' and len(fields) == 3:
+                    self.settings(search_date_mode='fixed', search_since=fields[1], search_until=fields[2])
+                else:
+                    raise ValueError('/date rolling 12 6 或 /date fixed YYYY-MM-DD YYYY-MM-DD')
         elif command == '/scope':
-            from .search_scope import recent_defaults, AI_VENUES
+            from .search_scope import recent_defaults, AI_VENUES, config_scope
             if value == 'ai-recent':
-                self.settings(**recent_defaults(), search_source='hybrid', search_venues=list(AI_VENUES), auto_search=True)
+                self.settings(**recent_defaults(), search_source='hybrid', search_venues=list(AI_VENUES), auto_search=True, search_date_mode='rolling')
             elif value == 'local':
                 self.settings(auto_search=False)
             elif value:
                 since, until = shlex.split(value)
-                self.settings(search_since=since, search_until=until)
+                self.settings(search_since=since, search_until=until, search_date_mode='fixed')
             else:
-                self.show('search', f"{self.cfg['search_since']} → {self.cfg['search_until']} · {self.cfg['search_source']} · 自动检索 {self.cfg['auto_search']}\n/scope ai-recent | local | YYYY-MM-DD YYYY-MM-DD")
+                self.show('search', f"{config_scope(self.cfg)['since']} → {config_scope(self.cfg)['until']} · {self.cfg['search_source']} · 自动检索 {self.cfg['auto_search']}\n/scope ai-recent | local | YYYY-MM-DD YYYY-MM-DD")
         elif command == '/open':
             self.idle_required()
             if not value:

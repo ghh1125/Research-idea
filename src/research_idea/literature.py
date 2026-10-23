@@ -22,6 +22,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from .retrieval_transport import retrieval_session, request_with_policy, retry_seconds
 from .search_scope import AI_VENUES, normalize_scope, exclusion_reason
 import xml.etree.ElementTree as ET
 
@@ -188,7 +189,7 @@ class _SameHostRedirect(HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
-def _request_bytes(url: str, timeout_s: float, headers: dict[str, str] | None = None) -> bytes:
+def _request_bytes_once(url: str, timeout_s: float, headers: dict[str, str] | None = None) -> bytes:
     request = Request(url, headers={"User-Agent": "research-idea/0.1", "Accept": "application/json, application/atom+xml", **(headers or {})})
     deadline = time.monotonic() + timeout_s
     try:
@@ -211,12 +212,20 @@ def _request_bytes(url: str, timeout_s: float, headers: dict[str, str] | None = 
     except HTTPError as exc:
         # Do not echo URLs, bodies, headers, or API credentials in error strings.
         hint = " Check API authentication or provider quota." if exc.code in {401, 403, 429} else ""
-        raise LiteratureError(f"Literature service returned HTTP {exc.code}.{hint}") from None
+        failure = LiteratureError(f"Literature service returned HTTP {exc.code}.{hint}")
+        failure.status = exc.code
+        failure.retry_after = retry_seconds(exc.headers)
+        exc.close()
+        raise failure from None
     except (URLError, TimeoutError, OSError):
         raise LiteratureError("Literature service could not be reached within the request limits") from None
     if len(data) > MAX_RESPONSE_BYTES:
         raise LiteratureError("Literature response exceeds the download size limit")
     return data
+
+
+def _request_bytes(url, timeout_s, headers=None):
+    return request_with_policy(_request_bytes_once, url, timeout_s, headers, LiteratureError)
 
 
 def _abstract(index: Any) -> str:
@@ -460,6 +469,7 @@ def _filter_scope(papers, scope, coverage, source):
     return kept
 
 
+@retrieval_session
 def discover(query: str, source: str = "arxiv", limit: int = 10,
              timeout_s: float = 30, api_key_env: str | None = None,
              venues: list[str] | None = None, since: str = "", until: str = "",
@@ -578,7 +588,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
     pools = {venue: [] for venue in venues}
     # Reserve half the total time for each provider when both were requested.
     other_venues = [venue for venue in venues if venue != "COLM"]
-    alex_deadline = time.monotonic() + _remaining(deadline) / 2 if "COLM" in venues and other_venues else deadline
+    alex_deadline = time.monotonic() + _remaining(deadline) * 0.35 if venues else deadline
     resolved = _openalex_sources(other_venues, alex_deadline, headers, coverage) if other_venues else {}
     # Fetch a bounded page per requested venue: a prolific venue must not crowd
     # another out before the final round-robin selection.
@@ -623,7 +633,17 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
                 raise
             coverage["gaps"].append(f"OpenAlex works {requested_venue}: {exc}")
     if "COLM" in venues:
-        pools["COLM"] = _discover_colm(query, limit, deadline, coverage)
+        pools["COLM"] = _discover_colm(query, limit, min(deadline, time.monotonic() + 5), coverage)
+    failed_index = any(any(marker in gap for marker in ('HTTP ', 'cooldown', 'could not be reached', 'time budget exhausted')) for gap in coverage['gaps'])
+    if venues and failed_index and time.monotonic() < deadline:
+        from .proceedings import discover_proceedings
+        missing = [venue for venue in venues if not pools[venue]]
+        try:
+            fallback = discover_proceedings(query, missing, limit, deadline, scope, coverage)
+            for paper in fallback:
+                pools[paper['venue']].append(paper)
+        except LiteratureError as exc:
+            coverage['gaps'].append(f'Official proceedings fallback: {exc}')
     if venues:
         papers = _interleave(list(pools.values()), limit)
         coverage["matched_counts"] = {venue: len(pool) for venue, pool in pools.items()}

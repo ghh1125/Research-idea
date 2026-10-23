@@ -32,6 +32,20 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    async def test_date_and_shortlist_settings_are_editable(self):
+        await self.chat.handle('/date rolling 12 6')
+        self.assertEqual(load_config(self.project)['novelty_months'], 6)
+        await self.chat.handle('/date fixed 2025-01-01 2026-10-23')
+        self.assertEqual(load_config(self.project)['search_date_mode'], 'fixed')
+        with self.assertRaises(ValueError):
+            await self.chat.handle('/date rolling 6 12')
+        await self.chat.handle('/budget search_results_per_query 30')
+        self.assertEqual(load_config(self.project)['search_results_per_query'], 30)
+        await self.chat.handle('/venues ACL COLM ICLR')
+        self.assertEqual(load_config(self.project)['search_venues'], ['ACL', 'COLM', 'ICLR'])
+        await self.chat.handle('/venues')
+        self.assertIn('ICLR: CCF2026 A', self.events[-1][1])
+
     async def test_settings_persist_and_invalid_strength_preserves_config(self):
         await self.chat.handle('/model custom-model')
         await self.chat.handle('/reasoning high')

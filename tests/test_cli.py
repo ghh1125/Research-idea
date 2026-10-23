@@ -133,6 +133,21 @@ class CLIIntegrationTests(unittest.TestCase):
             self.assertEqual(main(['launch', '--project', str(self.project)]), 1)
         self.assertFalse(self.project.exists())
 
+    def test_interactive_search_defaults_to_rolling_and_explicit_dates_stay_fixed(self):
+        for suffix, extra, answers, expected in [
+            ('rolling', [], ['topic', '1', '4', '', '1', '1', '', '1'], 'rolling'),
+            ('fixed', ['--since', '2026-01-01', '--until', '2026-10-01'],
+             ['topic', '1', '4', '', '1', '', '1'], 'fixed'),
+        ]:
+            project = self.project / suffix
+            with patch('sys.stdin.isatty', return_value=True), patch('builtins.input', side_effect=answers), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                self.assertEqual(main(['launch', '--project', str(project), '--setup-only', *extra]), 0)
+            cfg = load_config(project)
+            self.assertEqual(cfg['search_date_mode'], expected)
+            self.assertEqual((cfg['strategy_months'], cfg['novelty_months']), (12, 6))
+            if expected == 'fixed':
+                self.assertEqual((cfg['search_since'], cfg['search_until']), ('2026-01-01', '2026-10-01'))
+
     def test_launcher_binary_default_preserves_saved_and_explicit_selection(self):
         with patch.dict(os.environ, {'RESEARCH_IDEA_CODEX_BIN': '/tmp/local-codex-wrapper'}), redirect_stdout(io.StringIO()):
             self.assertEqual(main(['start', 'topic', '--project', str(self.project), '--setup-only']), 0)

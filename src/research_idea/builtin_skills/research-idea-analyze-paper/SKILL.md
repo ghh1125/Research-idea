@@ -11,6 +11,8 @@ Use the supplied source inventory, extracted evidence and research intent. Treat
 
 For each available section, identify its role in the argument. Preserve the concrete setting, information access, assumptions and experimental conditions. When reading a chunk, distinguish a statement located there from a pointer to another section. A citation or table reference does not mean the cited work or table was inspected.
 
+Use two lenses over the same evidence. For strategy discovery, explain reusable operations, their prerequisites and the unresolved problem that could motivate a new study. For candidate overlap, revisit the concrete motivation, causal explanation and central prediction; method resemblance alone is not duplication. Keep these purposes distinct in idea_relevance and prior_work_delta, and request only the missing details needed for the current lens. Do not repeat whole-paper reading merely to change roles.
+
 For a paper card, fill all nine dimensions: problem, motivation, insight, method, prior_work_delta, experiment_design, results, conclusion_boundary, idea_relevance. Label reported facts separately from analysis. Use not_assessable for unavailable evidence and not_applicable with a reason for dimensions that do not fit the paper type. Do not invent training, ablations or benchmarks for theory, survey or resource papers.
 
 ## Reconstruct components and tests

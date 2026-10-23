@@ -109,10 +109,22 @@ def configure_launch(args):
             args.no_search, args.auto_search = True, False
     if not args.no_search:
         dates = recent_defaults() if not existing or args.literature_preset else cfg
-        if args.since is None:
-            args.since = ask('论文起始日期 YYYY-MM-DD', dates['search_since'])
-        if args.until is None:
-            args.until = ask('论文截止日期 YYYY-MM-DD', dates['search_until'])
+        if args.search_date_mode is None:
+            if args.since is not None or args.until is not None:
+                args.search_date_mode = 'fixed'
+            else:
+                default_mode = 'rolling' if args.literature_preset else cfg['search_date_mode']
+                args.search_date_mode = ['rolling', 'fixed'][choose(
+                    '文献时间范围', ['动态：方法近一年 / 动机查重近半年', '固定日期'],
+                    0 if default_mode == 'rolling' else 1)]
+        if args.search_date_mode == 'fixed':
+            if args.since is None:
+                args.since = ask('论文起始日期 YYYY-MM-DD', dates['search_since'])
+            if args.until is None:
+                args.until = ask('论文截止日期 YYYY-MM-DD', dates['search_until'])
+        else:
+            print(f'每次运行自动更新日期：方法近 {args.strategy_months or cfg["strategy_months"]} 个月；'
+                  f'动机查重近 {args.novelty_months or cfg["novelty_months"]} 个月。可在对话中用 /date 修改。')
     if args.constraints is None:
         args.constraints = ask('资源限制（如单卡24GB、两周；未知可回车）', cfg['constraints'])
     budget = {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2,

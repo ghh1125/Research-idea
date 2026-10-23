@@ -2,16 +2,25 @@
 from __future__ import annotations
 
 from datetime import date
+import calendar
 import fnmatch
 import re
 
-AI_VENUES = ["NeurIPS", "ICML", "ICLR", "ACL", "EMNLP", "NAACL", "COLM", "AAAI", "IJCAI"]
+from .venues import DEFAULT_AI_VENUES
+
+AI_VENUES = list(DEFAULT_AI_VENUES)
 
 
 def recent_defaults() -> dict:
     today = date.today()
-    return {"search_since": f"{today.year - 1}-01-01", "search_until": today.isoformat(),
+    return {"search_since": months_before(today, 12).isoformat(), "search_until": today.isoformat(),
             "search_cs_only": True, "arxiv_categories": ["cs.*"]}
+
+
+def months_before(day, months):
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    month += 1
+    return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
 
 
 def normalize_scope(since="", until="", cs_only=False, arxiv_categories=None) -> dict:
@@ -41,8 +50,17 @@ def normalize_scope(since="", until="", cs_only=False, arxiv_categories=None) ->
     return {**values, "cs_only": cs_only, "arxiv_categories": list(dict.fromkeys(categories))}
 
 
-def config_scope(config: dict) -> dict:
-    return normalize_scope(config.get("search_since", ""), config.get("search_until", ""),
+def config_scope(config: dict, purpose='strategy') -> dict:
+    since, until = config.get('search_since', ''), config.get('search_until', '')
+    if config.get('search_date_mode') == 'rolling':
+        end = date.today()
+        until = end.isoformat()
+        months = config.get('novelty_months', 6) if purpose == 'novelty' else config.get('strategy_months', 12)
+        since = months_before(end, months).isoformat()
+    elif purpose == 'novelty':
+        end = date.fromisoformat(until) if until else date.today()
+        since = max(since, months_before(end, config.get('novelty_months', 6)).isoformat())
+    return normalize_scope(since, until,
                            config.get("search_cs_only", False), config.get("arxiv_categories", []))
 
 
@@ -55,10 +73,23 @@ def exclusion_reason(paper: dict, scope: dict, source: str, *, verified_venue=Fa
         except ValueError:
             parsed = None
         if parsed is None:
-            return "missing or invalid publication date"
-        if scope["since"] and published < scope["since"]:
+            period = paper.get('publication_period', '')
+            if paper.get('source') != 'official_proceedings' or not re.fullmatch(r'\d{4}(?:-\d{2})?', period):
+                return "missing or invalid publication date"
+            try:
+                year, month = int(period[:4]), int(period[5:]) if len(period) == 7 else 1
+                lower = date(year, month, 1).isoformat()
+                upper_month = month if len(period) == 7 else 12
+                upper = date(year, upper_month, calendar.monthrange(year, upper_month)[1]).isoformat()
+            except ValueError:
+                return "missing or invalid publication date"
+            if (scope['since'] and upper < scope['since']) or (scope['until'] and lower > scope['until']):
+                return "publication period outside requested window"
+            paper['date_window_match'] = 'period_overlap'
+            published = None
+        if published and scope["since"] and published < scope["since"]:
             return "publication date before requested window"
-        if scope["until"] and published > scope["until"]:
+        if published and scope["until"] and published > scope["until"]:
             return "publication date after requested window"
     if source == "arxiv":
         categories = paper.get("categories", [])

@@ -132,7 +132,7 @@ class RevisionFlowTests(unittest.TestCase):
         backend = ScriptedBackend(lambda _: method_spec(), lambda _: review_spec("search"))
         controller = self.controller(backend, max_rounds=3)
         searches = []
-        def search(query, reason):
+        def search(query, reason, **kwargs):
             searches.append(query)
             if len(searches) != 1:
                 return False
@@ -152,7 +152,7 @@ class RevisionFlowTests(unittest.TestCase):
         backend = ScriptedBackend(lambda _: method_spec(), lambda _: review_spec("search"))
         controller = self.controller(backend, max_rounds=3)
         searches = []
-        def search(query, reason):
+        def search(query, reason, **kwargs):
             searches.append(query)
             if len(searches) != 2:
                 return False

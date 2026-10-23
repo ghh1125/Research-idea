@@ -18,6 +18,7 @@ from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAM
 from .claims import assess_claims, current_claim_audits
 from .search_planning import normalize_search_plan
 from .search_scope import config_scope
+from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
 
 
@@ -155,6 +156,7 @@ class Controller:
         self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
         self.store.set("active_search_scope", {"source": config["search_source"],
                        "venues": config.get("search_venues", []), **config_scope(config)})
+        self.store.set('active_search_windows', {purpose: config_scope(config, purpose) for purpose in ('strategy', 'novelty')})
         if self.store.get("active_skills") != self.skill_manifest:
             self.store.set("active_skills", self.skill_manifest)
             self.store.event("skills_loaded", {"skills": self.skill_manifest})
@@ -267,6 +269,7 @@ class Controller:
         return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
                 "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
+                "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
                 "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
                 "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "content_kind", "full_text_error")} for p in papers],
@@ -274,6 +277,14 @@ class Controller:
                                    if entry.get("status") != "completed"],
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
                                     for entry in searches[-100:]], "evidence": evidence}
+
+    def reading_papers(self):
+        papers = self.store.rows('papers')
+        if len(papers) <= self.config['max_papers']:
+            return papers
+        queries = [q['query'] for plan in self.store.get('search_plans', {}).values() for q in plan.get('queries', [])]
+        ranked = rank_metadata(papers, queries or [self.store.get('topic', '')])
+        return ranked[:self.config['max_papers']]
 
     def retrieve_full_texts(self, selected_ids=None):
         """Acquire bounded source text; a failed download remains an evidence gap."""
@@ -283,7 +294,7 @@ class Controller:
             return False
         changed = False
         ledger = self.store.get("full_text_ledger", {})
-        for paper in self.store.rows("papers")[:self.config["max_papers"]]:
+        for paper in self.reading_papers():
             if selected_ids is not None and paper["id"] not in selected_ids:
                 continue
             if paper.get("content_kind") != "abstract":
@@ -292,14 +303,18 @@ class Controller:
             previous = ledger.get(key, {})
             if key in self.full_text_attempted or previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
                 continue
-            remaining = self.check_budget()
+            self.check_budget()
             entry = {"paper_id": paper["id"], "status": "started", "time": now(),
                      "attempts": previous.get("attempts", 0) + 1}
             ledger[key] = entry
             self.store.set("full_text_ledger", ledger)
             self.full_text_attempted.add(key)
             try:
-                enriched = fetch_full_text(paper, timeout_s=min(30, remaining))
+                if paper.get('source') == 'official_proceedings' and not paper.get('pdf_url'):
+                    from .proceedings import enrich_selected
+                    paper = enrich_selected(paper, timeout_s=min(15, self.check_budget()))
+                    self.store.put('papers', paper)
+                enriched = fetch_full_text(paper, timeout_s=min(30, self.check_budget()))
                 if enriched.get("content_kind") != "full_text" or not enriched.get("text", "").strip():
                     raise LiteratureError(enriched.get("full_text_error") or "No full text was extracted")
                 enriched["id"] = paper["id"]  # Keep existing evidence references stable.
@@ -322,12 +337,12 @@ class Controller:
         deep = self.config.get("deep_reading", True) and self.config["backend"] != "demo"
         self.extract_papers(skip_full_text=deep)
         if deep:
-            for paper in self.store.rows("papers"):
+            for paper in self.reading_papers():
                 if paper.get("content_kind") == "full_text":
                     read_paper(self, paper)
 
     def extract_papers(self, skip_full_text=False):
-        for paper in self.store.rows("papers"):
+        for paper in self.reading_papers():
             if skip_full_text and paper.get("content_kind") == "full_text":
                 continue
             text = paper.get("text") or paper.get("abstract") or ""
@@ -355,7 +370,7 @@ class Controller:
         audits = {}
         self.store.set("paper_claim_audits", audits)
         evidence = self.store.rows("evidence")
-        for paper in self.store.rows("papers"):
+        for paper in self.reading_papers():
             own_evidence = [e for e in evidence if e["paper_id"] == paper["id"]]
             if paper.get("content_kind") != "full_text" or not own_evidence:
                 audits[paper["id"]] = {"paper_id": paper["id"], "status": "insufficient_evidence",
@@ -378,7 +393,8 @@ class Controller:
     def plan_search(self, candidate=None):
         payload = {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
                    "venues": self.config.get("search_venues", []), "source": self.config["search_source"],
-                   "filters": config_scope(self.config)}
+                   "filters": config_scope(self.config, 'novelty' if candidate else 'strategy'),
+                   "purpose": 'recent_candidate_overlap' if candidate else 'strategy_discovery'}
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
         result = self.task("plan_search", payload, normalize_search_plan)
@@ -392,35 +408,30 @@ class Controller:
     def initial_search(self):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
+        self.progress('[strategy] 寻找可迁移策略、问题现象与候选动机；' + str(config_scope(self.config)))
         # Reserve corpus capacity for hypothesis-specific searches after brainstorming.
         target = max(1, self.config["max_papers"] // 2)
         if len(self.store.rows("papers")) >= target:
             return
         plan = self.plan_search()
-        quota = max(1, (target + len(plan["queries"]) - 1) // len(plan["queries"]))
+        keys = []
         for query in plan["queries"]:
-            room = target - len(self.store.rows("papers"))
-            if room <= 0:
-                break
-            self.search_once(query["query"], "initial: " + query["rationale"], max_new=min(room, quota))
+            keys.append(self.search_once(query["query"], "initial: " + query["rationale"], max_new=0))
+        self.select_search_results(keys, target - len(self.store.rows("papers")))
 
     def search_for_candidate(self, candidate):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
+        self.progress('[novelty] 围绕候选 motivation、解释与核心主张查重；' + str(config_scope(self.config, 'novelty')))
         room = self.config["max_papers"] - len(self.store.rows("papers"))
         if room <= 0:
             return
         plan = self.plan_search(candidate)
         quota = max(1, self.config["max_papers"] // (2 * self.config["max_candidates"]))
-        changed = False
         before_ids = {p["id"] for p in self.store.rows("papers")}
-        start_count = len(before_ids)
-        for query in plan["queries"]:
-            allowance = quota - (len(self.store.rows("papers")) - start_count)
-            if allowance <= 0:
-                break
-            changed = self.search_once(query["query"], "candidate " + candidate["id"] + ": " + query["rationale"], max_new=allowance) or changed
-        if changed:
+        keys = [self.search_once(query["query"], "candidate " + candidate["id"] + ": " + query["rationale"],
+                                 max_new=0, purpose='novelty') for query in plan["queries"]]
+        if self.select_search_results(keys, min(room, quota)):
             self.read_papers()
         new_ids = [p["id"] for p in self.store.rows("papers") if p["id"] not in before_ids]
         candidate["retrieved_work_ids"] = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + new_ids))
@@ -428,6 +439,7 @@ class Controller:
     def focus_sources(self, candidate):
         """Re-read methods for this hypothesis; related titles only select reading targets."""
         closest = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + candidate["proposal"].get("closest_work_ids", [])))
+        self.progress('[novelty] 定向比较已知近邻：方法相似仅是阅读入口；重点检查问题动机、因果解释和可检验主张。')
         papers = {p["id"]: p for p in self.store.rows("papers")}
         selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
         scope = digest(candidate["proposal"])
@@ -451,59 +463,71 @@ class Controller:
                               extraction_scope=scope)
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
 
-    def search_once(self, query, reason, max_new=None):
-        from .literature import discover, deduplicate, arxiv_query_expression
+    def select_search_results(self, keys, limit):
+        from .literature import deduplicate
+        ledger = self.store.get("search_ledger", {})
+        entries = [ledger[key] for key in keys if key in ledger]
+        records = deduplicate([paper for entry in entries for paper in entry.get("metadata", [])])
+        ranked = rank_metadata(records, [entry["query"] for entry in entries])
+        papers = self.store.rows("papers")
+        selected, added, updated = set(), 0, 0
+        for paper in ranked:
+            aliases = set(paper['aliases'])
+            existing = next((p for p in papers if aliases.intersection(p.get('aliases', [p['id']]))), None)
+            if existing:
+                merged = deduplicate([existing, paper])[0]
+                merged['id'] = existing['id']
+                selected.add(existing['id'])
+                if merged != existing:
+                    self.store.put('papers', merged)
+                    updated += 1
+            elif added < limit and len(papers) < self.config['max_papers']:
+                self.store.put('papers', paper)
+                papers.append(paper)
+                selected.add(paper['id'])
+                added += 1
+        audit = {'time': now(), 'queries': [entry['query'] for entry in entries],
+                 'screened': len(ranked), 'selected_ids': sorted(selected), 'limit': limit,
+                 'ranking': [{'paper_id': p['id'], 'title': p['title'], **p['selection']} for p in ranked]}
+        selections = self.store.get('paper_selections', [])
+        self.store.set('paper_selections', (selections + [audit])[-100:])
+        self.progress(f"[search] 摘要池 {len(ranked)} 篇；按相关度档位、日期排序，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
+        for paper in papers:
+            if paper['id'] in selected:
+                self.progress(f"[paper] {paper['title']} · {paper.get('publication_date') or paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}")
+        hydrated = self.retrieve_full_texts(selected)
+        return bool(added or updated or hydrated)
+
+    def search_once(self, query, reason, max_new=None, purpose='strategy'):
+        from .literature import discover, arxiv_query_expression
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return False
-        # Successful searches are cached; interrupted/transient failures get one retry.
         venues = self.config.get("search_venues", [])
         expression = arxiv_query_expression(query) if self.config["search_source"] == "arxiv" else query
-        scope = config_scope(self.config)
-        key = digest([expression, self.config["search_source"], venues, scope])
+        scope = config_scope(self.config, purpose)
+        recall = self.config.get('search_results_per_query', 20)
+        key = digest([expression, self.config["search_source"], venues, scope, recall])
         ledger = self.store.get("search_ledger", {})
         previous = ledger.get(key, {})
         if previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
-            return False
-        papers = self.store.rows("papers")
-        room = self.config["max_papers"] - len(papers)
-        if room <= 0:
-            return False
+            return key if max_new == 0 else False
         self.check_budget()
-        ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"],
+        ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"], "purpose": purpose,
                        "venues": venues, "filters": scope, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
         self.store.set("search_ledger", ledger)
         self.progress(f"[search] {query}\n目的：{reason}\n范围：{scope}；来源：{self.config['search_source']}；会议：{venues}")
         try:
-            limit = min(room, 5, max_new if max_new is not None else 5)
-            found = discover(query, source=self.config["search_source"], limit=limit,
+            found = discover(query, source=self.config["search_source"], limit=recall,
                 timeout_s=min(60, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
-                venues=venues, **scope)
-            added, updated, selected = 0, 0, set()
-            for paper in deduplicate(found):
-                aliases = set(paper["aliases"])
-                existing = next((p for p in papers if aliases.intersection(p.get("aliases", [p["id"]]))), None)
-                if existing:
-                    merged = deduplicate([existing, paper])[0]
-                    merged["id"] = existing["id"]
-                    if merged != existing:
-                        self.store.put("papers", merged)
-                        updated += 1
-                    selected.add(existing["id"])
-                elif added < limit:
-                    self.store.put("papers", paper)
-                    papers.append(paper)
-                    selected.add(paper["id"])
-                    added += 1
-            ledger[key].update(status="completed", found=len(found), added=added, updated=updated, limit=limit,
-                               coverage=getattr(found, "coverage", {}))
-            self.store.event("search", ledger[key])
+                venues=venues, cache_dir=self.store.project / "metadata-cache", **scope)
+            ledger[key].update(status="completed", found=len(found), limit=recall,
+                              metadata=list(found), coverage=getattr(found, "coverage", {}))
             self.store.set("search_ledger", ledger)
-            self.progress(f"[search] 找到 {len(found)} 篇，新增 {added} 篇，更新 {updated} 篇")
-            for paper in papers:
-                if paper['id'] in selected:
-                    self.progress(f"[paper] {paper['title']} · {paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}")
-            hydrated = self.retrieve_full_texts(selected)
-            return bool(added or updated or hydrated)
+            self.store.event("search", {k: v for k, v in ledger[key].items() if k != 'metadata'})
+            if max_new == 0:
+                return key
+            room = self.config['max_papers'] - len(self.store.rows('papers'))
+            return self.select_search_results([key], min(room, max_new if max_new is not None else 3))
         except BudgetExhausted:
             raise
         except Exception as exc:
@@ -511,7 +535,7 @@ class Controller:
             self.store.set("search_ledger", ledger)
             self.store.event("search_failed", ledger[key])
             self.progress("search unavailable; retaining explicit retrieval gap")
-            return False
+            return key if max_new == 0 else False
 
     def run(self):
         self.store.set("status", "running")
@@ -526,6 +550,7 @@ class Controller:
                 raise ValueError("No source-grounded evidence could be extracted. Add substantive paper text.")
             cohort = self.store.get("cohort")
             cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
+            cohort_key = digest([cohort_key, config_scope(self.config), config_scope(self.config, 'novelty')])
             if self.config.get("reasoning_effort"):
                 cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
             if cohort:
@@ -720,7 +745,7 @@ class Controller:
             action = review["next_action"]
             added_evidence = False
             if round_index + 1 < self.config["max_rounds"] and action["kind"] == "search":
-                if self.search_once(action["description"], action["decision_impact"]):
+                if self.search_once(action["description"], action["decision_impact"], purpose='novelty'):
                     self.read_papers()
                     self.focus_sources(candidate)
                     self.audit_papers()

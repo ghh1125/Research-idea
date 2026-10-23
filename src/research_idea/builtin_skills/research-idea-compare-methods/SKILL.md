@@ -10,11 +10,13 @@ Use the candidate problem, hypothesis, method specification, source records and 
 
 ## Procedure
 1. Restate the candidate's smallest central claim. Separate inherited components from its proposed new interaction, explanatory claim, boundary, or capability.
+   Start with motivation overlap: compare the observed problem, the limitation that makes it important, the causal explanation and the knowledge the study would establish. Shared methods are reusable tools, not an automatic duplicate verdict. A new motivation can justify an existing method when it answers a materially different question, distinguishes explanations, or establishes an untested boundary. A shared broad topic is not a shared motivation. Express these comparisons within problem, mechanism and claim, with source evidence.
 2. For each closest work, fill all six comparisons: problem, mechanism, information, objective, evaluation, claim. Give concrete prior_detail and proposed_detail, relation same/different/unknown, and evidence_ids from that paper.
 3. Trace both information paths: what is available during training, inference, and evaluation; what intervention changes the computation; what observable the claim predicts. Compare conditions rather than technique names.
 4. Ask whether the prior method already implies the candidate's central prediction under comparable conditions. Distinguish topical overlap, shared problem, shared mechanism, and actual core-claim coverage.
 5. Challenge every claimed difference: would it survive renaming modules, equalizing compute, using the same data, or replacing a component with the simplest baseline? A dataset swap or unmotivated tradeoff alone is not a substantive research gap.
 6. When related work leaves a consequential boundary or assumption open, retain that route with an explicit test. If it truly covers the claim, record the narrow overlap and seek a meaningful reformulation without silently changing the hypothesis.
+   Before abandoning a candidate, give a motivation-led reframing route when the evidence supports one. The story may change; explain what changed and what new prediction or test follows. Do not demand a new algorithm for an explanatory or boundary contribution, and do not label inherited machinery as a new mechanism.
 
 ## Output
 Fill prior_art.overlaps and novelty_claim in the active method schema. Explain the changed variable, observable consequence, falsifier, and nontriviality. Supply precise follow-up search queries for unresolved relations. A justified local difference is not proof of global novelty.

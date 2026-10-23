@@ -127,7 +127,7 @@ class ScopeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(Path(directory))
             try:
-                controller = Controller(store, None, dict(DEFAULTS, fetch_full_text=False))
+                controller = Controller(store, None, dict(DEFAULTS, fetch_full_text=False, search_date_mode='fixed'))
                 with patch.object(lit, "discover", return_value=[]) as search:
                     controller.search_once('agents', 'test')
                     controller.search_once('agents', 'cached')

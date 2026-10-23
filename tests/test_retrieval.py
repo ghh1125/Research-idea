@@ -65,7 +65,7 @@ class VenueRetrievalTests(unittest.TestCase):
         opener = Mock()
         opener.open.return_value = io.BytesIO(b"data")
         with patch.object(lit, "build_opener", return_value=opener), \
-             patch.object(lit.time, "monotonic", side_effect=[0, 0, 2]), \
+             patch.object(lit.time, "monotonic", side_effect=[0, 0, 0, 0, 2]), \
              self.assertRaisesRegex(lit.LiteratureError, "budget exhausted"):
             lit._request_bytes("https://api.openalex.org/works", 1)
 
@@ -155,7 +155,8 @@ class VenueRetrievalTests(unittest.TestCase):
                 raise lit.LiteratureError("Literature service returned HTTP 503.")
             year = int(parse_qs(urlparse(url).query)["content.venueid"][0].split("/")[2])
             return encoded({"notes": [note(str(year), year)]})
-        with patch.object(lit, "_request_bytes", side_effect=request):
+        with patch.object(lit, "_request_bytes", side_effect=request), \
+             patch('research_idea.proceedings.discover_proceedings', return_value=[]):
             results = lit.discover("retrieval", "openalex", venues=["EMNLP", "COLM"])
         self.assertTrue(results)
         self.assertTrue(all(p["venue"] == "COLM" for p in results))

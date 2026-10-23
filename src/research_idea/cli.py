@@ -167,7 +167,12 @@ def validate_active_skills(cfg, project):
 def apply_scope_options(args, cfg):
     before = dict(cfg)
     if getattr(args, "literature_preset", None) == "ai-recent":
-        cfg.update(recent_defaults(), search_source="hybrid", search_venues=list(AI_VENUES))
+        cfg.update(recent_defaults(), search_source="hybrid", search_venues=list(AI_VENUES), search_date_mode='rolling')
+    if getattr(args, 'since', None) is not None or getattr(args, 'until', None) is not None:
+        cfg['search_date_mode'] = 'fixed'
+    for key in ('search_date_mode', 'strategy_months', 'novelty_months'):
+        if getattr(args, key, None) is not None:
+            cfg[key] = getattr(args, key)
     for arg, key in (("since", "search_since"), ("until", "search_until"),
                      ("cs_only", "search_cs_only"), ("arxiv_categories", "arxiv_categories")):
         value = getattr(args, arg, None)
@@ -181,7 +186,7 @@ def execution_config(args, project):
     cfg = load_config(project)
     changed = apply_scope_options(args, cfg)
     for key in ("backend", "model", "codex_bin", "codex_profile", "reasoning_effort", "constraints",
-                "max_papers", "max_candidates", "max_rounds", "max_calls", "max_seconds", "timeout_s", "auto_search"):
+                "search_results_per_query", "max_papers", "max_candidates", "max_rounds", "max_calls", "max_seconds", "timeout_s", "auto_search"):
         value = getattr(args, key, None)
         if value is not None:
             cfg[key] = (_binary_setting(value) if key == "codex_bin" else
@@ -339,6 +344,9 @@ def build_parser():
     def project_arg(p):
         p.add_argument("--project", type=Path, required=True, help="Project directory")
     def scope_args(p):
+        p.add_argument('--date-mode', dest='search_date_mode', choices=['rolling', 'fixed'], default=None)
+        p.add_argument('--strategy-months', type=int, default=None, help='Rolling strategy window (default: 12 months)')
+        p.add_argument('--novelty-months', type=int, default=None, help='Candidate novelty window (default: 6 months)')
         p.add_argument("--literature-preset", choices=["ai-recent"], default=None,
                        help="Recent AI conferences first, with CS arXiv supplementation")
         p.add_argument("--since", default=None, help="Earliest publication date (YYYY-MM-DD)")
@@ -354,7 +362,7 @@ def build_parser():
         p.add_argument("--reasoning-effort", choices=["inherit", *REASONING_EFFORTS], default=None,
                        help="Codex thinking effort; inherit uses its existing configuration")
         p.add_argument("--constraints", default=None, help="Available resources and research constraints")
-        for name, help_text in (("max-papers", "Paper limit"), ("max-candidates", "Candidate limit"),
+        for name, help_text in (("search-results-per-query", "Metadata recall per query (no full-text reading)"), ("max-papers", "Full-text reading shortlist limit"), ("max-candidates", "Candidate limit"),
                                 ("max-rounds", "Revision-round limit"), ("max-calls", "Model-call limit"),
                                 ("max-seconds", "Cumulative runtime limit in seconds"),
                                 ("timeout-s", "Per-model-call timeout in seconds")):

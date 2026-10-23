@@ -160,7 +160,10 @@ def research(project):
                               f"类型：{evidence.get('kind', '')}；成立条件：{evidence.get('conditions', '')}")
             controller = Controller(store, make_backend(cfg, project), cfg, progress=progress, activity=findings)
             event('skill', '\n'.join(s['name'] + ' · ' + ', '.join(s['stages']) for s in controller.skills) or '未加载 skill')
-            event('search', f"日期：{cfg['search_since']} → {cfg['search_until']}；来源：{cfg['search_source']}；CS：{cfg['search_cs_only']}")
+            from .search_scope import config_scope
+            for purpose, label in [('strategy', '寻找可借鉴的方法与研究机会'), ('novelty', '候选动机与贡献查重')]:
+                window = config_scope(cfg, purpose)
+                event(purpose, f"{label} · {window['since']} → {window['until']} · {cfg['search_date_mode']}\n已找到的更早近邻仍参与对比；方法相似不等于动机或贡献重叠。")
             for paper in store.rows('papers'):
                 event('paper', f"{paper['title']} · {paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}\n资料类型：{paper.get('content_kind', '')}")
             try:

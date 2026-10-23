@@ -251,6 +251,8 @@ def export_report(store: Store, output_dir: Path | None = None):
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
         "manual_search_ledger": store.get("manual_search_ledger", []),
         "search_scope": store.get("active_search_scope", {}),
+        "search_windows": store.get('active_search_windows', {}),
+        "paper_selections": store.get('paper_selections', []),
         "full_text_ledger": store.get("full_text_ledger", {}),
         "search_plans": store.get("search_plans", {}),
         "quote_gaps": current_quote_gaps(store),
@@ -263,36 +265,32 @@ def export_report(store: Store, output_dir: Path | None = None):
     lines = ["# Research-idea — 研究方案", "", store.get("topic", ""), ""]
     if demo:
         lines.extend(["> **合成演示：所有资料和候选仅用于验证软件流程。没有调用真实模型，没有完成科学实验，不构成创新或效果结论。**", ""])
-    lines.extend([f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "> 引文匹配仅验证原文存在，不证明引文支持全部解释。模型审阅不等于独立实验。候选列出顺序不代表有效性排名。", ""])
+
     # Keep the main deliverable focused on an idea and its next test. Existing
     # evidence, paper cards and audit details remain accessible below.
     if candidates:
-        lines.extend(["## Idea 与第一步验证", "", "以下方案均未经过本系统的科学实验验证。", ""])
+        lines.extend(["## Idea 与第一步验证", ""])
         for candidate in candidates:
             proposal = candidate['proposal']
             spec = candidate.get('spec') or {}
             validation = spec.get('validation', {})
             motivation = spec.get('motivation', proposal.get('motivation', {}))
             review = candidate.get('review') or {}
-            verdict = {"refine": "仍需修订", "blocked": "当前受阻", "covered": "可能已有覆盖，需核实",
-                       "continue": "建议继续前提验证"}.get(review.get('verdict'), "尚未完成审阅")
-            if candidate.get('research_status') == 'round_limit_reached':
-                verdict += "；已达到本轮修订上限"
-            lines.extend([f"### {proposal['title']}", "", "**方案审阅：** " + verdict + "。", ""])
-            next_action = (review.get('next_action') or {}).get('description')
-            if next_action:
-                lines.extend(["**审阅要求的下一步：** " + next_action, ""])
+            lines.extend([f"### {proposal['title']}", ""])
             lines.extend([
-                "**问题与意义：** " + proposal['problem'] + " " + proposal['why_it_matters'], "",
+                "**问题：** " + motivation.get('problem_observation', proposal['problem']), "",
+                "**动机：** " + motivation.get('importance', proposal['why_it_matters']), "",
+                "**现有方法为什么不足：** " + motivation.get('existing_approach_limit', ''), "",
+                "**关键解释：** " + motivation.get('causal_explanation', proposal['hypothesis']), "",
                 "**方法为何可能奏效：** " + proposal['mechanism'] + " " + motivation.get('why_this_method', ''), "",
                 "**与已有工作的差异：** " + spec.get('prior_art', {}).get('justification', '尚未完成细节对照。'), "",
                 "**第一步验证：** " + validation.get('first_test', '尚未完成验证方案。'), "",
                 "**最脆弱的假设：** " + validation.get('weakest_assumption', '尚未明确。'), "",
-                f"**实施前提状态：** {candidate.get('feasibility_status', 'pending')}；效果仍为 untested。", "",
+                "**如何判断结果：** " + validation.get('positive', '') + " " + validation.get('negative', ''), "",
                 f"[完整方案]({candidate['id']}.md)", ""])
     else:
         lines.extend([data['no_candidate_reason'] or "尚未形成有依据的候选；请查看项目状态和未解决的证据缺口。", ""])
-    lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", ""])
+    lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "方案是实验前的研究设计；原文引文、审阅与执行记录如下。", ""])
     if data['quote_gaps']:
         lines.extend(['## 未采用的引用', '', '下列引用未通过来源定位，未进入证据库；对应结论保持未知。', ''])
         for task_id, gap in data['quote_gaps'].items():
