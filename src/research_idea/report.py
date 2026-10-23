@@ -271,7 +271,16 @@ def export_report(store: Store, output_dir: Path | None = None):
             spec = candidate.get('spec') or {}
             validation = spec.get('validation', {})
             motivation = spec.get('motivation', proposal.get('motivation', {}))
-            lines.extend([f"### {proposal['title']}", "",
+            review = candidate.get('review') or {}
+            verdict = {"refine": "仍需修订", "blocked": "当前受阻", "covered": "可能已有覆盖，需核实",
+                       "continue": "建议继续前提验证"}.get(review.get('verdict'), "尚未完成审阅")
+            if candidate.get('research_status') == 'round_limit_reached':
+                verdict += "；已达到本轮修订上限"
+            lines.extend([f"### {proposal['title']}", "", "**方案审阅：** " + verdict + "。", ""])
+            next_action = (review.get('next_action') or {}).get('description')
+            if next_action:
+                lines.extend(["**审阅要求的下一步：** " + next_action, ""])
+            lines.extend([
                 "**问题与意义：** " + proposal['problem'] + " " + proposal['why_it_matters'], "",
                 "**方法为何可能奏效：** " + proposal['mechanism'] + " " + motivation.get('why_this_method', ''), "",
                 "**与已有工作的差异：** " + spec.get('prior_art', {}).get('justification', '尚未完成细节对照。'), "",
