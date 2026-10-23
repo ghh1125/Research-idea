@@ -81,7 +81,7 @@ class ReadingSpanTests(unittest.TestCase):
         self.assertEqual(evidence["start"], source.index(quote))
         self.assertEqual(evidence["reading_coverage"], "partial")
         self.assertEqual(evidence["verification"], "quote_matched_only")
-        with self.assertRaisesRegex(ValueError, "verbatim"):
+        with self.assertRaisesRegex(ValueError, "supplied source"):
             make_evidence(paper, [{**observation, "quote": "Performance improves across all reported evaluation conditions."}], excerpt)
 
     def test_small_budget_remains_bounded(self):

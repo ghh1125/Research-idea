@@ -24,7 +24,7 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用调用和时间预算。
 6. 跟随彩色 [search] [paper] [read] [analysis] [review] 查看步骤和证据。
 7. 最后 [idea] 显示方案与第一步验证；/report 再看方案，/evidence ID 追溯原文。
-运行中 /status 看状态，/stop 停止；/run 从检查点继续。
+运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
 /account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止/清空'''
 
@@ -65,7 +65,7 @@ WELCOME_NOTES = '''使用说明 / NOTES
 3. /run 开始文献研究，最后得到 idea 方案与第一步验证设计。
 4. [paper] 对应论文，[evidence] 对应原文；/evidence ID 可以追溯依据。
 5. 方案是待验证假设，程序不执行科学实验；[thinking] 表示等待模型答复。
-6. /stop 停止并保留检查点，/run 继续；重开同一项目可恢复。
+6. 运行时输入框隐藏，Ctrl+C 停止并保留检查点；/run 继续。
 输入 /intro 看完整使用介绍，/help 看所有命令。'''
 
 
@@ -136,6 +136,7 @@ class Chat:
         self.job = None
         self.process = None
         self.started = 0
+        self.base_elapsed = 0
         self.state = '就绪'
         self.output = output
         self.session = None
@@ -153,9 +154,20 @@ class Chat:
             print_formatted_text(FormattedText(fragments(tag, text)))
 
     def toolbar(self):
-        elapsed = f' · {int(time.monotonic() - self.started)}s' if self.busy else ''
-        return [('bg:ansiblue ansiwhite', safe_text(f" {self.cfg['model'] or '继承模型'} | {self.cfg['reasoning_effort'] or '继承强度'} | {self.state}{elapsed}\n")),
-                ('bg:ansiblack ansicyan', ' /intro 使用介绍 · /model 模型 · /reasoning 强度 · /run 开始研究 · /help 命令 ')]
+        calls, elapsed = '?', 0
+        try:
+            store = Store(self.project, readonly=True)
+            try:
+                calls, elapsed = store.get('calls_used', 0), store.get('elapsed_s', 0)
+            finally:
+                store.close()
+        except (OSError, RuntimeError):
+            pass
+        if self.busy:
+            elapsed = max(elapsed, self.base_elapsed + time.monotonic() - self.started)
+        footer = ' 运行中 · Ctrl+C 停止并保留检查点 · 完成后恢复输入' if self.busy else ' /intro 使用介绍 · /model 模型 · /reasoning 强度 · /run 开始研究 · /help 命令 '
+        return [('bg:ansiblue ansiwhite', safe_text(f" {self.cfg['model'] or '继承模型'} | {self.cfg['reasoning_effort'] or '继承强度'} | 调用 {calls}/{self.cfg['max_calls']} | 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分 | {self.state}\n")),
+                ('bg:ansiblack ansicyan', footer)]
 
     def idle_required(self):
         if self.busy:
@@ -194,6 +206,11 @@ class Chat:
     async def start(self, mode, message=''):
         self.idle_required()
         self.cfg = load_config(self.project)
+        store = Store(self.project, readonly=True)
+        try:
+            self.base_elapsed = store.get('elapsed_s', 0)
+        finally:
+            store.close()
         self.started, self.state = time.monotonic(), '研究中' if mode == 'run' else '答复中'
         self.job = asyncio.create_task(self.work(mode, message))
         # Let process creation begin before the next prompt or /stop.
@@ -423,6 +440,8 @@ class Chat:
                         text = (await self.session.prompt_async('› ')).strip()
                         if text and not await self.handle(text):
                             break
+                        if self.busy:
+                            await self.wait_running()
                     except KeyboardInterrupt:
                         if self.busy:
                             await self.stop()
@@ -435,6 +454,36 @@ class Chat:
             finally:
                 await self.stop()
         return 0
+
+    async def wait_running(self):
+        """Show live status only. No editable prompt is present during work."""
+        from prompt_toolkit.application import Application
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.layout import Layout, Window
+        from prompt_toolkit.layout.controls import FormattedTextControl
+        keys = KeyBindings()
+        @keys.add('c-c')
+        @keys.add('c-d')
+        def stop(event):
+            event.app.exit(result='stop')
+        app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=2)),
+                          key_bindings=keys, full_screen=False, refresh_interval=1)
+        async def finish():
+            await asyncio.shield(self.job)
+            if app.is_running:
+                app.exit(result='done')
+        waiter = None
+        def ready():
+            nonlocal waiter
+            waiter = asyncio.create_task(finish())
+        try:
+            result = await app.run_async(pre_run=ready)
+            if result == 'stop':
+                await self.stop()
+        finally:
+            if waiter and not waiter.done():
+                waiter.cancel()
+                await asyncio.gather(waiter, return_exceptions=True)
 
 
 def launch_chat(args):

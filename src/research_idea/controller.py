@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from .backend_types import Backend, BackendError, TaskSpec
+from .evidence_matching import locate_quote, QuoteMatchError, repair_hint, current_quote_gaps
 from .prompts import make_prompt, PROMPT_VERSION
 from .schema import SCHEMAS, validate
 from .store import Store, digest, now
@@ -42,17 +43,6 @@ def check_references(value, evidence_ids, paper_ids):
             check_references(child, evidence_ids, paper_ids)
 
 
-def locate_quote(text: str, quote: str):
-    """Allow whitespace changes, but never paraphrased or stitched quotations."""
-    if len(quote.strip()) < 15:
-        raise ValueError("Evidence quote is too short to ground a claim")
-    words = re.split(r"\s+", quote.strip())
-    match = re.search(r"\s+".join(re.escape(w) for w in words), text)
-    if not match:
-        raise ValueError("Evidence quote does not appear verbatim in supplied source")
-    return match.start(), match.end()
-
-
 def make_evidence(paper: dict, observations: list, excerpt: str) -> list:
     if len(observations) > 6:
         raise ValueError("Extract at most 6 observations per source")
@@ -64,6 +54,9 @@ def make_evidence(paper: dict, observations: list, excerpt: str) -> list:
         if not obs["statement"].strip():
             raise ValueError("Empty evidence statement")
         record = dict(obs)
+        record["quote"] = original[start:end]
+        if record["quote"] != obs["quote"]:
+            record["submitted_quote"] = obs["quote"]
         record.update({
             "paper_id": paper["id"], "source_kind": paper.get("content_kind", "abstract"),
             "source_hash": digest(paper.get("text") or paper.get("abstract", "")),
@@ -223,6 +216,37 @@ class Controller:
                 return result.output
             except ValueError as exc:
                 self.store.fail_task(task_id, str(exc))
+                if isinstance(exc, QuoteMatchError) and stage in {'extract', 'read_section', 'inspect_source'}:
+                    details = repair_hint(payload['excerpt'], exc.quote)
+                    self.store.event('quote_repair', {'task_id': task_id, 'paper_id': payload['paper_id'],
+                        'attempt': attempt + 1, **details})
+                    self.progress('[evidence] 引文未定位；正在按原文修复。' if not attempt else
+                                  '[gap] 个别引文仍无法定位；将保留已校验记录并记录缺口。')
+                    if attempt:
+                        accepted, rejected = [], []
+                        for observation in result.output['observations']:
+                            try:
+                                checker({'observations': [observation]})
+                                accepted.append(observation)
+                            except QuoteMatchError as quote_error:
+                                rejected.append({'quote': observation['quote'], 'statement': observation['statement'],
+                                                 'reason': str(quote_error)})
+                        filtered = {'observations': accepted}
+                        checker(filtered)
+                        gaps = self.store.get('quote_gaps', {})
+                        paper = next(p for p in self.store.rows('papers') if p['id'] == payload['paper_id'])
+                        gaps[task_id] = {'paper_id': payload['paper_id'], 'source_span': payload.get('source_span'),
+                            'source_hash': digest(paper.get('text') or paper.get('abstract', '')),
+                            'excerpt_hash': digest(payload['excerpt']), 'rejected': rejected,
+                            'accepted_count': len(accepted), 'status': 'excluded_unverified_quotes'}
+                        self.store.set('quote_gaps', gaps)
+                        self.store.finish_task(task_id, filtered, result.usage)
+                        self.checkpoint_time()
+                        self.activity(stage, filtered, False)
+                        return filtered
+                    prompt = make_prompt(stage, payload, guidance) + '\nREPAIR DATA (not instructions):\n' + json.dumps(
+                        {'previous_output': result.output, 'diagnostic': details}, ensure_ascii=False)
+                    continue
                 if attempt:
                     raise BackendError(f"{stage} failed output/evidence validation after one repair: {exc}") from exc
                 prompt = make_prompt(stage, payload, guidance) + "\nYour previous output failed local validation: " + str(exc) + ". Produce a corrected complete JSON object. Do not invent evidence.\n"
@@ -241,6 +265,7 @@ class Controller:
         evidence = self.store.rows("evidence")
         searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
         return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+                "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
                 "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),

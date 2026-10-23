@@ -190,6 +190,7 @@ def validate_card(card, paper, evidence, source_inventory):
 def read_paper(controller, paper):
     """Replay cached reading, synthesize a card, then perform bounded gap-driven reads."""
     from .controller import make_evidence
+    from .evidence_matching import current_quote_gaps
     text = source_text(paper)
     source_inventory = inventory(paper)
     parts = chunks(text, controller.config["source_chars"])
@@ -228,7 +229,7 @@ def read_paper(controller, paper):
             for record in records:
                 local_start, local_end = locate_quote(excerpt, record["quote"])
                 start, end = part["start"] + local_start, part["start"] + local_end
-                record.update(start=start, end=end, line=text[:start].count("\n") + 1, page=text[:start].count("\f") + 1,
+                record.update(quote=text[start:end], start=start, end=end, line=text[:start].count("\n") + 1, page=text[:start].count("\f") + 1,
                     extraction_stage="read_section", guidance_key=controller.guidance_keys["read_section"], chunk_id=part["id"])
                 record["id"] = "ev_" + digest([record["id"], start, end])[:12]
             return records
@@ -248,6 +249,7 @@ def read_paper(controller, paper):
             return None
         coverage = with_coverage(source_inventory, read_parts)
         payload = {"paper_id": paper["id"], "title": paper["title"], "topic": controller.store.get("topic"),
+                   "quote_gaps": [g for g in current_quote_gaps(controller.store).values() if g['paper_id'] == paper['id']],
                    "inventory": coverage, "evidence": list(collected.values()), "followup_attempts": attempts}
         result = controller.task("paper_card", payload, lambda value: validate_card(value, paper, list(collected.values()), coverage))
         cards[paper["id"]] = {**result, "source_hash": source_inventory["source_hash"], "inventory": coverage,

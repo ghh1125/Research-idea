@@ -237,6 +237,7 @@ def paper_card_markdown(card):
 
 
 def export_report(store: Store, output_dir: Path | None = None):
+    from .evidence_matching import current_quote_gaps
     target = output_dir or store.project / "outputs"
     target.mkdir(parents=True, exist_ok=True)
     candidates = store.rows("candidates")
@@ -252,6 +253,7 @@ def export_report(store: Store, output_dir: Path | None = None):
         "search_scope": store.get("active_search_scope", {}),
         "full_text_ledger": store.get("full_text_ledger", {}),
         "search_plans": store.get("search_plans", {}),
+        "quote_gaps": current_quote_gaps(store),
         "paper_claim_audits": current_claim_audits(papers, evidence, store.get("paper_claim_audits", {})),
         "paper_cards": cards,
         "paper_card_files": {key: "papers/paper_" + digest(key)[:16] + ".md" for key in cards},
@@ -291,6 +293,11 @@ def export_report(store: Store, output_dir: Path | None = None):
     else:
         lines.extend([data['no_candidate_reason'] or "尚未形成有依据的候选；请查看项目状态和未解决的证据缺口。", ""])
     lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", ""])
+    if data['quote_gaps']:
+        lines.extend(['## 未采用的引用', '', '下列引用未通过来源定位，未进入证据库；对应结论保持未知。', ''])
+        for task_id, gap in data['quote_gaps'].items():
+            lines.append(f"- {gap['paper_id']} / {task_id}：排除 {len(gap['rejected'])} 条，保留 {gap['accepted_count']} 条已校验观察。")
+        lines.append('')
     if data["active_skills"]:
         lines.extend(["## 本次加载的研究 Skill", "", "这些文件提供研究步骤；它们不是论文证据，也不代表其中的脚本或外部工具已执行。", "",
             table(["名称", "来源", "阶段", "SHA-256"], [(s["name"], s.get("origin", "local"), ", ".join(s["stages"]), s["sha256"]) for s in data["active_skills"]]), ""])

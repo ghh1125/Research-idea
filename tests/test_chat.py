@@ -179,6 +179,42 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('第一步验证', self.events[-1][1])
         self.assertFalse(self.chat.busy)
 
+    async def test_budget_is_live_in_status_bar(self):
+        store = Store(self.project)
+        store.set('calls_used', 7)
+        store.set('elapsed_s', 120)
+        store.close()
+        text = ''.join(text for _, text in self.chat.toolbar())
+        self.assertIn('调用 7/80', text)
+        self.assertIn('时间 2.0/110', text)
+
+    async def test_running_view_has_no_prompt_and_control_c_stops(self):
+        from prompt_toolkit.input import create_pipe_input
+        from prompt_toolkit.output import DummyOutput
+        from prompt_toolkit.application import create_app_session
+        self.chat.job = asyncio.create_task(asyncio.sleep(60))
+        async def stop():
+            self.chat.job.cancel()
+            await asyncio.gather(self.chat.job, return_exceptions=True)
+        with create_pipe_input() as pipe, create_app_session(input=pipe, output=DummyOutput()):
+            with patch.object(self.chat, 'stop', new_callable=AsyncMock, side_effect=stop) as stopped:
+                view = asyncio.create_task(self.chat.wait_running())
+                await asyncio.sleep(.05)
+                pipe.send_text('ignored input')
+                pipe.send_bytes(b'\x03')
+                await asyncio.wait_for(view, 3)
+                stopped.assert_awaited_once()
+        self.assertFalse(self.chat.busy)
+
+    async def test_running_view_returns_automatically_when_job_finishes(self):
+        from prompt_toolkit.input import create_pipe_input
+        from prompt_toolkit.output import DummyOutput
+        from prompt_toolkit.application import create_app_session
+        self.chat.job = asyncio.create_task(asyncio.sleep(.05))
+        with create_pipe_input() as pipe, create_app_session(input=pipe, output=DummyOutput()):
+            await asyncio.wait_for(self.chat.wait_running(), 3)
+        self.assertFalse(self.chat.busy)
+
 
 if __name__ == '__main__':
     unittest.main()
