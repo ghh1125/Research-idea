@@ -178,11 +178,6 @@ class Controller:
 
     def task(self, stage, payload, checker=None):
         guidance = [s for s in self.skills if stage in s["stages"]]
-        if guidance:
-            self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
-        if payload.get('paper_id'):
-            paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
-            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))}\n{payload['paper_id']} · {paper.get('year', '')}\n{paper.get('url', '')}")
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
         fingerprint = [stage_version(stage), stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
         if self.config.get("reasoning_effort"):
@@ -200,6 +195,11 @@ class Controller:
             self.progress(f"cached {stage}")
             self.activity(stage, result, True)
             return result
+        if guidance:
+            self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
+        if payload.get('paper_id'):
+            paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
+            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))}\n{payload['paper_id']} · {paper.get('year', '')}\n{paper.get('url', '')}")
         prompt = make_prompt(stage, payload, guidance)
         # A single bounded repair for invalid structured outputs or citations.
         for attempt in range(2):

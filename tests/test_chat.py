@@ -148,6 +148,16 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-2]['tag'], 'idea')
         self.assertIn('第一步验证', events[-2]['text'])
         self.assertNotIn('<details>', events[-2]['text'])
+        resumed = io.StringIO()
+        with patch('research_idea.chat_worker.make_backend', return_value=DemoBackend()), redirect_stdout(resumed):
+            research(self.project)
+        reused_events = [json.loads(line) for line in resumed.getvalue().splitlines()]
+        self.assertNotIn('evidence', [e['tag'] for e in reused_events])
+        reused = [e['text'] for e in reused_events if '已复用' in e['text']]
+        self.assertTrue(reused)
+        self.assertTrue(all('\n' not in text and len(text) < 80 for text in reused))
+        self.assertIn('detail', [e['tag'] for e in reused_events])
+        self.assertEqual(reused_events[-2]['tag'], 'idea')
 
     async def test_stop_real_worker_process_and_return_to_prompt(self):
         script = Path(self.tmp.name) / 'fake-worker'

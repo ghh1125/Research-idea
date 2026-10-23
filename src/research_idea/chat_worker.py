@@ -61,7 +61,7 @@ def outline(value, depth=0):
 
 def activity(stage, result, cached):
     tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
-    event(tag, label + (' · 已有分析' if cached else '') + '\n\n' + activity_summary(stage, result))
+    event(tag, label + ' · 已复用' if cached else label + '\n\n' + activity_summary(stage, result))
     event('detail', label + '\n' + '\n'.join(outline(result)))
 
 
@@ -163,7 +163,7 @@ def research(project):
                               f"{paper.get('url', '')}\n原文：{evidence['quote']}\n"
                               f"原文位置：页 {evidence.get('page', '?')} / 行 {evidence.get('line', '?')}\n"
                               f"类型：{evidence.get('kind', '')}；成立条件：{evidence.get('conditions', '')}")
-            shown_evidence = set()
+            shown_evidence = {e['id'] for e in store.rows('evidence')}
             controller = Controller(store, make_backend(cfg, project), cfg, progress=progress, activity=findings)
             event('skill', '本轮分析方法：' + ' → '.join(skill_label(s['name']) for s in controller.skills) if controller.skills else '使用任务内的分析方法')
             from .search_scope import config_scope
