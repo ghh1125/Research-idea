@@ -233,6 +233,14 @@ class ControllerExecutionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.controller(FakeBackend([])).task("map", {}, lambda x: check_references(x, set(), set()))
 
+    def test_reasoning_change_recomputes_task_but_same_setting_reuses_cache(self):
+        value = valid_shape(SCHEMAS["map"])
+        backend = FakeBackend([value, value, value])
+        for effort in ["", "medium", "medium", "high", ""]:
+            self.controller(backend, reasoning_effort=effort).task("map", {})
+        self.assertEqual(len(backend.calls), 3)
+        self.assertEqual(len({t.task_id for t in backend.calls}), 3)
+
     def test_backend_failure_is_not_retried_as_a_schema_repair(self):
         backend = FakeBackend([BackendError("provider unavailable")])
         with self.assertRaises(BackendError):

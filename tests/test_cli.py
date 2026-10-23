@@ -80,6 +80,71 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Unknown configuration", result.stderr)
 
+    def test_topic_file_and_run_options_persist_without_model_call(self):
+        topic = self.project.parent / 'brief.txt'
+        topic.write_text('环境设计\n比较规则辨识与随机覆盖。', encoding='utf-8')
+        result = self.call('start', '--topic-file', topic, '--project', self.project,
+                           '--model', 'gpt-6.1-sol', '--reasoning-effort', 'high',
+                           '--constraints', '资源未知；先做小规模验证', '--max-papers', '6',
+                           '--max-candidates', '1', '--max-rounds', '2', '--max-calls', '60',
+                           '--max-seconds', '6600', '--timeout-s', '600', '--setup-only')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(json.loads(result.stdout)['model_invoked'])
+        cfg = load_config(self.project)
+        self.assertEqual((cfg['model'], cfg['reasoning_effort'], cfg['timeout_s']), ('gpt-6.1-sol', 'high', 600))
+        self.assertEqual(cfg['max_calls'], 60)
+        store = Store(self.project)
+        try:
+            self.assertEqual(store.get('topic'), topic.read_text())
+            self.assertEqual(store.get('calls_used', 0), 0)
+        finally:
+            store.close()
+        reset = self.call('start', '--topic-file', topic, '--project', self.project,
+                          '--reasoning-effort', 'inherit', '--setup-only')
+        self.assertEqual(reset.returncode, 0, reset.stderr)
+        self.assertEqual(load_config(self.project)['reasoning_effort'], '')
+
+    def test_topic_file_conflict_and_noninteractive_launch_fail_without_project(self):
+        topic = self.project.parent / 'brief.txt'
+        topic.write_text('研究方向', encoding='utf-8')
+        result = self.call('start', 'another topic', '--topic-file', topic, '--project', self.project, '--setup-only')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('not both', result.stderr)
+        result = self.call('launch', '--project', self.project, '--setup-only')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('interactive terminal', result.stderr)
+        self.assertFalse(self.project.exists())
+
+    def test_interactive_launcher_saves_selected_inputs_and_budget(self):
+        # Topic, model selection, custom ID, effort, end papers, source, constraints, budget.
+        answers = ['环境如何促进 agent 学习', '3', 'account-model', 'high', '', '3', '两周', '1']
+        output = io.StringIO()
+        with patch('sys.stdin.isatty', return_value=True), patch('builtins.input', side_effect=answers), redirect_stdout(output), redirect_stderr(io.StringIO()):
+            result = main(['launch', '--project', str(self.project), '--setup-only'])
+        self.assertEqual(result, 0, output.getvalue())
+        cfg = load_config(self.project)
+        self.assertEqual(cfg['model'], 'account-model')
+        self.assertEqual(cfg['reasoning_effort'], 'high')
+        self.assertFalse(cfg['auto_search'])
+        self.assertEqual((cfg['max_papers'], cfg['max_rounds'], cfg['timeout_s']), (6, 2, 600))
+
+    def test_interactive_eof_does_not_create_project(self):
+        with patch('sys.stdin.isatty', return_value=True), patch('builtins.input', side_effect=EOFError), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(main(['launch', '--project', str(self.project)]), 1)
+        self.assertFalse(self.project.exists())
+
+    def test_launcher_binary_default_preserves_saved_and_explicit_selection(self):
+        with patch.dict(os.environ, {'RESEARCH_IDEA_CODEX_BIN': '/tmp/local-codex-wrapper'}), redirect_stdout(io.StringIO()):
+            self.assertEqual(main(['start', 'topic', '--project', str(self.project), '--setup-only']), 0)
+            self.assertEqual(load_config(self.project)['codex_bin'], str(Path('/tmp/local-codex-wrapper').resolve()))
+            cfg = load_config(self.project)
+            cfg['codex_bin'] = '/tmp/saved-codex'
+            write_config(self.project, cfg)
+            self.assertEqual(main(['start', 'topic', '--project', str(self.project), '--setup-only']), 0)
+            self.assertEqual(load_config(self.project)['codex_bin'], '/tmp/saved-codex')
+            self.assertEqual(main(['start', 'topic', '--project', str(self.project), '--codex-bin', 'codex', '--setup-only']), 0)
+            self.assertEqual(load_config(self.project)['codex_bin'], 'codex')
+
     def test_real_project_cannot_be_overwritten_by_demo(self):
         self.call("init", "real topic", "--project", self.project)
         result = self.call("demo", "--project", self.project)
@@ -113,6 +178,26 @@ class CLIIntegrationTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_completed_cohort_is_rebuilt_when_reasoning_effort_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp))
+            try:
+                store.set('topic', DEMO_TOPIC)
+                import_papers(store, DEMO_PAPERS)
+                config = {**DEFAULTS, 'backend': 'codex', 'auto_search': False,
+                          'deep_reading': False, 'builtin_skills': False, 'max_rounds': 1}
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run()
+                calls = store.get('calls_used')
+                cohort = store.get('cohort')['key']
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run()
+                self.assertEqual(store.get('calls_used'), calls)
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'high'}).run()
+                self.assertGreater(store.get('calls_used'), calls)
+                self.assertNotEqual(store.get('cohort')['key'], cohort)
+                self.assertTrue(all(c['development_complete'] for c in store.rows('candidates')))
+            finally:
+                store.close()
+
     def test_explicit_shorter_full_text_revision_replaces_source_without_abstract_downgrade(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp))

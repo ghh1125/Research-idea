@@ -112,6 +112,21 @@ class BackendTests(unittest.TestCase):
                     CodexBackend({"codex_bin": selected}, self.root).generate(task(self.root))
                 execute.assert_not_called()
 
+    def test_codex_reasoning_override_reaches_preflight_and_execution(self):
+        for effort in ["", "medium", "high", "max"]:
+            calls = []
+            def execute(argv, *args):
+                calls.append(argv)
+                settings = [arg for arg in argv if arg.startswith("model_reasoning_effort=")]
+                self.assertEqual(settings, [f'model_reasoning_effort="{effort}"'] if effort else [])
+                if "mcp" in argv:
+                    return "[]"
+                Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"yes"}')
+                return '{"type":"turn.completed"}'
+            with self.subTest(effort=effort), patch("research_idea.backends.cli.run_cli", side_effect=execute):
+                CodexBackend({"reasoning_effort": effort}, self.root).generate(task(self.root))
+            self.assertEqual(len(calls), 2)
+
     def test_codex_missing_result_is_failure(self):
         with patch("research_idea.backends.cli.run_cli", side_effect=["[]", "{}"]), self.assertRaises(BackendError):
             CodexBackend({}, self.root).generate(task(self.root))

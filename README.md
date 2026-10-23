@@ -45,6 +45,63 @@ research-idea inspect --project ./research-projects/demo
 research-idea resume --project ./research-projects/demo
 ```
 
+### 交互启动：逐项选择
+
+安装后运行：
+
+```bash
+research-idea launch
+```
+
+菜单依次选择项目目录、研究主题、模型、思考强度、论文文件、检索范围和运行预算。新项目默认提供 `gpt-6.1-sol`，也可沿用 Codex 配置或手动输入其他模型 ID；这不是账户可用模型的实时列表。主题可以直接输入，也可输入 `@/path/to/brief.txt` 读取多行研究说明。最后选择“开始研究”或“仅保存配置，稍后运行”。非交互脚本请使用 `start`。
+
+### 命令行参数：直接启动
+
+```bash
+research-idea start "如何设计促进 agent 适应的交互环境" \
+  --project ./research-projects/environment \
+  --backend codex --model gpt-6.1-sol --reasoning-effort medium \
+  --literature-preset ai-recent \
+  --constraints "资源尚未确定；先设计无需训练的最小验证" \
+  --max-papers 6 --max-candidates 1 --max-rounds 2 \
+  --max-calls 80 --max-seconds 6600 --timeout-s 600
+```
+
+| 选择 | 参数 | 说明 |
+| --- | --- | --- |
+| 模型 | `--model MODEL_ID` | 使用本机 CLI/账户支持的模型 ID |
+| 思考强度 | `--reasoning-effort medium` | Codex 后端支持；`inherit` 清除项目覆盖并沿用 Codex 配置 |
+| 研究输入 | 位置参数主题，或 `--topic-file ./brief.txt` | 二选一；文件为 UTF-8，最多 128 KiB |
+| 参考论文 | `--papers ./papers paper.pdf` | PDF、正文、论文 JSON 或目录 |
+| 资源限制 | `--constraints "单张24GB GPU，两周"` | 仅填写实际拥有的条件；未知可以明确写未知 |
+| 文献范围 | `--literature-preset ai-recent --since YYYY-MM-DD --until YYYY-MM-DD` | 日期、CS 分类和会议筛选 |
+| 研究规模 | `--max-papers 6 --max-candidates 1 --max-rounds 2` | 控制文献、候选和修订轮数 |
+| 调用与时间 | `--max-calls 80 --max-seconds 6600 --timeout-s 600` | 调用总数、累计运行秒数、单次调用超时 |
+| 先配置 | `--setup-only` | 保存选项并导入资料，不调用模型 |
+
+选项保存在项目的 `research.toml`，`resume` 沿用它们；也可在 `init/start/run/resume` 中覆盖模型、强度、资源和预算。模型/强度可选值以所选模型及 Codex 客户端为准，程序不会自动降级。通用强度值为 `none/minimal/low/medium/high/xhigh/max/ultra`；这不代表每个模型都支持全部值。GPT-6.1 Sol 的常用选择为 `low/medium/high/xhigh/max`，不支持 `none/minimal`。参见 [OpenAI 模型文档](https://developers.openai.com/api/docs/models/gpt-6.1-sol)与 [Codex 配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。
+
+```toml
+model = "gpt-6.1-sol"
+reasoning_effort = "medium" # 空字符串表示继承 Codex 配置
+max_papers = 6
+max_candidates = 1
+max_rounds = 2
+max_calls = 80
+max_seconds = 6600
+timeout_s = 600
+```
+
+思考强度作为每次 `codex` 调用的配置覆盖传入，不修改全局设置；变更强度会重新计算相关任务和候选。其他后端暂不接受非空 `reasoning_effort`，切换时用 `--reasoning-effort inherit` 清除它。未指定模型/强度的新项目继续沿用 Codex 配置。预算是上限，不保证在上限内完成；高级别思考和长方案可能需要更长的单次超时。
+
+```bash
+research-idea start --topic-file ./brief.txt --project ./research-projects/my-idea \
+  --model gpt-6.1-sol --reasoning-effort high --setup-only
+research-idea run --project ./research-projects/my-idea
+research-idea status --project ./research-projects/my-idea
+research-idea resume --project ./research-projects/my-idea --timeout-s 600
+```
+
 不安装包也可以运行：
 
 ```bash
@@ -100,6 +157,8 @@ research-idea start "你的研究主题" --project ./research-projects/my-idea \
 ```
 
 `--codex-profile` 指向你已在 Codex 中配置的 profile；不指定则沿用默认设置。`--codex-bin` 是可执行文件路径或 PATH 中的名称，不是 shell 命令。全局认证文件不由本程序读取或改写。
+
+本机启动脚本可设置 `RESEARCH_IDEA_CODEX_BIN` 提供默认 Codex 可执行文件。它只替代项目中的默认名称 `codex`，保留已保存的自定义路径；显式 `--codex-bin` 优先。
 
 对应项目配置：
 

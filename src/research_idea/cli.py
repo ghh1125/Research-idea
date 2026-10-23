@@ -11,7 +11,7 @@ import sys
 import time
 
 from . import __version__
-from .config import load_config, write_config, DEFAULTS
+from .config import load_config, write_config, DEFAULTS, REASONING_EFFORTS
 from .controller import Controller, BudgetExhausted
 from .backend_types import BackendError
 from .demo import DemoBackend, DEMO_PAPERS, DEMO_TOPIC
@@ -180,11 +180,18 @@ def apply_scope_options(args, cfg):
 def execution_config(args, project):
     cfg = load_config(project)
     changed = apply_scope_options(args, cfg)
-    for key in ("backend", "model", "codex_bin", "codex_profile"):
+    for key in ("backend", "model", "codex_bin", "codex_profile", "reasoning_effort", "constraints",
+                "max_papers", "max_candidates", "max_rounds", "max_calls", "max_seconds", "timeout_s", "auto_search"):
         value = getattr(args, key, None)
         if value is not None:
-            cfg[key] = _binary_setting(value) if key == "codex_bin" else value
+            cfg[key] = (_binary_setting(value) if key == "codex_bin" else
+                        "" if key == "reasoning_effort" and value == "inherit" else value)
             changed = True
+    launcher_binary = os.environ.get("RESEARCH_IDEA_CODEX_BIN")
+    if (launcher_binary and cfg["backend"] == "codex" and cfg["codex_bin"] == "codex"
+            and getattr(args, "codex_bin", None) is None):
+        cfg["codex_bin"] = _binary_setting(launcher_binary)
+        changed = True
     if getattr(args, "builtin_skills", None) is not None:
         cfg["builtin_skills"] = args.builtin_skills
         changed = True
@@ -344,6 +351,14 @@ def build_parser():
         scope_args(p)
         p.add_argument("--backend", choices=["codex", "claude", "api"], default=None)
         p.add_argument("--model", default=None)
+        p.add_argument("--reasoning-effort", choices=["inherit", *REASONING_EFFORTS], default=None,
+                       help="Codex thinking effort; inherit uses its existing configuration")
+        p.add_argument("--constraints", default=None, help="Available resources and research constraints")
+        for name, help_text in (("max-papers", "Paper limit"), ("max-candidates", "Candidate limit"),
+                                ("max-rounds", "Revision-round limit"), ("max-calls", "Model-call limit"),
+                                ("max-seconds", "Cumulative runtime limit in seconds"),
+                                ("timeout-s", "Per-model-call timeout in seconds")):
+            p.add_argument("--" + name, type=int, default=None, help=help_text)
         p.add_argument("--codex-bin", default=None, help="Codex executable name or path")
         p.add_argument("--codex-profile", default=None, help="Existing Codex profile")
         p.add_argument("--skill", action="append", default=None, help="Selected local skill name/path; repeat to select several")
@@ -357,18 +372,29 @@ def build_parser():
         p.add_argument("--fetch-full-text", action=argparse.BooleanOptionalAction, default=None,
                        help="Persist automatic full-text retrieval (default: enabled)")
     p = sub.add_parser("init", help="Initialize an isolated research project")
-    p.add_argument("topic")
+    p.add_argument("topic", nargs="?")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
     project_arg(p)
     backend_args(p)
     p = sub.add_parser("start", help="设置主题、论文和 skills，生成 idea")
     p.add_argument("topic", nargs="?")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
     project_arg(p)
     backend_args(p)
     p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None, help="Paper files or directories (up to 100 files)")
     p.add_argument("--no-search", action="store_true")
     p.add_argument("--setup-only", action="store_true", help="Only configure/import; do not invoke a model")
+    p = sub.add_parser("launch", help="交互选择主题、模型、思考强度、论文和预算")
+    p.add_argument("topic", nargs="?")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
+    p.add_argument("--project", type=Path, help="Project directory; prompted when omitted")
+    backend_args(p)
+    p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None)
+    p.add_argument("--no-search", action="store_true")
+    p.add_argument("--setup-only", action="store_true")
     p = sub.add_parser("run", help="Discover/import evidence and develop research candidates")
     p.add_argument("topic", nargs="?")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
     project_arg(p)
     backend_args(p)
     p.add_argument("--no-search", action="store_true", help="Use only imported source material")
@@ -422,6 +448,14 @@ def build_parser():
 
 
 def execute(args):
+    if getattr(args, "topic_file", None):
+        if args.topic:
+            raise ValueError("Use either TOPIC or --topic-file, not both")
+        from .interactive import read_topic_file
+        args.topic = read_topic_file(args.topic_file)
+    if args.command == "launch":
+        from .interactive import configure_launch
+        configure_launch(args)
     command = args.command
     if command == "venues":
         from .literature import supported_venues
@@ -450,7 +484,8 @@ def execute(args):
         emit({"python": sys.version.split()[0], "backend": cfg["backend"], "model": cfg["model"],
               "executables": {x: shutil.which(x) is not None for x in ("codex", "claude", "pdftotext")},
               "codex_bin": cfg["codex_bin"], "codex_resolved_path": str(Path(codex_path).resolve()) if codex_path else None,
-              "codex_profile": cfg["codex_profile"], "selected_skills": skill_metadata(selected),
+              "codex_profile": cfg["codex_profile"], "reasoning_effort": cfg["reasoning_effort"],
+              "selected_skills": skill_metadata(selected),
               "builtin_skills": cfg["builtin_skills"],
               "discovery_roots": discovery_roots(project=project, extra_roots=cfg["skill_roots"]), "warnings": warnings,
               "api_key_env": key_name, "api_key_present": bool(os.environ.get(key_name, "")) if key_name else None,

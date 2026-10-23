@@ -180,6 +180,8 @@ class Controller:
         guidance = [s for s in self.skills if stage in s["stages"]]
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
         fingerprint = [PROMPT_VERSION, stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
+        if self.config.get("reasoning_effort"):
+            fingerprint.append({"reasoning_effort": self.config["reasoning_effort"]})
         task_id = stage + "_" + digest(fingerprint)[:20]
         previous = self.store.task(task_id)
         if previous and previous["status"] == "succeeded":
@@ -486,6 +488,8 @@ class Controller:
                 raise ValueError("No source-grounded evidence could be extracted. Add substantive paper text.")
             cohort = self.store.get("cohort")
             cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
+            if self.config.get("reasoning_effort"):
+                cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
             if cohort:
                 try:
                     check_references(cohort["proposed"], {e["id"] for e in self.store.rows("evidence")}, {p["id"] for p in self.store.rows("papers")})
@@ -566,6 +570,8 @@ class Controller:
             return [] if before == after else [{"field": path, "previous": snapshot(before), "current": snapshot(after)}]
 
         development_key = digest([PROMPT_VERSION, self.skill_key, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), self.config["constraints"], self.config["max_rounds"], self.reading_settings])
+        if self.config.get("reasoning_effort"):
+            development_key = digest([development_key, self.config["reasoning_effort"]])
         if candidate.get("development_key") not in {None, development_key}:
             self.store.event("candidate_versions_archived", {"candidate_id": candidate["id"], "versions": candidate.get("versions", [])})
             candidate.update(versions=[], development_complete=False)

@@ -11,6 +11,19 @@ from research_idea.config import load_config, write_config
 
 
 class ConfigTests(unittest.TestCase):
+    def test_reasoning_effort_round_trip_and_explicit_backend_boundary(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)
+            write_config(path, {"model": "gpt-6.1-sol", "reasoning_effort": "high"})
+            self.assertEqual(load_config(path)["reasoning_effort"], "high")
+            for bad in ["unknown", 1, None]:
+                with self.subTest(value=bad), self.assertRaises(ValueError):
+                    write_config(path, {"reasoning_effort": bad})
+            for backend in ["claude", "api"]:
+                with self.subTest(backend=backend), self.assertRaisesRegex(ValueError, "requires backend=codex"):
+                    write_config(path, {"backend": backend, "reasoning_effort": "high"})
+            write_config(path, {"backend": "claude", "reasoning_effort": ""})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.project = Path(self.temp.name)

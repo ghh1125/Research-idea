@@ -6,12 +6,14 @@ from pathlib import Path
 import tomllib
 from .search_scope import recent_defaults, config_scope
 
+REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+
 DEFAULTS = {
     "backend": "codex", "model": "", "api_provider": "openai-compatible",
     "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY",
     "timeout_s": 180, "max_calls": 80, "max_seconds": 3600,
     "max_output_tokens": 8192, "api_max_tokens_field": "max_completion_tokens",
-    "codex_bin": "codex", "codex_profile": "",
+    "codex_bin": "codex", "codex_profile": "", "reasoning_effort": "",
     "skill_paths": [], "skill_roots": [], "skill_max_chars": 48000, "builtin_skills": True,
     "max_candidates": 3, "max_rounds": 2, "max_papers": 12,
     "source_chars": 24000, "search_source": "arxiv", "auto_search": True,
@@ -44,7 +46,7 @@ def _validated_settings(supplied: dict) -> dict:
     data.update(supplied)
     for key in ("backend", "model", "api_provider", "base_url", "api_key_env",
                 "api_max_tokens_field", "search_source", "search_api_key_env", "constraints",
-                "codex_bin", "codex_profile"):
+                "codex_bin", "codex_profile", "reasoning_effort"):
         if not isinstance(data[key], str):
             raise ValueError(f"{key} must be a string")
     if not data["codex_bin"].strip() or "\x00" in data["codex_bin"]:
@@ -67,6 +69,10 @@ def _validated_settings(supplied: dict) -> dict:
             data[key] = value
     if data["backend"] not in {"codex", "claude", "api", "demo"}:
         raise ValueError("backend must be codex, claude, api, or demo")
+    if data["reasoning_effort"] not in ("", *REASONING_EFFORTS):
+        raise ValueError("reasoning_effort must be empty (inherit) or one of: " + ", ".join(REASONING_EFFORTS))
+    if data["reasoning_effort"] and data["backend"] != "codex":
+        raise ValueError("reasoning_effort currently requires backend=codex; use --reasoning-effort inherit when switching backends")
     for key in ("timeout_s", "max_calls", "max_seconds", "max_candidates", "max_rounds",
                 "max_papers", "source_chars", "max_output_tokens", "skill_max_chars", "max_paper_read_chunks"):
         if isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] <= 0:

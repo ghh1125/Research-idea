@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from research_idea.backend_types import BackendError, BackendResult, TaskSpec
+from research_idea.config import REASONING_EFFORTS
 from .common import MAX_RESPONSE_BYTES, parse_object, positive_timeout, run_cli
 
 
@@ -51,6 +52,11 @@ def _codex_command(config: dict[str, Any]) -> list[str]:
     command = [str(executable)]
     if profile:
         command += ["--profile", profile]
+    effort = config.get("reasoning_effort", "")
+    if effort not in ("", *REASONING_EFFORTS):
+        raise BackendError("Unsupported reasoning_effort")
+    if effort:
+        command += ["--config", "model_reasoning_effort=" + json.dumps(effort)]
     return command
 
 
