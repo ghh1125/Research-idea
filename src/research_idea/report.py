@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from .store import Store, now
+from .store import Store, now, digest
 from .claims import current_claim_audits
+from .paper_reading import current_cards, FACET_LABELS
 
 
 COMPARISON_DIMENSIONS = {
@@ -188,6 +189,53 @@ def claim_audits_markdown(audits):
     return "\n".join(lines)
 
 
+def paper_card_markdown(card):
+    lines = [f"# 论文分析卡：{card['paper_id']}", "", f"状态：{card['status']}", ""]
+    source_inventory = card.get("inventory")
+    if source_inventory:
+        lines.extend([f"文本覆盖：{source_inventory['text_coverage']}；已提供 {source_inventory['characters_supplied']} / {source_inventory['characters']} 字符。", "",
+            "覆盖表示文本已交给成功完成的阅读任务，不保证理解完整。图像、表格布局和公式渲染均未视觉核查。", "",
+            "## 章节清单", "", table(["ID", "章节", "角色", "文本覆盖"],
+                [(s['id'], s['title'], s['family'], s['text_coverage']) for s in source_inventory['sections']]), "",
+            "## 图表与公式标记清单", "", table(["ID", "类型", "标记", "文本覆盖", "视觉检查"],
+                [(s['id'], s['kind'], s['label'], s['text_coverage'], s['visual_status']) for s in source_inventory['assets']]), "",
+            bullets(source_inventory['inventory_gaps']), ""])
+    if card['status'] != 'analyzed':
+        lines.extend([card.get('reason', '分析尚未完成。'), ""])
+        return "\n".join(lines)
+    lines.extend([f"论文类型：{card['paper_type']}", "", "## 九维分析框架", ""])
+    for item in card['framework']:
+        lines.extend([f"### {FACET_LABELS[item['dimension']]}", "", f"[{item['status']}] {item['summary']}", "",
+                      "依据：" + (", ".join(item['evidence_ids']) or "无；不可推断未读内容"), ""])
+    lines.extend(["## 核心模块", ""])
+    for item in card['components']:
+        lines.extend([f"### {item['name']}", ""])
+        for key, label in (("function", "功能"), ("inputs", "输入"), ("outputs", "输出"), ("necessity", "必要性"), ("contribution_test", "隔离模块贡献的检验")):
+            lines.extend([f"**{label}：** {item[key]}", ""])
+        lines.extend(["**假设：**", "", bullets(item['assumptions']), "", "依据：" + ", ".join(item['evidence_ids']), ""])
+    lines.extend(["## 实验—主张证据链", ""])
+    for item in card['experiments']:
+        lines.extend([f"### {item['name']}", ""])
+        for key, label in (("tested_claim", "检验主张"), ("setup", "设置"), ("comparator", "比较对象"), ("controls", "控制条件"),
+                           ("reported_result", "报告结果"), ("supported_conclusion", "可支持结论"), ("unsupported_inference", "不支持的更强推断")):
+            lines.extend([f"**{label}：** {item[key]}", ""])
+        lines.extend(["依据：" + ", ".join(item['evidence_ids']), "", "图表/公式：" + (", ".join(item['asset_ids']) or "未关联；不可视作已检查全部图表"), ""])
+    lines.extend(["## 作者明确承认的局限", "", bullets([x['statement'] + "；依据：" + ", ".join(x['evidence_ids']) for x in card['author_limitations']]), "",
+                  "## 模型分析出的疑点", ""])
+    for item in card['analyst_concerns']:
+        lines.extend([item['concern'], "", "竞争解释：" + item['alternative_explanation'], "", "区分检验：" + item['discriminating_test'], "",
+                      "依据：" + ", ".join(item['evidence_ids']), ""])
+    lines.extend(["## 待检验的研究机会", ""])
+    for item in card['opportunities']:
+        lines.extend([item['hypothesis'], "", "意义：" + item['why_meaningful'], "", "首个检验：" + item['first_test'], "",
+                      "证伪条件：" + item['falsifier'], "", "依据：" + ", ".join(item['evidence_ids']), ""])
+    lines.extend(["## 阅读缺口与补读", "", bullets(card['reading_gaps']), "",
+                  table(["目标", "问题", "影响", "执行记录"], [(r['target_id'], r['question'], r['decision_impact'], r['status']) for r in card.get('followup_attempts', [])]), "",
+                  "**仍建议补读（不代表已执行）：**", "", bullets([r['target_id'] + "：" + r['question'] for r in card['followup_requests']]), "",
+                  card['assessment_boundary'], ""])
+    return "\n".join(lines)
+
+
 def export_report(store: Store, output_dir: Path | None = None):
     target = output_dir or store.project / "outputs"
     target.mkdir(parents=True, exist_ok=True)
@@ -195,7 +243,8 @@ def export_report(store: Store, output_dir: Path | None = None):
     papers = store.rows("papers")
     evidence = store.rows("evidence")
     demo = store.get("demo", False)
-    data = {"schema_version": 3, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
+    data = {"schema_version": 4, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
@@ -203,6 +252,8 @@ def export_report(store: Store, output_dir: Path | None = None):
         "full_text_ledger": store.get("full_text_ledger", {}),
         "search_plans": store.get("search_plans", {}),
         "paper_claim_audits": current_claim_audits(papers, evidence, store.get("paper_claim_audits", {})),
+        "paper_cards": cards,
+        "paper_card_files": {key: "papers/paper_" + digest(key)[:16] + ".md" for key in cards},
         "active_skills": store.get("active_skills", [])}
     json_path = target / "report.json"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
@@ -210,6 +261,26 @@ def export_report(store: Store, output_dir: Path | None = None):
     if demo:
         lines.extend(["> **合成演示：所有资料和候选仅用于验证软件流程。没有调用真实模型，没有完成科学实验，不构成创新或效果结论。**", ""])
     lines.extend([f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "> 引文匹配仅验证原文存在，不证明引文支持全部解释。模型审阅不等于独立实验。候选列出顺序不代表有效性排名。", ""])
+    # Keep the main deliverable focused on an idea and its next test. Existing
+    # evidence, paper cards and audit details remain accessible below.
+    if candidates:
+        lines.extend(["## Idea 与第一步验证", "", "以下方案均未经过本系统的科学实验验证。", ""])
+        for candidate in candidates:
+            proposal = candidate['proposal']
+            spec = candidate.get('spec') or {}
+            validation = spec.get('validation', {})
+            motivation = spec.get('motivation', proposal.get('motivation', {}))
+            lines.extend([f"### {proposal['title']}", "",
+                "**问题与意义：** " + proposal['problem'] + " " + proposal['why_it_matters'], "",
+                "**方法为何可能奏效：** " + proposal['mechanism'] + " " + motivation.get('why_this_method', ''), "",
+                "**与已有工作的差异：** " + spec.get('prior_art', {}).get('justification', '尚未完成细节对照。'), "",
+                "**第一步验证：** " + validation.get('first_test', '尚未完成验证方案。'), "",
+                "**最脆弱的假设：** " + validation.get('weakest_assumption', '尚未明确。'), "",
+                f"**实施前提状态：** {candidate.get('feasibility_status', 'pending')}；效果仍为 untested。", "",
+                f"[完整方案]({candidate['id']}.md)", ""])
+    else:
+        lines.extend([data['no_candidate_reason'] or "尚未形成有依据的候选；请查看项目状态和未解决的证据缺口。", ""])
+    lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", ""])
     if data["active_skills"]:
         lines.extend(["## 本次加载的研究 Skill", "", "这些文件提供研究步骤；它们不是论文证据，也不代表其中的脚本或外部工具已执行。", "",
             table(["名称", "来源", "阶段", "SHA-256"], [(s["name"], s.get("origin", "local"), ", ".join(s["stages"]), s["sha256"]) for s in data["active_skills"]]), ""])
@@ -223,6 +294,15 @@ def export_report(store: Store, output_dir: Path | None = None):
         (target / (c["id"] + ".md")).write_text(("# 合成演示；非科学结论\n\n" if demo else "") + candidate_markdown(c), encoding="utf-8")
     if data["paper_claim_audits"]:
         lines.append(claim_audits_markdown(data["paper_claim_audits"]))
+    if cards:
+        (target / "papers").mkdir(exist_ok=True)
+        lines.extend(["## 逐篇结构化分析", ""])
+        for key, card in cards.items():
+            filename = data['paper_card_files'][key]
+            (target / filename).write_text(paper_card_markdown(card), encoding='utf-8')
+            coverage = card.get('inventory') or {}
+            lines.append(f"- `{key}`：{card['status']}；文本覆盖：{coverage.get('text_coverage', 'unavailable')}；[分析卡]({filename})")
+        lines.append("")
     if data["search_plans"]:
         lines.extend(["## 研究意图与检索计划", "", "计划不等于已执行；实际结果和覆盖缺口见下一节。", ""])
         for key, plan in data["search_plans"].items():
@@ -251,5 +331,6 @@ def export_report(store: Store, output_dir: Path | None = None):
     for e in evidence:
         lines.extend([f"### {e['id']}", "", f"来源 `{e['paper_id']}`，第 {e['page']} 页 / 第 {e['line']} 行；{e['source_kind']}；{e['reading_coverage']}", "", e["statement"], "", "> " + e["quote"].replace("\n", "\n> "), "", "条件：" + e["conditions"], ""])
     md_path = target / "report.md"
+    lines.extend(["", "</details>"])
     md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return md_path, json_path

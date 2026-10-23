@@ -16,14 +16,11 @@
 
 ## 研究流程
 
-1. **输入想研究什么及资源约束。** 先明确科学问题与范围假设，规划英文检索词。
-2. **检索并深读。** 读取正文中的方法、实验、结果与可用附录，抽取带原文位置的证据；记录未读取和获取失败的部分。
-3. **审计论文主张。** 分开记录作者说了什么、在哪些任务/数据/模型/预算下测试、结果能支持什么。缺失对照、混杂因素与过度推广都有明确依据或待核查标记，不能猜测作者意图。
-4. **头脑风暴。** 从真实问题、竞争解释、成立条件和证据矛盾构建有意义的候选，不以堆叠模块作为创新。
-5. **围绕每个 idea 再检索、深读和比较。** 用候选机制及假设搜索最近工作，逐项比较六个维度，区分既有机制与未证明的效果。全文中的作者主张也不能单独支持“问题已经解决”；`covered` 还要求评测维度有全文报告结果。证据不足不会把旧机制变成新机制。
-6. **检查实施前提并有界修订。** 输出具体操作、最弱假设的最小验证计划、正/负/不明确结果的解释。每轮保存原始问题锚点、上轮质疑、变化字段和新证据；内容与证据都未变化时停止重复修订并保留候选。
+**输入方向 → 查读关键论文 → 提出少量候选 → 深入对比，形成可执行的 idea。**
 
-第一版分析论文，不自动检查代码或执行科学实验。论文分析能提前发现不可用的推理信号、泄漏、接口矛盾和不公平比较，却不能证明一个新方法一定有效。`no_detectable_progress` 只是逐字段精确比较发现重复，不代表语义上判定研究没有价值。
+论文分析只服务三个判断：问题是否值得做、与已有工作到底差在哪、最小验证怎么开展。默认最多三个候选、两轮修订，不要求用户管理多个 agent 或逐项填写表格。
+
+运行后先看 `outputs/report.md` 顶部：问题与意义、方法、已有工作差异、第一步验证和最脆弱假设。完整方案、论文分析卡和证据放在详细部分，按需查看。程序不自动执行实验；“有明确验证路径”和“实验已经有效”分别记录。
 
 ## 快速开始
 
@@ -72,6 +69,7 @@ research-idea start "长上下文中证据冲突的处理机制" \
 
 | Skill | 研究职责 |
 | --- | --- |
+| `research-idea-analyze-paper` | 按九维框架分析问题、方法与实验，针对影响判断的缺口补读 |
 | `research-idea-read-evidence` | 提取方法、条件、限制和原文证据 |
 | `research-idea-audit-claims` | 对照作者主张与实验实际支持，保留测试范围、混杂和未读附录 |
 | `research-idea-motivation` | 建立 problem → motivation → method，检验问题价值与方法必要性 |
@@ -118,7 +116,7 @@ skill_max_chars = 48000
 
 加载的是指定 Markdown 文本。引用文件需额外显式选择；技能内的脚本、网络访问与工具不会自动执行，也不会改变研究任务的输出格式、证据规则和预算。原文证据与 skill 指导严格分开。每次记录名称、来源、阶段、路径与 SHA-256；修改 skill 后相关任务和候选批次会失效重算，旧历史保留。
 
-推荐把 CCFA idea optimizer/reviewer、experiment designer 作为补充，按需要显式附加它们的具体参考文件。系统内置七个 skill 为项目自主编写，未打包第三方代码或文档；ARIS/CCFA 的设计借鉴见 [来源](docs/sources.md)。
+推荐把 CCFA idea optimizer/reviewer、experiment designer 作为补充，按需要显式附加它们的具体参考文件。系统内置八个 skill 为项目自主编写，未打包第三方代码或文档；ARIS/CCFA 的设计借鉴见 [来源](docs/sources.md)。
 
 ## 使用自己的主题和论文
 
@@ -245,18 +243,17 @@ max_output_tokens = 8192
 
 使用原生 `/messages` 和结构化输出协议。更换 provider 时应同步修改已写入配置的 endpoint/key；用户显式配置值会被保留。
 
-## 研究流程与可靠性边界
+## 论文怎么分析
 
-1. 导入/检索来源，按 DOI/arXiv 等标识去重；不按标题相似就合并论文。
-2. 提取可定位的原文证据，记录来源类型、条件、页/行/字符位置。
-3. 建立问题、竞争解释和关键未知项。
-4. 生成有问题动机、因果解释、方法必要性、预测和反例的候选。
-5. 对候选关联的最近工作全文定向补读，提取方法细节及成立条件。
-6. 写明贡献主张，完成六维最近工作对照、七维可行性检查和信号阶段说明。
-7. 用独立任务提出具体质疑；在预算内修订或按明确查询补充文献。
-8. 保存方案、版本、待核实/阻塞项与下一步验证动作。
+全文阅读默认启用。先定位章节及图表/公式标记，分块读取方法、实验和可用附录，再形成九维分析卡：**问题、动机、洞见、方法、已有工作差异、实验设计、结果、结论边界、研究启发**。每个维度区分原文支持、模型分析、证据不足和不适用；不会要求理论论文提供不存在的实验。
 
-每次来源抽取最多保存六条证据。候选定向补读使用 `closest_work_ids` 中最多三篇 `full_text` 来源，每篇再抽取最多六条与该候选有关的方法/条件证据；摘要和笔记跳过此步骤，不能被升级成全文证据。长文仍按 `source_chars` 预算选取开头及方法/结果等原文片段，并标记 `partial`；这是有限的定向补读，不是穷尽全文的精读保证。原文匹配只证明引文存在，不证明模型解释完全受到引文支持。只凭摘要不能确认核心主张已被覆盖；全文引文支持的重叠也仍需人工判断语义与条件。
+核心方法说明输入、输出、必要性和隔离模块贡献的检验；实验对照作者主张、实际设置、结果与可支持结论。作者明确承认的局限、模型疑点、待检验机会分开保存。有具体缺口时，按章节或图表 ID 定向读取尚未提供的文本，再更新分析卡。只进行一次有预算的补读循环，不为补齐表格无限循环。
+
+默认每篇最多先读 3 个连续片段，每片最多 `source_chars` 字符，再按必要性最多补读 2 片。每片最多抽取 6 条原文证据。正文读取、分析卡生成和补读都计入统一调用预算。摘要和笔记保留来源受限标记，不能升级成全文分析。
+
+章节和图表识别是启发式的；覆盖率表示交给成功阅读任务的文本范围，不证明模型理解完整。当前只分析提取文本，未视觉核对图片、表格布局和公式。未读内容、获取失败和缺少对照是待核查项，不是不存在或不可行的证明。
+
+分析卡进入后续头脑风暴和候选对比。候选阶段仍对最多三篇最近工作定向补读，按问题、机制、信息、目标、评测、主张逐项比较。引文匹配只验证原文存在，语义解释与创新判断仍需核查。
 
 研究审阅默认使用同一个配置后端的独立任务，不能称为跨模型独立验证。审阅指出的阻塞、待修订和轮数用尽会单独记录。模型“继续”意见不提升实验证据状态，所有未执行方案保持 `untested`。
 
@@ -266,14 +263,18 @@ max_output_tokens = 8192
 max_candidates = 3
 max_rounds = 2
 max_papers = 12
-max_calls = 40
+max_calls = 80
 max_seconds = 3600
 timeout_s = 180
 source_chars = 24000
+deep_reading = true
+max_paper_read_chunks = 3
+max_followup_reads = 2
 auto_search = true
 constraints = "单张24GB GPU；两周；允许小规模微调；禁止调用推理时真实答案"
 ```
 
+- 新建项目默认上限为 80 次；旧项目显式设置的上限不变。上限不是必须用满的目标。`max_followup_reads = 0` 关闭额外补读，`deep_reading = false` 恢复简要证据抽取。
 - `max_calls` 是持久化的后端 `generate` 调用次数，结构化输出修复也计入。API 每次最多三次 HTTP 尝试，并记录已知尝试数；CLI 内部请求次数未知。
 - `max_seconds` 是项目累计控制器运行时间，在任务边界检查并保存。强制杀死进程可能丢失最后一个检查点之后的时间；它不是操作系统级全局计费限额。
 - 每次后端调用有本地超时，API 请求在可终止子进程中执行。断开连接不能保证远端服务立刻停止推理或计费。
@@ -286,11 +287,12 @@ research-idea status --project ./research-projects/conflict
 research-idea resume --project ./research-projects/conflict
 research-idea inspect --project ./research-projects/conflict
 research-idea inspect --project ./research-projects/conflict EVIDENCE_OR_IDEA_ID
+research-idea inspect --project ./research-projects/conflict PAPER_ID --paper-card
 research-idea inspect --project ./research-projects/conflict --events
 research-idea export --project ./research-projects/conflict
 ```
 
-输出位于项目的 `outputs/report.md`、`report.json` 和各候选 Markdown 文件。JSON 报告的 `schema_version` 为 `3`，包含问题—动机—方法的论证、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及 `feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
+输出位于项目的 `outputs/report.md`、`report.json` 和各候选 Markdown 文件。逐篇分析卡位于 `outputs/papers/`。JSON 报告的 `schema_version` 为 `4`，包含问题—动机—方法的论证、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及 `feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
 
 ## 开发与测试
 
@@ -300,4 +302,4 @@ PYTHONPATH=src python -m unittest discover -s tests -v
 
 测试覆盖证据定位、引用一致性、断点恢复、预算、CLI 协议、API 本机 HTTP、超时、文献解析、本地 skill 和缓存失效。开发环境未安装 Codex/Claude CLI，未连接真实模型账户、远程学术搜索或 GPU；这些真实环境联调仍需完成。离线测试通过不能证明生成 idea 的研究质量。
 
-下一步重点：真实主题质量评测、更细粒度的全文定位与覆盖审计，以及最小验证计划的区分能力。参见 [架构](docs/architecture.md) 和 [借鉴来源](docs/sources.md)。
+下一步重点是用真实主题评估能否产出值得做、可开始验证的 idea，而不是继续增加流程。参见 [架构](docs/architecture.md) 和 [借鉴来源](docs/sources.md)。

@@ -57,13 +57,13 @@ class SkillIntegrationTests(unittest.TestCase):
         return path
 
     def test_builtins_are_complete_and_stage_scoped(self):
-        self.assertEqual(len(builtin_skill_paths()), 7)
+        self.assertEqual(len(builtin_skill_paths()), 8)
         controller = Controller(self.store, CaptureBackend(), dict(self.config, builtin_skills=True))
-        self.assertEqual(len(controller.skill_manifest), 7)
+        self.assertEqual(len(controller.skill_manifest), 8)
         self.assertTrue(all(item["origin"] == "builtin" for item in controller.skill_manifest))
         selected = [s["name"] for s in controller.skills if "extract" in s["stages"]]
         self.assertEqual(selected, ["research-idea-read-evidence", "research-idea-audit-claims"])
-        self.assertEqual(len(self.store.get("active_skills")), 7)
+        self.assertEqual(len(self.store.get("active_skills")), 8)
         audits = [s["name"] for s in controller.skills if "audit_claims" in s["stages"]]
         self.assertEqual(audits, ["research-idea-audit-claims"])
         planners = [s["name"] for s in controller.skills if "plan_search" in s["stages"]]

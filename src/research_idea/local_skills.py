@@ -15,16 +15,17 @@ from typing import Any
 MAX_FILE_BYTES = 32 * 1024
 MAX_DISCOVERY_ENTRIES = 5000
 MAX_DEPTH = 3
-ALL_STAGES = ("plan_search", "extract", "audit_claims", "map", "propose", "develop", "review", "refine", "inspect_source")
+ALL_STAGES = ("plan_search", "extract", "read_section", "paper_card", "audit_claims", "map", "propose", "develop", "review", "refine", "inspect_source")
 BUILTIN_ROOT = Path(__file__).parent / "builtin_skills"
 BUILTIN_NAMES = (
     "research-idea-read-evidence", "research-idea-motivation", "research-idea-compare-methods",
     "research-idea-build-mechanism", "research-idea-check-feasibility", "research-idea-design-falsification",
-    "research-idea-audit-claims",
+    "research-idea-audit-claims", "research-idea-analyze-paper",
 )
 
 STAGE_MAP = {
-    "research-idea-read-evidence": ("plan_search", "extract", "inspect_source"),
+    "research-idea-read-evidence": ("plan_search", "extract", "read_section", "inspect_source"),
+    "research-idea-analyze-paper": ("read_section", "paper_card"),
     "research-idea-motivation": ("map", "propose", "develop", "refine", "review"),
     "research-idea-compare-methods": ("inspect_source", "develop", "refine", "review"),
     "research-idea-build-mechanism": ("propose", "develop", "refine"),
@@ -35,7 +36,7 @@ STAGE_MAP = {
     "ccf-idea-reviewer": ("review",),
     "ccf-experiment-designer": ("develop", "refine", "review"),
     "ccf-literature-searcher": ("map", "inspect_source"),
-    "nature-paper-card": ("extract", "inspect_source"),
+    "nature-paper-card": ("extract", "read_section", "paper_card", "inspect_source"),
     "nature-reader": ("extract", "inspect_source"),
     "nature-academic-search": ("map", "inspect_source"),
     "idea-creator": ("map", "propose"),

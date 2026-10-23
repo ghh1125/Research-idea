@@ -69,7 +69,20 @@ REVIEW = obj(verdict=string(["continue", "refine", "covered", "blocked"]),
     unresolved_questions=STRINGS, revision_instructions=STR, next_action=ACTION,
     motivation_assessment=obj(problem_significance=string(["substantial", "limited", "unclear"]),
         causal_link=string(["plausible", "unsupported", "unclear"]), progress=string(["substantive", "incremental", "unclear"]), reason=STR, decisive_test=STR))
-SCHEMAS = {"plan_search": PLAN_SEARCH, "extract": EVIDENCE, "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
+PAPER_CARD = obj(paper_id=STR, paper_type=string(["method", "empirical", "theory", "resource", "review", "mixed"]),
+    framework=array(obj(dimension=string(["problem", "motivation", "insight", "method", "prior_work_delta", "experiment_design", "results", "conclusion_boundary", "idea_relevance"]),
+        status=string(["source_supported", "analysis", "not_assessable", "not_applicable"]), summary=STR, evidence_ids=STRINGS)),
+    components=array(obj(name=STR, function=STR, inputs=STR, outputs=STR, necessity=STR,
+        assumptions=STRINGS, contribution_test=STR, evidence_ids=STRINGS)),
+    experiments=array(obj(name=STR, tested_claim=STR, setup=STR, comparator=STR, controls=STR,
+        reported_result=STR, supported_conclusion=STR, unsupported_inference=STR, evidence_ids=STRINGS, asset_ids=STRINGS)),
+    author_limitations=array(obj(statement=STR, evidence_ids=STRINGS)),
+    analyst_concerns=array(obj(concern=STR, evidence_ids=STRINGS, alternative_explanation=STR, discriminating_test=STR)),
+    opportunities=array(obj(hypothesis=STR, evidence_ids=STRINGS, why_meaningful=STR, first_test=STR, falsifier=STR)),
+    reading_gaps=STRINGS,
+    followup_requests=array(obj(target_id=STR, question=STR, decision_impact=STR)))
+SCHEMAS = {"plan_search": PLAN_SEARCH, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD,
+    "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 
 
 def validate(value, schema, path="$", depth=0):

@@ -140,7 +140,7 @@ class RevisionFlowTests(unittest.TestCase):
                 {"id": "ev-2", "paper_id": "paper-1", "source_kind": "abstract"}])
             return True
         controller.search_once = search
-        controller.extract_papers = lambda: None
+        controller.read_papers = lambda: None
         controller.develop_candidate(self.candidate)
         self.assertEqual(len(self.candidate["versions"]), 3)
         second = self.candidate["versions"][1]["revision_record"]
@@ -160,7 +160,7 @@ class RevisionFlowTests(unittest.TestCase):
                 {"id": "ev-2", "paper_id": "paper-1", "source_kind": "abstract"}])
             return True
         controller.search_once = search
-        controller.extract_papers = lambda: None
+        controller.read_papers = lambda: None
         controller.develop_candidate(self.candidate)
         self.assertEqual(len(self.candidate["versions"]), 3)
         second = self.candidate["versions"][1]["revision_record"]

@@ -8,12 +8,13 @@ import tomllib
 DEFAULTS = {
     "backend": "codex", "model": "", "api_provider": "openai-compatible",
     "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY",
-    "timeout_s": 180, "max_calls": 40, "max_seconds": 3600,
+    "timeout_s": 180, "max_calls": 80, "max_seconds": 3600,
     "max_output_tokens": 8192, "api_max_tokens_field": "max_completion_tokens",
     "codex_bin": "codex", "codex_profile": "",
     "skill_paths": [], "skill_roots": [], "skill_max_chars": 48000, "builtin_skills": True,
     "max_candidates": 3, "max_rounds": 2, "max_papers": 12,
     "source_chars": 24000, "search_source": "arxiv", "auto_search": True,
+    "deep_reading": True, "max_paper_read_chunks": 3, "max_followup_reads": 2,
     "search_venues": [], "fetch_full_text": True,
     "search_api_key_env": "", "constraints": "Resources unspecified; do not assume GPU access, model weights, logits, labels, or unlimited API budget.",
 }
@@ -65,14 +66,20 @@ def _validated_settings(supplied: dict) -> dict:
     if data["backend"] not in {"codex", "claude", "api", "demo"}:
         raise ValueError("backend must be codex, claude, api, or demo")
     for key in ("timeout_s", "max_calls", "max_seconds", "max_candidates", "max_rounds",
-                "max_papers", "source_chars", "max_output_tokens", "skill_max_chars"):
+                "max_papers", "source_chars", "max_output_tokens", "skill_max_chars", "max_paper_read_chunks"):
         if isinstance(data[key], bool) or not isinstance(data[key], int) or data[key] <= 0:
             raise ValueError(f"{key} must be a positive integer")
     if data["max_candidates"] > 10 or data["max_rounds"] > 10 or data["max_papers"] > 100:
         raise ValueError("Maximum limits: 10 candidates, 10 rounds, 100 papers")
-    for key in ("auto_search", "builtin_skills", "fetch_full_text"):
+    if type(data["max_followup_reads"]) is not int or not 0 <= data["max_followup_reads"] <= 10:
+        raise ValueError("max_followup_reads must be an integer from 0 to 10")
+    if data["max_paper_read_chunks"] > 50:
+        raise ValueError("max_paper_read_chunks must not exceed 50")
+    for key in ("auto_search", "builtin_skills", "fetch_full_text", "deep_reading"):
         if not isinstance(data[key], bool):
             raise ValueError(f"{key} must be a boolean")
+    if data["deep_reading"] and data["source_chars"] < 256:
+        raise ValueError("deep_reading requires source_chars >= 256")
     if data["search_source"] not in {"arxiv", "openalex"}:
         raise ValueError("search_source must be arxiv or openalex")
     if data["search_venues"]:

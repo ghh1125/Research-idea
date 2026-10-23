@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research-idea Paper Analysis"
+  short_description: "Trace paper sections, mechanisms and experimental evidence"
+  default_prompt: "Use $research-idea-analyze-paper to reconstruct this paper’s argument and identify evidence gaps."

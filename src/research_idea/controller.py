@@ -16,6 +16,7 @@ from .motivation import assess_motivation
 from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAMES
 from .claims import assess_claims, current_claim_audits
 from .search_planning import normalize_search_plan
+from .paper_reading import read_paper, current_cards
 
 
 class BudgetExhausted(RuntimeError):
@@ -155,7 +156,8 @@ class Controller:
         self.skill_key = digest(self.skill_manifest)
         self.guidance_keys = {stage: digest([PROMPT_VERSION, stage,
             [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
-            for stage in ("extract", "inspect_source")}
+            for stage in ("extract", "inspect_source", "read_section")}
+        self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
         if self.store.get("active_skills") != self.skill_manifest:
             self.store.set("active_skills", self.skill_manifest)
             self.store.event("skills_loaded", {"skills": self.skill_manifest})
@@ -226,6 +228,7 @@ class Controller:
         evidence = self.store.rows("evidence")
         searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
         return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+                "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
                 "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "content_kind", "full_text_error")} for p in papers],
                 "retrieval_gaps": [entry for entry in self.store.get("full_text_ledger", {}).values()
@@ -276,8 +279,18 @@ class Controller:
                 self.checkpoint_time()
         return changed
 
-    def extract_papers(self):
+    def read_papers(self):
+        deep = self.config.get("deep_reading", True) and self.config["backend"] != "demo"
+        self.extract_papers(skip_full_text=deep)
+        if deep:
+            for paper in self.store.rows("papers"):
+                if paper.get("content_kind") == "full_text":
+                    read_paper(self, paper)
+
+    def extract_papers(self, skip_full_text=False):
         for paper in self.store.rows("papers"):
+            if skip_full_text and paper.get("content_kind") == "full_text":
+                continue
             text = paper.get("text") or paper.get("abstract") or ""
             excerpt = select_excerpt(text, self.config["source_chars"])
             if not excerpt.strip():
@@ -315,6 +328,7 @@ class Controller:
             excerpt = select_excerpt(source_text, self.config["source_chars"])
             payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
                 "excerpt": excerpt, "evidence": own_evidence,
+                "paper_card": current_cards([paper], own_evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {}))[paper["id"]],
                 "reading_coverage": "complete_supplied_text" if excerpt == source_text else "partial"}
             result = self.task("audit_claims", payload, lambda value: assess_claims(value, paper, own_evidence))
             audits[paper["id"]] = {**assess_claims(result, paper, own_evidence), "source_hash": digest(source_text)}
@@ -367,7 +381,7 @@ class Controller:
                 break
             changed = self.search_once(query["query"], "candidate " + candidate["id"] + ": " + query["rationale"], max_new=allowance) or changed
         if changed:
-            self.extract_papers()
+            self.read_papers()
         new_ids = [p["id"] for p in self.store.rows("papers") if p["id"] not in before_ids]
         candidate["retrieved_work_ids"] = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + new_ids))
 
@@ -459,12 +473,12 @@ class Controller:
             if not self.store.rows("papers"):
                 raise ValueError("No source material. Import papers with 'research-idea add' or configure a reachable search source.")
             self.retrieve_full_texts()
-            self.extract_papers()
+            self.read_papers()
             self.audit_papers()
             if not self.store.rows("evidence"):
                 raise ValueError("No source-grounded evidence could be extracted. Add substantive paper text.")
             cohort = self.store.get("cohort")
-            cohort_key = digest([PROMPT_VERSION, self.skill_key, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
+            cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
             if cohort:
                 try:
                     check_references(cohort["proposed"], {e["id"] for e in self.store.rows("evidence")}, {p["id"] for p in self.store.rows("papers")})
@@ -544,7 +558,7 @@ class Controller:
                 return changes
             return [] if before == after else [{"field": path, "previous": snapshot(before), "current": snapshot(after)}]
 
-        development_key = digest([PROMPT_VERSION, self.skill_key, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), self.config["constraints"], self.config["max_rounds"]])
+        development_key = digest([PROMPT_VERSION, self.skill_key, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), self.config["constraints"], self.config["max_rounds"], self.reading_settings])
         if candidate.get("development_key") not in {None, development_key}:
             self.store.event("candidate_versions_archived", {"candidate_id": candidate["id"], "versions": candidate.get("versions", [])})
             candidate.update(versions=[], development_complete=False)
@@ -656,7 +670,7 @@ class Controller:
             added_evidence = False
             if round_index + 1 < self.config["max_rounds"] and action["kind"] == "search":
                 if self.search_once(action["description"], action["decision_impact"]):
-                    self.extract_papers()
+                    self.read_papers()
                     self.focus_sources(candidate)
                     self.audit_papers()
                     added_evidence = True

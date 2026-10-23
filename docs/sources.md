@@ -1,6 +1,6 @@
 # 工作流借鉴与接口资料
 
-本项目的控制器、存储、适配器、七个内置 skill 和测试为本次自主实现；未复制或打包下列项目的源代码。它们是工作流设计的参考，不构成本项目已获得研究效果的证据。
+本项目的控制器、存储、适配器、八个内置 skill 和测试为本次自主实现；未复制或打包下列项目的源代码。它们是工作流设计的参考，不构成本项目已获得研究效果的证据。
 
 - [ARIS / Auto-Research-In-Sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)：研究任务分解、迭代和状态保存。
 - [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md)：生成后再验证、候选 pilot、正负与不明确结果的解释。
@@ -45,3 +45,8 @@
 本项目借用“本地模型客户端负责认证、控制器负责研究流程、内置模块与用户技能可组合”的分工。当前使用每任务 `codex exec`，直接继承现有登录环境；不建立或复制认证文件。技能采用显式选择、按阶段冻结 Markdown 内容的方式，尚未复刻 OpenResearch 的完整原生技能、插件镜像或交互式 app-server 会话。两者的执行边界不同，不能把文本加载说成执行了技能脚本。
 
 账号额度依据 [Codex authentication](https://developers.openai.com/codex/auth) 与 [non-interactive mode](https://developers.openai.com/codex/non-interactive-mode)：`codex exec` 默认复用保存的 CLI 登录；ChatGPT 登录和 API key 登录具有不同计费路径。用户应在本机确认实际登录和环境配置，本程序不查询剩余额度。
+
+
+## 论文分析框架
+
+参考已安装 `nature-paper-card` 的来源范围、阅读覆盖、模块必要性和实验—主张证据链原则。Research-idea 自主实现有界九维分析卡和定向补读，不打包该技能正文，不要求生成完整长篇 Paper Card；分析只服务 idea 的意义、差异和最小验证路径。

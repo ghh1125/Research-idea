@@ -60,14 +60,14 @@ class LocalSkillsTests(unittest.TestCase):
         self.assertIn("review", found[0]["suggested_stages"])
         self.assertEqual(load_selected_skills(builtin_skill_paths(), self.project, [])[0]["origin"], "builtin")
 
-    def test_seven_namespaced_builtins_include_claims_audit(self):
-        self.assertEqual(len(BUILTIN_NAMES), 7)
+    def test_eight_namespaced_builtins_include_claims_audit(self):
+        self.assertEqual(len(BUILTIN_NAMES), 8)
         for name in BUILTIN_NAMES:
             self.assertTrue(name.startswith("research-idea-"))
             self.skill(self.builtin / name, name=name)
         found = discover_skills(self.project)
         self.assertEqual({row["name"] for row in found}, set(BUILTIN_NAMES))
-        self.assertEqual(len(builtin_skill_paths()), 7)
+        self.assertEqual(len(builtin_skill_paths()), 8)
         audit = load_selected_skills(["research-idea-audit-claims"], self.project, [])[0]
         self.assertEqual(audit["stages"], ["audit_claims", "extract", "inspect_source", "develop", "refine", "review"])
         self.assertNotIn("propose", audit["stages"])

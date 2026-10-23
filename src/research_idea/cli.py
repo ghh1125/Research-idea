@@ -357,6 +357,7 @@ def build_parser():
     project_arg(p)
     p.add_argument("id", nargs="?")
     p.add_argument("--events", action="store_true")
+    p.add_argument("--paper-card", action="store_true", help="Show the structured analysis card for the supplied paper ID")
     p = sub.add_parser("export", help="Export Markdown and JSON reports")
     project_arg(p)
     p.add_argument("--output", type=Path)
@@ -498,7 +499,15 @@ def execute(args):
                     "manual_full_text_errors": store.get("manual_full_text_errors", 0),
                     "tasks": store.task_summary()})
             elif command == "inspect":
-                if args.events:
+                if args.paper_card:
+                    if not args.id or args.events:
+                        raise ValueError("--paper-card requires a paper ID and cannot be combined with --events")
+                    from .paper_reading import current_cards
+                    cards = current_cards(store.rows("papers"), store.rows("evidence"), store.get("paper_cards", {}), store.get("paper_readings", {}))
+                    if args.id not in cards:
+                        raise ValueError("Unknown paper ID")
+                    emit(cards[args.id])
+                elif args.events:
                     emit(store.recent_events())
                 elif args.id:
                     found = next((r for table in ("papers", "evidence", "candidates") for r in store.rows(table) if r["id"] == args.id), None)

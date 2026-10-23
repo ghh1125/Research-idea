@@ -48,7 +48,7 @@ class PipelineBackend:
                       "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion."}
                                   for query, purpose in zip(queries, ("background", "mechanism", "counterevidence"))],
                       "assumptions": ["Resource access remains unspecified."]}
-        elif task.stage in {"extract", "inspect_source"}:
+        elif task.stage in {"extract", "inspect_source", "read_section"}:
             observations = []
             for line in payload["excerpt"].splitlines():
                 if line.startswith("Adaptive routing"):
@@ -58,6 +58,13 @@ class PipelineBackend:
                     observations.append({"statement": "The supplied experiment reports a bounded result.", "quote": line,
                         "kind": "reported_result", "conditions": "Dataset A; Model B; 1000 tokens per item.", "source_section": "Results Table 1"})
             output = {"observations": observations}
+        elif task.stage == "paper_card":
+            from research_idea.paper_reading import FACETS
+            refs = [item["id"] for item in payload["evidence"]]
+            output = {"paper_id": payload["paper_id"], "paper_type": "empirical",
+                "framework": [{"dimension": dimension, "status": "analysis", "summary": "The supplied synthetic evidence supports only a narrow interpretation.", "evidence_ids": refs} for dimension in FACETS],
+                "components": [], "experiments": [], "author_limitations": [], "analyst_concerns": [], "opportunities": [],
+                "reading_gaps": ["Synthetic example; no visual inspection."], "followup_requests": []}
         elif task.stage == "audit_claims":
             claims = [item for item in payload["evidence"] if item["kind"] == "author_claim"]
             results = [item for item in payload["evidence"] if item["kind"] == "reported_result"]
@@ -125,7 +132,7 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in search.call_args_list], QUERIES)
         self.assertNotIn(self.store.get("topic"), [call.args[0] for call in search.call_args_list])
         last_search = max(i for i, item in enumerate(trace) if item[0] == "discover")
-        first_extract = trace.index(("model", "extract"))
+        first_extract = trace.index(("model", "read_section"))
         first_audit = trace.index(("model", "audit_claims"))
         first_map = trace.index(("model", "map"))
         self.assertLess(last_search, first_extract)
@@ -136,6 +143,8 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertEqual(sum(call.kwargs["limit"] for call in search.call_args_list), 5)
         map_payload = next(payload for stage, payload in backend.calls if stage == "map")
         self.assertEqual(len(map_payload["paper_claim_audits"]), 5)
+        self.assertEqual(len(map_payload["paper_cards"]), 5)
+        self.assertTrue(all(item["status"] == "analyzed" for item in map_payload["paper_cards"]))
         self.assertTrue(all(item["status"] == "audited" for item in map_payload["paper_claim_audits"]))
 
     def test_candidate_search_uses_reserved_capacity_and_a_different_plan(self):
