@@ -1,0 +1,4 @@
+interface:
+  display_name: "Read Research Evidence"
+  short_description: "Extract methods and conditions with exact citations"
+  default_prompt: "Use $research-idea-read-evidence to analyze the supplied research material."

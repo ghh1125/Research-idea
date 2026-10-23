@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design a Falsification Test"
+  short_description: "Test the weakest premise before expensive experiments"
+  default_prompt: "Use $research-idea-design-falsification to analyze the supplied research material."

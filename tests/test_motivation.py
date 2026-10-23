@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import unittest
 
-from research_agent.motivation import assess_motivation
+from research_idea.motivation import assess_motivation
 
 
 EVIDENCE = [{"id": "ev-observation", "verification": "quote_matched_only"}]

@@ -4,11 +4,11 @@ from __future__ import annotations
 import copy
 import unittest
 
-from research_agent.novelty import DIMENSIONS, assess_novelty, validate_comparisons
+from research_idea.novelty import DIMENSIONS, assess_novelty, validate_comparisons
 
 
 def example(verdict="covered", source_kind="full_text"):
-    evidence = [{"id": "ev-1", "paper_id": "paper-1", "source_kind": source_kind}]
+    evidence = [{"id": "ev-1", "paper_id": "paper-1", "source_kind": source_kind, "kind": "reported_result"}]
     overlap = {
         "paper_id": "paper-1", "level": "core_claim", "covered_claim": "Budget allocation improves accuracy at fixed total compute.",
         "evidence_ids": ["ev-1"], "remaining_gap": "",
@@ -58,6 +58,61 @@ class NoveltyTests(unittest.TestCase):
     def test_full_core_claim_comparison_can_support_coverage(self):
         spec, evidence = example()
         self.assertEqual(assess_novelty(spec, evidence)["status"], "covered")
+
+    def test_full_text_author_claim_cannot_establish_empirical_coverage(self):
+        spec, evidence = example()
+        evidence[0]["kind"] = "author_claim"
+        result = assess_novelty(spec, evidence)
+        self.assertEqual(result["status"], "uncertain")
+        self.assertTrue(any("paper-1/evaluation:" in gap and "reported_result" in gap for gap in result["comparison_gaps"]))
+        self.assertTrue(any("pre-existing mechanism" in warning for warning in result["warnings"]))
+        self.assertTrue(any("branch was not rejected" in warning for warning in result["warnings"]))
+
+    def test_missing_kind_or_limitation_is_not_a_reported_result(self):
+        for kind in (None, "limitation"):
+            spec, evidence = example()
+            if kind is None:
+                evidence[0].pop("kind")
+            else:
+                evidence[0]["kind"] = kind
+            with self.subTest(kind=kind):
+                self.assertEqual(assess_novelty(spec, evidence)["status"], "uncertain")
+
+    def test_reported_result_must_be_cited_in_evaluation_comparison(self):
+        spec, evidence = example()
+        evidence[0]["kind"] = "author_claim"
+        evidence.append({"id": "ev-result", "paper_id": "paper-1", "source_kind": "full_text", "kind": "reported_result"})
+        spec["prior_art"]["overlaps"][0]["evidence_ids"].append("ev-result")
+        self.assertEqual(assess_novelty(spec, evidence)["status"], "uncertain")
+        evaluation = next(c for c in spec["prior_art"]["overlaps"][0]["comparisons"] if c["dimension"] == "evaluation")
+        evaluation["evidence_ids"].append("ev-result")
+        # Method descriptions need not themselves be reported experimental results.
+        self.assertEqual(assess_novelty(spec, evidence)["status"], "covered")
+
+    def test_reported_result_from_notes_is_insufficient(self):
+        spec, evidence = example()
+        evidence[0]["kind"] = "author_claim"
+        evidence.append({"id": "ev-result", "paper_id": "paper-1", "source_kind": "notes", "kind": "reported_result"})
+        evaluation = next(c for c in spec["prior_art"]["overlaps"][0]["comparisons"] if c["dimension"] == "evaluation")
+        evaluation["evidence_ids"].append("ev-result")
+        self.assertEqual(assess_novelty(spec, evidence)["status"], "uncertain")
+
+    def test_weak_performance_evidence_does_not_promote_known_mechanism(self):
+        spec, evidence = example("difference_supported")
+        evidence[0]["kind"] = "author_claim"
+        result = assess_novelty(spec, evidence)
+        self.assertEqual(result["status"], "uncertain")
+        self.assertTrue(any("does not make that mechanism novel" in warning for warning in result["warnings"]))
+
+    def test_known_core_overlap_remains_a_difference_conflict_without_results(self):
+        spec, evidence = example("difference_supported")
+        evidence[0]["kind"] = "author_claim"
+        covering = copy.deepcopy(spec["prior_art"]["overlaps"][0])
+        differ(spec)
+        spec["prior_art"]["overlaps"].append(covering)
+        result = assess_novelty(spec, evidence)
+        self.assertEqual(result["status"], "uncertain")
+        self.assertTrue(any("overlap conflicts" in warning for warning in result["warnings"]))
 
     def test_legacy_or_incomplete_comparisons_remain_uncertain(self):
         for operation in (lambda overlap: overlap.pop("comparisons"), lambda overlap: overlap["comparisons"].pop()):

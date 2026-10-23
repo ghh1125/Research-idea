@@ -13,11 +13,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from research_agent.backend_types import BackendError, TaskSpec
-from research_agent.backends import make_backend
-from research_agent.backends.api import APIBackend, endpoint_url
-from research_agent.backends.cli import ClaudeBackend, CodexBackend
-from research_agent.backends.common import parse_object, run_cli
+from research_idea.backend_types import BackendError, TaskSpec
+from research_idea.backends import make_backend
+from research_idea.backends.api import APIBackend, endpoint_url
+from research_idea.backends.cli import ClaudeBackend, CodexBackend
+from research_idea.backends.common import parse_object, run_cli
 
 SCHEMA = {"type": "object", "properties": {"answer": {"type": "string"}},
           "required": ["answer"], "additionalProperties": False}
@@ -58,6 +58,8 @@ class BackendTests(unittest.TestCase):
 
     def test_codex_passes_schema_and_prompt_without_shell(self):
         def execute(argv, prompt, cwd, timeout):
+            self.assertEqual(argv[0], "codex")
+            self.assertNotIn("--profile", argv)
             if "mcp" in argv:
                 return "[]"
             self.assertIn("features.shell_tool=false", argv)
@@ -73,14 +75,45 @@ class BackendTests(unittest.TestCase):
             Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"yes"}')
             return '\n'.join([json.dumps({"type": "thread.started", "thread_id": "thread-1"}),
                               json.dumps({"type": "turn.completed", "usage": {"input_tokens": 9}})])
-        with patch("research_agent.backends.cli.run_cli", side_effect=execute):
+        with patch("research_idea.backends.cli.run_cli", side_effect=execute):
             result = CodexBackend({}, self.root).generate(task(self.root))
         self.assertEqual(result.output, {"answer": "yes"})
         self.assertEqual(result.session_id, "thread-1")
         self.assertEqual(result.usage["input_tokens"], 9)
 
+    def test_codex_custom_executable_and_profile_apply_to_both_invocations(self):
+        selected = "~/Applications/Codex CLI/bin/codex"
+        expected = str(Path(selected).expanduser())
+        profile = "research profile"
+        seen = []
+        def execute(argv, prompt, cwd, timeout):
+            seen.append(argv)
+            self.assertEqual(argv[:3], [expected, "--profile", profile])
+            self.assertEqual(argv.count(expected), 1)
+            self.assertIn("features.shell_tool=false", argv)
+            self.assertNotEqual(cwd, self.root)
+            if "mcp" in argv:
+                self.assertEqual(prompt, "")
+                return "[]"
+            Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"selected"}')
+            return ""
+        with patch.dict(os.environ, {"CODEX_HOME": str(self.root / "saved-auth-home")}), patch("research_idea.backends.cli.run_cli", side_effect=execute):
+            result = CodexBackend({"codex_bin": selected, "codex_profile": profile}, self.root).generate(task(self.root))
+            self.assertEqual(os.environ["CODEX_HOME"], str(self.root / "saved-auth-home"))
+        self.assertEqual(result.output["answer"], "selected")
+        self.assertEqual(len(seen), 2)
+        self.assertIn("mcp", seen[0])
+        self.assertIn("exec", seen[1])
+
+    def test_codex_invalid_executable_fails_before_preflight(self):
+        for selected in ["", "   ", None, [], "codex\x00"]:
+            with self.subTest(selected=selected), patch("research_idea.backends.cli.run_cli") as execute:
+                with self.assertRaisesRegex(BackendError, "codex_bin"):
+                    CodexBackend({"codex_bin": selected}, self.root).generate(task(self.root))
+                execute.assert_not_called()
+
     def test_codex_missing_result_is_failure(self):
-        with patch("research_agent.backends.cli.run_cli", side_effect=["[]", "{}"]), self.assertRaises(BackendError):
+        with patch("research_idea.backends.cli.run_cli", side_effect=["[]", "{}"]), self.assertRaises(BackendError):
             CodexBackend({}, self.root).generate(task(self.root))
 
     def test_codex_error_event_rejects_partial_file(self):
@@ -89,12 +122,12 @@ class BackendTests(unittest.TestCase):
                 return "[]"
             Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"partial"}')
             return '{"type":"turn.failed"}'
-        with patch("research_agent.backends.cli.run_cli", side_effect=execute), self.assertRaises(BackendError):
+        with patch("research_idea.backends.cli.run_cli", side_effect=execute), self.assertRaises(BackendError):
             CodexBackend({}, self.root).generate(task(self.root))
 
     def test_codex_enabled_mcp_stops_before_task_is_sent(self):
         for inventory in [[{"name": "external", "enabled": True}], [{"name": "unknown"}]]:
-            with self.subTest(inventory=inventory), patch("research_agent.backends.cli.run_cli", return_value=json.dumps(inventory)) as call:
+            with self.subTest(inventory=inventory), patch("research_idea.backends.cli.run_cli", return_value=json.dumps(inventory)) as call:
                 with self.assertRaisesRegex(BackendError, "MCP servers enabled"):
                     CodexBackend({}, self.root).generate(task(self.root))
                 self.assertEqual(call.call_count, 1)
@@ -105,7 +138,7 @@ class BackendTests(unittest.TestCase):
         envelope = {"subtype": "success", "is_error": False,
                     "structured_output": {"answer": "yes"}, "session_id": "s1",
                     "usage": {"input_tokens": 20}, "total_cost_usd": 0.02}
-        with patch("research_agent.backends.cli.run_cli", return_value=json.dumps(envelope)) as call:
+        with patch("research_idea.backends.cli.run_cli", return_value=json.dumps(envelope)) as call:
             result = ClaudeBackend({}, self.root).generate(task(self.root))
         argv = call.call_args.args[0]
         self.assertIn("--safe-mode", argv)
@@ -117,7 +150,7 @@ class BackendTests(unittest.TestCase):
     def test_claude_refusal_and_missing_structured_output(self):
         for envelope in [{"is_error": True}, {"result": '{"answer":"maybe"}'},
                          {"subtype": "error_max_turns", "structured_output": {"answer": "partial"}}]:
-            with self.subTest(envelope=envelope), patch("research_agent.backends.cli.run_cli", return_value=json.dumps(envelope)), self.assertRaises(BackendError):
+            with self.subTest(envelope=envelope), patch("research_idea.backends.cli.run_cli", return_value=json.dumps(envelope)), self.assertRaises(BackendError):
                 ClaudeBackend({}, self.root).generate(task(self.root))
 
     def test_missing_cli_is_actionable(self):
@@ -147,7 +180,7 @@ class BackendTests(unittest.TestCase):
                 endpoint_url(url, "openai-compatible")
 
     def test_openai_request_schema_and_usage(self):
-        with patch("research_agent.backends.api._request_once", return_value=transport(openai_response())) as request:
+        with patch("research_idea.backends.api._request_once", return_value=transport(openai_response())) as request:
             result = self.api().generate(task(self.root))
         payload = request.call_args.args[1]
         self.assertEqual(payload["response_format"]["json_schema"]["schema"], SCHEMA)
@@ -161,7 +194,7 @@ class BackendTests(unittest.TestCase):
     def test_anthropic_request_and_parse(self):
         value = {"stop_reason": "end_turn", "content": [{"type": "text", "text": '{"answer":"yes"}'}],
                  "usage": {"output_tokens": 7}}
-        with patch("research_agent.backends.api._request_once", return_value=transport(value)) as request:
+        with patch("research_idea.backends.api._request_once", return_value=transport(value)) as request:
             result = self.api(api_provider="anthropic").generate(task(self.root))
         url, payload, headers, _ = request.call_args.args
         self.assertEqual(payload["output_config"]["format"]["schema"], SCHEMA)
@@ -172,7 +205,7 @@ class BackendTests(unittest.TestCase):
     def test_api_refused_or_truncated_not_accepted(self):
         for value in [openai_response(finish="length"), openai_response(content="[]"),
                       {"choices": []}, {"choices": ["wrong"]}]:
-            with self.subTest(value=value), patch("research_agent.backends.api._request_once", return_value=transport(value)):
+            with self.subTest(value=value), patch("research_idea.backends.api._request_once", return_value=transport(value)):
                 with self.assertRaises(BackendError) as caught:
                     self.api().generate(task(self.root))
                 self.assertEqual(caught.exception.transport_attempts, 1)
@@ -180,23 +213,23 @@ class BackendTests(unittest.TestCase):
     def test_anthropic_malformed_content_is_actionable(self):
         for content in [[], [{"type": "text", "text": None}], [{"type": "tool_use"}]]:
             value = {"stop_reason": "end_turn", "content": content}
-            with self.subTest(content=content), patch("research_agent.backends.api._request_once", return_value=transport(value)):
+            with self.subTest(content=content), patch("research_idea.backends.api._request_once", return_value=transport(value)):
                 with self.assertRaisesRegex(BackendError, "text content"):
                     self.api(api_provider="anthropic").generate(task(self.root))
 
     def test_unsupported_schema_does_not_silently_degrade(self):
-        with patch("research_agent.backends.api._request_once", return_value={"kind": "http_error", "status": 400}) as request:
+        with patch("research_idea.backends.api._request_once", return_value={"kind": "http_error", "status": 400}) as request:
             with self.assertRaisesRegex(BackendError, "no fallback") as caught:
                 self.api().generate(task(self.root))
         self.assertEqual(caught.exception.transport_attempts, 1)
         self.assertEqual(request.call_count, 1)
 
     def test_retry_is_bounded_and_records_attempts(self):
-        with patch("research_agent.backends.api._request_once", side_effect=[
-            {"kind": "http_error", "status": 429}, transport(openai_response())]), patch("research_agent.backends.api.time.sleep"):
+        with patch("research_idea.backends.api._request_once", side_effect=[
+            {"kind": "http_error", "status": 429}, transport(openai_response())]), patch("research_idea.backends.api.time.sleep"):
             result = self.api().generate(task(self.root))
         self.assertEqual(result.usage["transport_attempts"], 2)
-        with patch("research_agent.backends.api._request_once", return_value={"kind": "http_error", "status": 503}) as request, patch("research_agent.backends.api.time.sleep"):
+        with patch("research_idea.backends.api._request_once", return_value={"kind": "http_error", "status": 503}) as request, patch("research_idea.backends.api.time.sleep"):
             with self.assertRaises(BackendError) as caught:
                 self.api().generate(task(self.root))
         self.assertEqual(caught.exception.transport_attempts, 3)
@@ -212,7 +245,7 @@ class BackendTests(unittest.TestCase):
             self.api().generate(no_model)
 
     def test_api_redirect_is_rejected(self):
-        with patch("research_agent.backends.api._request_once", return_value={"kind": "http_error", "status": 307}) as request:
+        with patch("research_idea.backends.api._request_once", return_value={"kind": "http_error", "status": 307}) as request:
             with self.assertRaisesRegex(BackendError, "HTTP 307"):
                 self.api().generate(task(self.root))
         self.assertEqual(request.call_count, 1)

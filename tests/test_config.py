@@ -6,8 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from research_agent.backends.api import APIBackend
-from research_agent.config import load_config, write_config
+from research_idea.backends.api import APIBackend
+from research_idea.config import load_config, write_config
 
 
 class ConfigTests(unittest.TestCase):
@@ -57,6 +57,62 @@ class ConfigTests(unittest.TestCase):
         config = load_config(self.project)
         self.assertEqual(config["max_output_tokens"], 1024)
         self.assertEqual(config["api_max_tokens_field"], "max_tokens")
+
+    def test_codex_and_skill_settings_round_trip(self):
+        values = {"codex_bin": "/tmp/Codex App/codex", "codex_profile": "research",
+                  "skill_paths": ["/tmp/研究/SKILL.md"], "skill_roots": ["/tmp/研究"],
+                  "skill_max_chars": 9000, "builtin_skills": False}
+        write_config(self.project, values)
+        config = load_config(self.project)
+        for key, value in values.items():
+            self.assertEqual(config[key], value)
+
+    def test_search_venues_select_openalex_and_full_text_setting_round_trips(self):
+        write_config(self.project, {"search_venues": ["ACL", "EMNLP", "NAACL", "COLM"],
+                                    "fetch_full_text": False})
+        cfg = load_config(self.project)
+        self.assertEqual(cfg["search_source"], "openalex")
+        self.assertEqual(cfg["search_venues"], ["ACL", "EMNLP", "NAACL", "COLM"])
+        self.assertFalse(cfg["fetch_full_text"])
+
+    def test_invalid_search_settings_fail_before_writing(self):
+        for values in [
+            {"search_venues": "ACL"}, {"search_venues": [1]}, {"search_venues": [""]},
+            {"search_venues": ["ACL"], "search_source": "arxiv"},
+            {"fetch_full_text": "true"}, {"fetch_full_text": 0},
+        ]:
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                write_config(self.project, values)
+        self.assertFalse((self.project / "research.toml").exists())
+
+    def test_new_defaults_are_safe_and_lists_are_not_shared(self):
+        first = load_config(self.project)
+        self.assertEqual(first["codex_bin"], "codex")
+        self.assertEqual(first["codex_profile"], "")
+        self.assertEqual(first["skill_max_chars"], 48000)
+        self.assertTrue(first["builtin_skills"])
+        self.assertTrue(first["fetch_full_text"])
+        first["skill_paths"].append("/tmp/a.md")
+        first["skill_roots"].append("/tmp/skills")
+        first["search_venues"].append("ACL")
+        second = load_config(self.project)
+        self.assertEqual(second["skill_paths"], [])
+        self.assertEqual(second["skill_roots"], [])
+        self.assertEqual(second["search_venues"], [])
+
+    def test_invalid_codex_and_skill_settings_are_rejected(self):
+        for values in [
+            {"codex_bin": ""}, {"codex_bin": False}, {"codex_bin": "bad\x00name"},
+            {"codex_profile": 1}, {"codex_profile": "bad\x00profile"},
+            {"skill_paths": "one.md"}, {"skill_paths": [1]}, {"skill_paths": [""]},
+            {"skill_roots": [" "]}, {"skill_roots": ["bad\x00path"]},
+            {"skill_max_chars": 0}, {"skill_max_chars": True}, {"skill_max_chars": 1.1},
+            {"builtin_skills": "true"}, {"builtin_skills": 1},
+        ]:
+            with self.subTest(values=values):
+                with self.assertRaises(ValueError):
+                    write_config(self.project, values)
+                self.assertFalse((self.project / "research.toml").exists())
 
     def test_invalid_api_settings_fail_before_network_or_file_creation(self):
         bad_settings = [

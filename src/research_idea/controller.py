@@ -1,0 +1,691 @@
+"""Evidence checks, bounded hypothesis development, and resumable task execution."""
+from __future__ import annotations
+
+import json
+import re
+import time
+from pathlib import Path
+
+from .backend_types import Backend, BackendError, TaskSpec
+from .prompts import make_prompt, PROMPT_VERSION
+from .schema import SCHEMAS, validate
+from .store import Store, digest, now
+from .novelty import assess_novelty, validate_comparisons
+from .feasibility import assess_feasibility
+from .motivation import assess_motivation
+from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAMES
+from .claims import assess_claims, current_claim_audits
+from .search_planning import normalize_search_plan
+
+
+class BudgetExhausted(RuntimeError):
+    pass
+
+
+def check_references(value, evidence_ids, paper_ids):
+    """Reject dangling citations, including inside nested method assumptions."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key == "evidence_ids":
+                if not isinstance(child, list) or any(x not in evidence_ids for x in child):
+                    raise ValueError("Unknown evidence ID in model output")
+            elif key == "closest_work_ids":
+                if not isinstance(child, list) or any(x not in paper_ids for x in child):
+                    raise ValueError("Unknown closest-work paper ID")
+            elif key == "paper_id" and child not in paper_ids:
+                raise ValueError("Unknown paper ID in overlap comparison")
+            check_references(child, evidence_ids, paper_ids)
+    elif isinstance(value, list):
+        for child in value:
+            check_references(child, evidence_ids, paper_ids)
+
+
+def locate_quote(text: str, quote: str):
+    """Allow whitespace changes, but never paraphrased or stitched quotations."""
+    if len(quote.strip()) < 15:
+        raise ValueError("Evidence quote is too short to ground a claim")
+    words = re.split(r"\s+", quote.strip())
+    match = re.search(r"\s+".join(re.escape(w) for w in words), text)
+    if not match:
+        raise ValueError("Evidence quote does not appear verbatim in supplied source")
+    return match.start(), match.end()
+
+
+def make_evidence(paper: dict, observations: list, excerpt: str) -> list:
+    if len(observations) > 6:
+        raise ValueError("Extract at most 6 observations per source")
+    records = []
+    for obs in observations:
+        locate_quote(excerpt, obs["quote"])
+        original = paper.get("text") or paper.get("abstract", "")
+        start, end = locate_quote(original, obs["quote"])
+        if not obs["statement"].strip():
+            raise ValueError("Empty evidence statement")
+        record = dict(obs)
+        record.update({
+            "paper_id": paper["id"], "source_kind": paper.get("content_kind", "abstract"),
+            "source_hash": digest(paper.get("text") or paper.get("abstract", "")),
+            "start": start, "end": end,
+            "line": original[:start].count("\n") + 1,
+            "page": original[:start].count("\f") + 1,
+            "reading_coverage": "complete_supplied_text" if excerpt == original else "partial",
+            "verification": "quote_matched_only",
+        })
+        record["id"] = "ev_" + digest([paper["id"], record["source_hash"], obs])[:12]
+        records.append(record)
+    return list({r["id"]: r for r in records}.values())
+
+
+def select_excerpt(text: str, limit: int) -> str:
+    """Sample bounded source spans from distinct section families where identifiable.
+
+    This heading heuristic does not establish complete or semantic reading coverage.
+    Original offsets are recovered when validating each evidence quotation.
+    """
+    if len(text) <= limit:
+        return text
+    if limit <= 0:
+        return ""
+    # Select one heading per family rather than the first N headings: many early
+    # method subsections must not crowd late experiments, results, or appendices out.
+    families = [
+        r"(?:(?:proposed|our)\s+)?(?:methods?|methodology|approach|framework)\b|(?:研究)?方法|模型架构",
+        r"experiments?\b|experimental\b|evaluation\s+(?:setup|settings?)\b|implementation\s+details\b|setup\b|实验|實驗|评估设置",
+        r"(?:(?:main|experimental|evaluation|additional|quantitative|qualitative)\s+)?results?\b|findings\b|(?:主要|实验|评估)?结果",
+        r"limitations?\b|discussion\b|局限|讨论|限制",
+        r"appendi(?:x|ces)\b|supplementary\b|附录|补充材料",
+    ]
+    numbering = re.compile(
+        r"^(?:\d+(?:\.\d+)*(?:[.)、．:：][ \t]*|[ \t]+)"
+        r"|(?:[A-Z](?:\.\d+)*|[IVXLCDM]+)(?:[.)、:：][ \t]*|[ \t]+)"
+        r"|第[一二三四五六七八九十百0-9]+[章节][ \t]*"
+        r"|[一二三四五六七八九十百]+[、.)．][ \t]*)"
+    )
+    found = {}
+    for match in re.finditer(r"(?m)^[ \t]*[^\n\r]{1,160}\r?$", text):
+        heading = re.sub(r"^#{1,6}[ \t]*", "", match.group().strip())
+        heading = numbering.sub("", heading).strip()
+        for family, pattern in enumerate(families):
+            if family not in found and re.match(pattern, heading, re.IGNORECASE):
+                found[family] = match.start()
+    positions = [0]
+    positions.extend(found.values())
+    positions = sorted(set(positions))
+    if len(positions) < 3:
+        # The end position is a tail anchor, converted after allocating the budget.
+        positions = sorted(set(positions + [len(text) // 2, len(text)]))
+    marker_budget = len(positions) * (len(f"[SOURCE SPAN {len(text)}:{len(text)}]\n") + 2)
+    if limit <= marker_budget:
+        # A tiny budget cannot hold multiple marked spans; never exceed it.
+        return text[:limit]
+    width = max(1, (limit - marker_budget) // len(positions))
+    spans = sorted((min(p, len(text) - width), min(len(text), p + width))
+                   for p in positions)
+    merged = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
+        else:
+            merged.append((start, end))
+    return "\n\n".join(f"[SOURCE SPAN {start}:{end}]\n{text[start:end]}" for start, end in merged)
+
+
+def evidence_gate(spec: dict, evidence: list) -> tuple[str, list[str]]:
+    """Model novelty verdict is bounded by actual provenance, never global proof."""
+    for assumption in spec["method"]["assumptions"]:
+        if assumption["status"] == "source_supported" and not assumption["evidence_ids"]:
+            raise ValueError("Source-supported assumption has no evidence")
+    assessment = assess_novelty(spec, evidence)
+    return assessment["status"], assessment["warnings"]
+
+
+class Controller:
+    def __init__(self, store: Store, backend: Backend, config: dict, progress=None):
+        self.store, self.backend, self.config = store, backend, config
+        self.progress = progress or (lambda message: None)
+        self.started = time.monotonic()
+        self.previous_elapsed = float(store.get("elapsed_s", 0))
+        self.full_text_attempted = set()
+        builtins = builtin_skill_paths() if config.get("builtin_skills", True) else []
+        if config.get("builtin_skills", True) and len(builtins) != len(BUILTIN_NAMES):
+            raise ValueError("Built-in skill files are missing. Reinstall the package or explicitly disable builtin_skills.")
+        self.skills = load_selected_skills(builtins + config.get("skill_paths", []), store.project,
+            config.get("skill_roots", []), config.get("skill_max_chars", 48000))
+        self.skill_manifest = [{k: s[k] for k in ("name", "path", "sha256", "stages", "origin")} for s in self.skills]
+        self.skill_key = digest(self.skill_manifest)
+        self.guidance_keys = {stage: digest([PROMPT_VERSION, stage,
+            [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
+            for stage in ("extract", "inspect_source")}
+        if self.store.get("active_skills") != self.skill_manifest:
+            self.store.set("active_skills", self.skill_manifest)
+            self.store.event("skills_loaded", {"skills": self.skill_manifest})
+
+    def checkpoint_time(self):
+        self.store.set("elapsed_s", self.previous_elapsed + time.monotonic() - self.started)
+
+    def check_budget(self):
+        elapsed = self.previous_elapsed + time.monotonic() - self.started
+        if self.store.get("calls_used", 0) >= self.config["max_calls"]:
+            raise BudgetExhausted("Model-call budget exhausted. Increase max_calls in research.toml to continue.")
+        if elapsed >= self.config["max_seconds"]:
+            raise BudgetExhausted("Wall-time budget exhausted. Increase max_seconds in research.toml to continue.")
+        return self.config["max_seconds"] - elapsed
+
+    def task(self, stage, payload, checker=None):
+        guidance = [s for s in self.skills if stage in s["stages"]]
+        manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
+        fingerprint = [PROMPT_VERSION, stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
+        task_id = stage + "_" + digest(fingerprint)[:20]
+        previous = self.store.task(task_id)
+        if previous and previous["status"] == "succeeded":
+            result = json.loads(previous["output"])
+            validate(result, SCHEMAS[stage])
+            if checker:
+                checker(result)
+            self.progress(f"cached {stage}")
+            return result
+        prompt = make_prompt(stage, payload, guidance)
+        # A single bounded repair for invalid structured outputs or citations.
+        for attempt in range(2):
+            remaining = self.check_budget()
+            self.checkpoint_time()
+            self.store.begin_task(task_id, stage)
+            self.store.set("calls_used", self.store.get("calls_used", 0) + 1)
+            self.progress(f"{stage} (call {self.store.get('calls_used')}/{self.config['max_calls']})")
+            spec = TaskSpec(task_id=task_id, stage=stage, prompt=prompt, output_schema=SCHEMAS[stage], workspace=self.store.project,
+                            timeout_s=min(float(self.config["timeout_s"]), remaining), model=self.config.get("model") or None)
+            try:
+                result = self.backend.generate(spec)
+                attempts = result.usage.get("transport_attempts")
+                if isinstance(attempts, int):
+                    self.store.set("known_http_attempts", self.store.get("known_http_attempts", 0) + attempts)
+                validate(result.output, SCHEMAS[stage])
+                if checker:
+                    checker(result.output)
+                self.store.finish_task(task_id, result.output, result.usage)
+                self.checkpoint_time()
+                self.store.event("task_completed", {"task_id": task_id, "stage": stage, "backend": self.backend.name, "usage": result.usage})
+                return result.output
+            except ValueError as exc:
+                self.store.fail_task(task_id, str(exc))
+                if attempt:
+                    raise BackendError(f"{stage} failed output/evidence validation after one repair: {exc}") from exc
+                prompt = make_prompt(stage, payload, guidance) + "\nYour previous output failed local validation: " + str(exc) + ". Produce a corrected complete JSON object. Do not invent evidence.\n"
+            except Exception as exc:
+                # Provider errors may contain request details: persist a coarse error only.
+                self.store.fail_task(task_id, f"{type(exc).__name__}: backend execution failed")
+                attempts = getattr(exc, "transport_attempts", None)
+                if isinstance(attempts, int):
+                    self.store.set("known_http_attempts", self.store.get("known_http_attempts", 0) + attempts)
+                self.checkpoint_time()
+                raise
+        raise AssertionError("unreachable")
+
+    def context(self):
+        papers = self.store.rows("papers")
+        evidence = self.store.rows("evidence")
+        searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
+        return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+                "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
+                "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "content_kind", "full_text_error")} for p in papers],
+                "retrieval_gaps": [entry for entry in self.store.get("full_text_ledger", {}).values()
+                                   if entry.get("status") != "completed"],
+                "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
+                                    for entry in searches[-100:]], "evidence": evidence}
+
+    def retrieve_full_texts(self, selected_ids=None):
+        """Acquire bounded source text; a failed download remains an evidence gap."""
+        from .literature import fetch_full_text, LiteratureError
+        if (not self.config["auto_search"] or not self.config.get("fetch_full_text", True)
+                or self.config["backend"] == "demo"):
+            return False
+        changed = False
+        ledger = self.store.get("full_text_ledger", {})
+        for paper in self.store.rows("papers")[:self.config["max_papers"]]:
+            if selected_ids is not None and paper["id"] not in selected_ids:
+                continue
+            if paper.get("content_kind") != "abstract":
+                continue
+            key = digest([paper["id"], paper.get("url"), paper.get("pdf_url"), paper.get("locations")])
+            previous = ledger.get(key, {})
+            if key in self.full_text_attempted or previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
+                continue
+            remaining = self.check_budget()
+            entry = {"paper_id": paper["id"], "status": "started", "time": now(),
+                     "attempts": previous.get("attempts", 0) + 1}
+            ledger[key] = entry
+            self.store.set("full_text_ledger", ledger)
+            self.full_text_attempted.add(key)
+            try:
+                enriched = fetch_full_text(paper, timeout_s=min(30, remaining))
+                if enriched.get("content_kind") != "full_text" or not enriched.get("text", "").strip():
+                    raise LiteratureError(enriched.get("full_text_error") or "No full text was extracted")
+                enriched["id"] = paper["id"]  # Keep existing evidence references stable.
+                enriched.pop("full_text_error", None)
+                self.store.put("papers", enriched)
+                entry.update(status="completed", characters=len(enriched["text"]))
+                changed = True
+                self.progress(f"full text acquired: {paper['id']}")
+            except LiteratureError as exc:
+                entry.update(status="failed", error=str(exc))
+                self.store.put("papers", dict(paper, full_text_error=str(exc)))
+                self.progress(f"full text unavailable: {paper['id']}; keeping retrieval gap")
+            finally:
+                self.store.set("full_text_ledger", ledger)
+                self.store.event("full_text_retrieval", entry)
+                self.checkpoint_time()
+        return changed
+
+    def extract_papers(self):
+        for paper in self.store.rows("papers"):
+            text = paper.get("text") or paper.get("abstract") or ""
+            excerpt = select_excerpt(text, self.config["source_chars"])
+            if not excerpt.strip():
+                self.store.replace_evidence(paper["id"], [])
+                continue
+            payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": paper.get("content_kind", "abstract"),
+                       "reading_coverage": "complete_supplied_text" if excerpt == text else "partial", "excerpt": excerpt}
+            result = self.task("extract", payload, lambda x: make_evidence(paper, x["observations"], excerpt))
+            # Ordinary extraction replaces its previous interpretation, including
+            # when the new result is empty. Only compatible focused readings may
+            # survive; legacy records have no trustworthy extraction provenance.
+            retained = [e for e in self.store.rows("evidence") if e["paper_id"] == paper["id"]
+                and e.get("source_hash") == digest(text) and e.get("source_kind") == paper.get("content_kind", "abstract")
+                and e.get("extraction_stage") == "inspect_source"
+                and e.get("guidance_key") == self.guidance_keys["inspect_source"]]
+            generated = make_evidence(paper, result["observations"], excerpt)
+            for record in generated:
+                record.update(extraction_stage="extract", guidance_key=self.guidance_keys["extract"])
+            self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
+
+    def audit_papers(self):
+        """Interpret reported experiments without treating author claims as proof."""
+        audits = {}
+        self.store.set("paper_claim_audits", audits)
+        evidence = self.store.rows("evidence")
+        for paper in self.store.rows("papers"):
+            own_evidence = [e for e in evidence if e["paper_id"] == paper["id"]]
+            if paper.get("content_kind") != "full_text" or not own_evidence:
+                audits[paper["id"]] = {"paper_id": paper["id"], "status": "insufficient_evidence",
+                    "source_hash": digest(paper.get("text") or paper.get("abstract", "")),
+                    "claims": [], "warnings": ["No grounded full-text experiment evidence is available; author claims do not establish problem resolution."],
+                    "reading_coverage": {"experiments": "unavailable", "appendix": "unavailable", "notes": "Full-text claim audit not performed."}}
+                continue
+            source_text = paper.get("text") or paper.get("abstract", "")
+            excerpt = select_excerpt(source_text, self.config["source_chars"])
+            payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
+                "excerpt": excerpt, "evidence": own_evidence,
+                "reading_coverage": "complete_supplied_text" if excerpt == source_text else "partial"}
+            result = self.task("audit_claims", payload, lambda value: assess_claims(value, paper, own_evidence))
+            audits[paper["id"]] = {**assess_claims(result, paper, own_evidence), "source_hash": digest(source_text)}
+            # Persist each completed paper so a budget stop retains useful work.
+            self.store.set("paper_claim_audits", audits)
+        self.store.set("paper_claim_audits", audits)
+
+    def plan_search(self, candidate=None):
+        payload = {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+                   "venues": self.config.get("search_venues", []), "source": self.config["search_source"]}
+        if candidate is not None:
+            payload["candidate"] = candidate["proposal"]
+        result = self.task("plan_search", payload, normalize_search_plan)
+        plan = normalize_search_plan(result)
+        key = candidate["id"] if candidate else "initial"
+        plans = self.store.get("search_plans", {})
+        plans[key] = plan
+        self.store.set("search_plans", plans)
+        return plan
+
+    def initial_search(self):
+        if not self.config["auto_search"] or self.config["backend"] == "demo":
+            return
+        # Reserve corpus capacity for hypothesis-specific searches after brainstorming.
+        target = max(1, self.config["max_papers"] // 2)
+        if len(self.store.rows("papers")) >= target:
+            return
+        plan = self.plan_search()
+        quota = max(1, (target + len(plan["queries"]) - 1) // len(plan["queries"]))
+        for query in plan["queries"]:
+            room = target - len(self.store.rows("papers"))
+            if room <= 0:
+                break
+            self.search_once(query["query"], "initial: " + query["rationale"], max_new=min(room, quota))
+
+    def search_for_candidate(self, candidate):
+        if not self.config["auto_search"] or self.config["backend"] == "demo":
+            return
+        room = self.config["max_papers"] - len(self.store.rows("papers"))
+        if room <= 0:
+            return
+        plan = self.plan_search(candidate)
+        quota = max(1, self.config["max_papers"] // (2 * self.config["max_candidates"]))
+        changed = False
+        before_ids = {p["id"] for p in self.store.rows("papers")}
+        start_count = len(before_ids)
+        for query in plan["queries"]:
+            allowance = quota - (len(self.store.rows("papers")) - start_count)
+            if allowance <= 0:
+                break
+            changed = self.search_once(query["query"], "candidate " + candidate["id"] + ": " + query["rationale"], max_new=allowance) or changed
+        if changed:
+            self.extract_papers()
+        new_ids = [p["id"] for p in self.store.rows("papers") if p["id"] not in before_ids]
+        candidate["retrieved_work_ids"] = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + new_ids))
+
+    def focus_sources(self, candidate):
+        """Re-read methods for this hypothesis; related titles only select reading targets."""
+        closest = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + candidate["proposal"].get("closest_work_ids", [])))
+        papers = {p["id"]: p for p in self.store.rows("papers")}
+        selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
+        scope = digest(candidate["proposal"])
+        for paper in selected:
+            text = paper.get("text") or paper.get("abstract") or ""
+            if not text.strip():
+                continue
+            excerpt = select_excerpt(text, self.config["source_chars"])
+            payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
+                "candidate": candidate["proposal"], "excerpt": excerpt,
+                "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
+            result = self.task("inspect_source", payload, lambda x: make_evidence(paper, x["observations"], excerpt))
+            retained = [e for e in self.store.rows("evidence") if e["paper_id"] == paper["id"]
+                and e.get("source_hash") == digest(text) and e.get("source_kind") == "full_text"
+                and e.get("extraction_stage") in self.guidance_keys
+                and e.get("guidance_key") == self.guidance_keys[e["extraction_stage"]]
+                and not (e["extraction_stage"] == "inspect_source" and e.get("extraction_scope") == scope)]
+            generated = make_evidence(paper, result["observations"], excerpt)
+            for record in generated:
+                record.update(extraction_stage="inspect_source", guidance_key=self.guidance_keys["inspect_source"],
+                              extraction_scope=scope)
+            self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
+
+    def search_once(self, query, reason, max_new=None):
+        from .literature import discover, deduplicate
+        if not self.config["auto_search"] or self.config["backend"] == "demo":
+            return False
+        # Successful searches are cached; interrupted/transient failures get one retry.
+        venues = self.config.get("search_venues", [])
+        key = digest([query, self.config["search_source"], venues])
+        ledger = self.store.get("search_ledger", {})
+        previous = ledger.get(key, {})
+        if previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
+            return False
+        papers = self.store.rows("papers")
+        room = self.config["max_papers"] - len(papers)
+        if room <= 0:
+            return False
+        self.check_budget()
+        ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"],
+                       "venues": venues, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
+        self.store.set("search_ledger", ledger)
+        try:
+            limit = min(room, 5, max_new if max_new is not None else 5)
+            found = discover(query, source=self.config["search_source"], limit=limit,
+                timeout_s=min(30, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
+                venues=venues)
+            added, updated, selected = 0, 0, set()
+            for paper in deduplicate(found):
+                aliases = set(paper["aliases"])
+                existing = next((p for p in papers if aliases.intersection(p.get("aliases", [p["id"]]))), None)
+                if existing:
+                    merged = deduplicate([existing, paper])[0]
+                    merged["id"] = existing["id"]
+                    if merged != existing:
+                        self.store.put("papers", merged)
+                        updated += 1
+                    selected.add(existing["id"])
+                elif added < limit:
+                    self.store.put("papers", paper)
+                    papers.append(paper)
+                    selected.add(paper["id"])
+                    added += 1
+            ledger[key].update(status="completed", found=len(found), added=added, updated=updated, limit=limit,
+                               coverage=getattr(found, "coverage", {}))
+            self.store.event("search", ledger[key])
+            self.store.set("search_ledger", ledger)
+            hydrated = self.retrieve_full_texts(selected)
+            return bool(added or updated or hydrated)
+        except BudgetExhausted:
+            raise
+        except Exception as exc:
+            ledger[key].update(status="failed", error=type(exc).__name__)
+            self.store.set("search_ledger", ledger)
+            self.store.event("search_failed", ledger[key])
+            self.progress("search unavailable; retaining explicit retrieval gap")
+            return False
+
+    def run(self):
+        self.store.set("status", "running")
+        try:
+            self.initial_search()
+            if not self.store.rows("papers"):
+                raise ValueError("No source material. Import papers with 'research-idea add' or configure a reachable search source.")
+            self.retrieve_full_texts()
+            self.extract_papers()
+            self.audit_papers()
+            if not self.store.rows("evidence"):
+                raise ValueError("No source-grounded evidence could be extracted. Add substantive paper text.")
+            cohort = self.store.get("cohort")
+            cohort_key = digest([PROMPT_VERSION, self.skill_key, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
+            if cohort:
+                try:
+                    check_references(cohort["proposed"], {e["id"] for e in self.store.rows("evidence")}, {p["id"] for p in self.store.rows("papers")})
+                except ValueError:
+                    cohort = None
+            cohort_created = False
+            if not cohort or cohort.get("key") != cohort_key:
+                context = self.context()
+                refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
+                problem = self.task("map", context, refs)
+                self.store.set("problem_model", problem)
+                proposal_payload = {**context, "problem_model": problem, "max_candidates": self.config["max_candidates"]}
+                def validate_proposal(value):
+                    refs(value)
+                    if len(value["candidates"]) > self.config["max_candidates"]:
+                        raise ValueError("Too many candidates")
+                    for candidate in value["candidates"]:
+                        if not candidate["evidence_ids"] or any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
+                            raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
+                        motive = candidate["motivation"]
+                        if not motive["evidence_ids"] or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+                            raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
+                    if not value["candidates"] and not value["no_candidate_reason"].strip():
+                        raise ValueError("No-candidate outcome requires a reason")
+                proposed = self.task("propose", proposal_payload, validate_proposal)
+                if self.store.rows("candidates"):
+                    self.store.event("cohort_archived", {"candidates": self.store.rows("candidates")})
+                cohort = {"key": cohort_key, "proposed": proposed, "created_at": now()}
+                self.store.set("cohort", cohort)
+                self.store.set("no_candidate_reason", proposed["no_candidate_reason"])
+                cohort_created = True
+            else:
+                proposed = cohort["proposed"]
+            old = {} if cohort_created else {c["id"]: c for c in self.store.rows("candidates")}
+            candidates = []
+            for item in proposed["candidates"]:
+                idea_id = "idea_" + digest(item)[:10]
+                candidate = {"id": idea_id, "proposal": item, "versions": [], "execution_status": "pending", "research_status": "proposed", "empirical_status": "untested"}
+                if idea_id in old:
+                    candidate = old[idea_id]
+                candidates.append(candidate)
+            self.store.replace_candidates(candidates)
+            for candidate in candidates:
+                self.develop_candidate(candidate)
+            self.store.set("status", "completed")
+            self.store.event("run_completed", {"candidate_count": len(candidates)})
+        except BudgetExhausted:
+            self.store.set("status", "budget_exhausted")
+            raise
+        except Exception:
+            self.store.set("status", "blocked")
+            raise
+        finally:
+            self.store.set("elapsed_s", self.previous_elapsed + time.monotonic() - self.started)
+
+    def develop_candidate(self, candidate):
+        # Keep an immutable reference for the bounded revision task. This is a
+        # record of the original proposal, not an automated semantic drift test.
+        snapshot = lambda value: json.loads(json.dumps(value, ensure_ascii=False))
+        candidate.setdefault("original_anchor", {
+            field: candidate["proposal"].get(field, "")
+            for field in ("problem", "hypothesis", "prediction")
+        })
+        original_anchor = snapshot(candidate["original_anchor"])
+        anchored_proposal = {**candidate["proposal"], **original_anchor}
+        substantive_sections = ("method", "motivation", "prior_art", "novelty_claim", "feasibility", "validation")
+        progress_limitation = (
+            "Exact structured-content and evidence-ID comparison only; wording changes may be counted "
+            "as changes, and changed text does not establish that an objection was resolved."
+        )
+
+        def changed_fields(before, after, path=""):
+            if isinstance(before, dict) and isinstance(after, dict):
+                changes = []
+                for key in sorted(set(before) | set(after)):
+                    changes.extend(changed_fields(before.get(key), after.get(key), f"{path}.{key}" if path else key))
+                return changes
+            return [] if before == after else [{"field": path, "previous": snapshot(before), "current": snapshot(after)}]
+
+        development_key = digest([PROMPT_VERSION, self.skill_key, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), self.config["constraints"], self.config["max_rounds"]])
+        if candidate.get("development_key") not in {None, development_key}:
+            self.store.event("candidate_versions_archived", {"candidate_id": candidate["id"], "versions": candidate.get("versions", [])})
+            candidate.update(versions=[], development_complete=False)
+            candidate.pop("spec", None)
+            candidate.pop("review", None)
+        candidate["development_key"] = development_key
+        versions = list(candidate.get("versions", []))
+        current = candidate.get("spec")
+        review = candidate.get("review")
+        if candidate.get("development_complete"):
+            self.progress(f"cached candidate {candidate['id']}")
+            return
+        self.search_for_candidate(candidate)
+        self.focus_sources(candidate)
+        self.audit_papers()
+        for round_index in range(len(versions), self.config["max_rounds"]):
+            context = self.context()
+            evidence_ids = {e["id"] for e in context["evidence"]}
+            paper_ids = {p["id"] for p in context["papers"]}
+            def spec_check(value):
+                check_references(value, evidence_ids, paper_ids)
+                motive = value["motivation"]
+                if not motive["evidence_ids"] or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+                    raise ValueError("Method needs a complete, evidence-grounded motivation chain")
+                validate_comparisons(value["prior_art"]["overlaps"])
+                evidence_gate(value, context["evidence"])
+                assess_feasibility(value, context["evidence"])
+                if not value["method"]["changes"] or not value["validation"]["first_test"].strip():
+                    raise ValueError("Missing concrete change or first test")
+            previous_spec, previous_review = current, review
+            previous_record = versions[-1].get("revision_record", {}) if versions else {}
+            previous_evidence_ids = previous_record.get("evidence_ids")
+            payload = {**context, "candidate": anchored_proposal, "round": round_index + 1}
+            if current is not None:
+                payload.update(previous_spec=current, review=review)
+                if previous_record:
+                    payload["previous_revision_record"] = previous_record
+            current = self.task("develop" if round_index == 0 else "refine", payload, spec_check)
+            novelty, warnings = evidence_gate(current, context["evidence"])
+            comparison = assess_novelty(current, context["evidence"])
+            feasibility = assess_feasibility(current, context["evidence"])
+            warnings.extend(feasibility["warnings"])
+            def review_check(value):
+                check_references(value, evidence_ids, paper_ids)
+                assess_motivation({**candidate["proposal"], "motivation": current["motivation"]}, value, context["evidence"])
+            review = self.task("review", {**context, "candidate": anchored_proposal, "method_spec": current}, review_check)
+            motivation = assess_motivation({**candidate["proposal"], "motivation": current["motivation"]}, review, context["evidence"])
+            warnings.extend(motivation["warnings"])
+            # A review verdict alone cannot prove novelty coverage or empirical success.
+            if review["verdict"] == "covered" and novelty != "covered":
+                warnings.append("Reviewer coverage opinion is unconfirmed; retain candidate for targeted checking.")
+            critical = any(i["severity"] == "critical" for i in review["issues"])
+            research_status = "prerequisites_unverified" if feasibility["status"] == "prerequisites_unverified" else "specified_for_test"
+            if review["verdict"] == "blocked":
+                research_status = "implementation_blocked"
+            elif review["verdict"] == "refine" or critical:
+                research_status = "needs_revision"
+            if motivation["status"] == "needs_revision":
+                research_status = "needs_revision"
+            elif motivation["status"] == "motivation_unresolved" and research_status == "specified_for_test":
+                research_status = "motivation_unresolved"
+            if novelty == "covered":
+                research_status = "overlap_requires_confirmation"
+            if feasibility["status"] == "blocked":
+                research_status = "implementation_blocked"
+            candidate.update(spec=current, review=review, novelty_status=novelty, warnings=warnings,
+                comparison_gaps=comparison["comparison_gaps"], feasibility_status=feasibility["status"], feasibility_assessment=feasibility,
+                motivation_status=motivation["status"], motivation_assessment=motivation,
+                empirical_status="untested", research_status=research_status, execution_status="completed",
+                review_scope="separate task using configured backend; not empirical validation")
+            pending = feasibility["blocking_checks"] or feasibility["unverified_checks"]
+            if pending:
+                item = pending[0]
+                candidate["recommended_action"] = {"kind": "resolve_prerequisite",
+                    "description": item.get("verification_plan") or item.get("acquisition_plan") or str(item),
+                    "decision_impact": "Resolve this execution prerequisite before treating the method as runnable."}
+            else:
+                candidate.pop("recommended_action", None)
+            changes = [] if previous_spec is None else changed_fields(
+                {key: previous_spec.get(key) for key in substantive_sections},
+                {key: current.get(key) for key in substantive_sections})
+            same_evidence = previous_evidence_ids is not None and evidence_ids == set(previous_evidence_ids)
+            exact_repeat = previous_spec is not None and not changes and same_evidence
+            revision_record = {
+                "original_anchor": snapshot(original_anchor),
+                "previous_objections": snapshot((previous_review or {}).get("issues", [])),
+                "previous_revision_instructions": (previous_review or {}).get("revision_instructions", ""),
+                "changed_fields": changes,
+                "evidence_ids": sorted(evidence_ids),
+                "new_evidence_ids": sorted(evidence_ids - set(previous_evidence_ids or [])),
+                "pending_concerns": {
+                    "issues": snapshot(review["issues"]),
+                    "unresolved_questions": snapshot(review["unresolved_questions"]),
+                    "revision_instructions": review["revision_instructions"],
+                },
+                "progress_check": {
+                    "method": "exact_structured_content_and_evidence_ids",
+                    "outcome": ("initial" if previous_spec is None else "unchanged" if exact_repeat
+                        else "baseline_unavailable" if not changes and previous_evidence_ids is None else "changed"),
+                    "limitation": progress_limitation,
+                },
+            }
+            versions.append({"round": round_index + 1, "spec": current, "review": review, "novelty_status": novelty,
+                "feasibility_status": feasibility["status"], "revision_record": revision_record})
+            candidate["versions"] = list(versions)
+            self.store.put("candidates", candidate)
+            self.store.event("candidate_updated", {"id": candidate["id"], "round": round_index + 1, "novelty_status": novelty, "review_verdict": review["verdict"]})
+            action = review["next_action"]
+            added_evidence = False
+            if round_index + 1 < self.config["max_rounds"] and action["kind"] == "search":
+                if self.search_once(action["description"], action["decision_impact"]):
+                    self.extract_papers()
+                    self.focus_sources(candidate)
+                    self.audit_papers()
+                    added_evidence = True
+            # A search may still break an otherwise repeated revision. Compare
+            # actual evidence IDs, not merely a successful retrieval response.
+            after_action_ids = {e["id"] for e in self.store.rows("evidence")}
+            revision_record["evidence_ids_after_action"] = sorted(after_action_ids)
+            revision_record["new_evidence_ids_after_action"] = sorted(after_action_ids - evidence_ids)
+            if exact_repeat and after_action_ids != evidence_ids:
+                revision_record["progress_check"]["outcome"] = "evidence_changed_after_action"
+            needs_more_revision = review["verdict"] == "refine" or motivation["status"] == "needs_revision" or critical
+            if exact_repeat and after_action_ids == evidence_ids and needs_more_revision:
+                candidate["research_status"] = "no_detectable_progress"
+                revision_record["progress_check"]["outcome"] = "no_detectable_progress"
+                candidate["warnings"].append("Repeated refinement changed neither the tracked content nor the evidence; candidate retained. " + progress_limitation)
+                concern = next((issue["issue"] for issue in review["issues"]), None)
+                concern = concern or next(iter(review["unresolved_questions"]), None) or review["revision_instructions"]
+                candidate["recommended_action"] = {
+                    "kind": "read_source",
+                    "description": "Obtain targeted source evidence before another revision: " + (concern or "clarify the weakest unsupported assumption."),
+                    "decision_impact": "Resolve a named uncertainty or explicitly redesign the mechanism; repeated wording alone cannot establish progress.",
+                }
+                self.store.event("revision_stalled", {"candidate_id": candidate["id"], "round": round_index + 1,
+                    "reason": "exact_repeat_without_new_evidence"})
+                break
+            # Code/experiment actions are proposed, never silently executed.
+            if review["verdict"] != "refine" and motivation["status"] != "needs_revision" and not critical and not added_evidence:
+                break
+        if candidate.get("research_status") == "needs_revision" and len(versions) >= self.config["max_rounds"]:
+            candidate["research_status"] = "round_limit_reached"
+        candidate["development_complete"] = True
+        self.store.put("candidates", candidate)

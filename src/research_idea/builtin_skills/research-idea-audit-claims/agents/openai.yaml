@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit Research Claims"
+  short_description: "Check whether paper claims match reported evidence"
+  default_prompt: "Use $research-idea-audit-claims to compare the supplied paper claims with their reported experimental support."

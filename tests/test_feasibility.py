@@ -4,7 +4,7 @@ from __future__ import annotations
 import copy
 import unittest
 
-from research_agent.feasibility import assess_feasibility
+from research_idea.feasibility import assess_feasibility
 
 
 DIMENSIONS = ["data_access", "inference_signal", "interface", "learning_signal",

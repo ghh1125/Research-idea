@@ -1,26 +1,28 @@
 # 架构与当前范围
 
-CLI 使用单进程控制器，SQLite 保存项目状态，文件保存报告和实验日志。研究过程与模型后端解耦。
+CLI 使用单进程控制器，SQLite 保存项目状态，文件保存 idea 报告。研究过程与模型后端解耦。
 
 | 模块 | 责任 |
 | --- | --- |
-| `cli.py` | 命令、项目锁、导入导出、显式实验入口 |
+| `cli.py` | 命令、项目锁、导入导出、本地 skill 选择 |
 | `controller.py` | 证据门槛、候选定向补读、对照与可行性状态、迭代、预算、恢复 |
 | `prompts.py` / `schema.py` | 有边界的任务规范和本地结构校验 |
-| `novelty.py` / `feasibility.py` / `motivation.py` | 对照证据、操作前提与动机审阅的独立状态规则 |
-| `store.py` | 来源、证据、候选版本、任务缓存、事件与实验 |
-| `literature.py` | arXiv/OpenAlex、规范化、去重、本地正文读取 |
+| `claims.py` / `novelty.py` / `feasibility.py` / `motivation.py` | 对照证据、操作前提与动机审阅的独立状态规则 |
+| `store.py` | 来源、证据、候选版本、任务缓存、事件与 skill 指纹 |
+| `literature.py` / `venues.py` / `fulltext.py` | arXiv/OpenAlex/OpenReview、会议元数据过滤、有限全文获取、规范化与去重 |
 | `backends/` | Codex、Claude Code、OpenAI-compatible、Anthropic |
-| `experiments.py` | 用户显式提供的本地实验规格执行 |
+| `local_skills.py` / `builtin_skills/` | 加载显式选择的本地文件与七个内置研究 skill，按阶段提供指导 |
 | `report.py` | 可读报告和机器可读结果 |
 
 ## 控制流程
 
 ```mermaid
 flowchart TD
-    A["主题与约束"] --> B["来源与原文证据"]
-    B --> C["问题模型与候选"]
-    C --> R["最近工作全文定向补读"]
+    A["研究意图与约束"] --> S["英文检索规划与搜索"]
+    S --> B["正文与实验证据"]
+    B --> Q["主张与实验支持审计"]
+    Q --> C["问题建模与头脑风暴"]
+    C --> R["候选定向检索与深读"]
     R --> D["贡献主张与六维方法对照"]
     D --> E["七维可行性与机制审阅"]
     E --> F{"下一步需要什么"}
@@ -34,7 +36,7 @@ flowchart TD
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 2`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 3`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -54,7 +56,7 @@ flowchart TD
 
 `TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
 
-模型后端用于有边界的推理任务。检索和正文读取在控制器执行；模型输出的工具建议由控制器选择性处理。当前自动补证据包括有预算的学术搜索，以及对已导入最近工作全文的候选定向补读。代码检查和科学实验建议保留为下一步动作，不会未经用户显式执行命令启动。
+模型后端用于有边界的推理任务。检索和正文读取在控制器执行；模型输出的工具建议由控制器选择性处理。当前自动补证据包括有预算的学术搜索、公开全文获取，以及对最近工作全文的候选定向补读。失败的全文获取不会提升来源等级；检索覆盖缺口独立保存。代码检查和科学实验建议仅作为 idea 的交接计划；CLI 不提供实验执行或论文写作入口。
 
 API key 读取、请求协议和超时都留在适配器。适配器不把失败转换成 demo，不把 refusal 或截断结果当成有效 JSON。每个原生协议的结构化输出要求可能随服务变化，应通过真实账户做兼容性验证。
 
@@ -62,9 +64,9 @@ API key 读取、请求协议和超时都留在适配器。适配器不把失败
 
 - 任务：running / succeeded / failed。成功结果使用输入与后端配置散列缓存。
 - 项目：initialized / sources_changed / running / completed / budget_exhausted / blocked。
-- 候选：proposed / specified_for_test / prerequisites_unverified / motivation_unresolved / needs_revision / implementation_blocked / round_limit_reached / overlap_requires_confirmation。
+- 候选：proposed / specified_for_test / prerequisites_unverified / motivation_unresolved / needs_revision / implementation_blocked / round_limit_reached / overlap_requires_confirmation / no_detectable_progress。
 - 操作前提：`feasibility_status` 为 `prerequisites_unverified`（前提待核实）、`blocked`（前提阻塞）或 `specified_not_executed`（规格明确但未执行）；逐项依据另存，不能把流程完成当成实施已验证。
-- 实验证据：初始 untested；独立实验执行记录保持 unreviewed。
+- 实验证据：初始 untested；系统只输出验证计划，不执行科学实验。
 
 completed 表示这一轮软件工作结束，不表示 idea 已验证或具备发表价值。
 
@@ -74,6 +76,27 @@ completed 表示这一轮软件工作结束，不表示 idea 已验证或具备�
 
 1. 在现有候选定向补读上增加逐节定位、附录读取和全文覆盖审计，减少启发式片段遗漏。
 2. 使用固定真实文献集比较直接提示、普通 RAG 和本系统的质量。
-3. 将真实实验结果以审阅任务回写主张，保留相反解释和统计不确定性。
-4. 真实模型/CLI/GPU 环境联调。
+3. 评估最小验证计划是否真正区分核心机制和简单替代解释。
+4. 真实模型与本地 CLI 兼容性联调。
 5. 需要时添加批量并发和更多文献源；当前不需要分布式 agent 平台。
+
+## 本地 skill 与可复现性
+
+内置七个 skill 随包发布，默认启用；外部 skill 只按明确选择加载。`local_skills.py` 对已知研究 skill 按阶段分配；未知的用户自定义 skill 作为所有阶段的显式补充，用户应保持其范围简洁。相同名称的不同路径不会自动覆盖。
+
+控制器在一次运行开始时读取并冻结 skill 文本，提示词只携带当前阶段相关内容。文件 SHA-256 进入任务缓存，完整选择进入候选批次与方法版本的散列。报告保留实际使用清单；指纹说明加载了哪个版本，不证明模型完全遵循或研究效果更好。
+
+本地 Codex executable 和 profile 进入执行身份。Codex 自己负责现有登录与用户配置，本程序不复制认证文件。当前边界保持受限推理，skill 的脚本与外部工具需要另行实现，不能由文本指导暗中启动。
+
+
+普通证据抽取会替换此前同来源的普通解释；空结果也生效。定向阅读记录来源散列、阶段指导指纹与候选范围，只有来源和指导仍一致的记录才会保留。修改 skill 后不能仅因论文文本没变，就继续沿用已经撤回的抽取结论。
+
+## 主张审计与检索规划
+
+`plan_search` 将中文/英文意图转成最多三条英文关键词查询，包含目的与理由；`search_planning.py` 校验结构、长度、重复和容量，计划不是检索证据。初始检索保留约一半文献容量用于候选后的机制定向查询，所有调用计入统一预算。
+
+`audit_claims` 每篇全文最多审计四项主张，保存作者主张、测试范围、结果证据、可支持结论、限制、混杂、缺少的对照和下一步阅读。`claims.py` 重新检查同篇来源哈希和引文位置；摘要、作者主张、无实验条件的引用不能算实验证据。不支持的判断降为 `insufficient_evidence`。结果的来源分类和语义支持仍由模型判断，因此不能把结构校验当作科学证明。
+
+六维 novelty gate 的 `covered` 还要求 evaluation 对照引用同篇全文 `reported_result`。这是保守的实证研究筛选门槛；理论性主张仍可能需要人工核查，证据不足不会证明机制新颖。
+
+`versions[].revision_record` 保存原始问题/假设/预测、上轮质疑、逐字段变化、新证据和当前未解决问题。仅内容精确重复、证据未变且仍要求修订时返回 `no_detectable_progress`。文字改写仍可能算变化；程序没有声称能机械判定语义进步。

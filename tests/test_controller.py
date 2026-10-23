@@ -7,14 +7,14 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from research_agent.backend_types import BackendError, BackendResult
-from research_agent.config import DEFAULTS
-from research_agent.controller import (
+from research_idea.backend_types import BackendError, BackendResult
+from research_idea.config import DEFAULTS
+from research_idea.controller import (
     BudgetExhausted, Controller, check_references, evidence_gate,
     locate_quote, make_evidence,
 )
-from research_agent.schema import SCHEMAS, validate
-from research_agent.store import Store
+from research_idea.schema import SCHEMAS, validate
+from research_idea.store import Store
 
 
 QUOTE = "The observed benefit depends on the available inference budget."
@@ -292,7 +292,7 @@ class ControllerExecutionTests(unittest.TestCase):
         self.assertEqual([t.stage for t in backend.calls], ["develop", "review", "refine"])
         self.assertEqual(len(candidate["versions"]), 2)
         self.assertEqual(candidate["motivation_status"], "needs_revision")
-        self.assertEqual(candidate["research_status"], "round_limit_reached")
+        self.assertEqual(candidate["research_status"], "no_detectable_progress")
 
     def test_hypothesis_focused_reading_is_preserved_by_resume_extraction(self):
         paper = EvidenceIntegrityTests().paper()
