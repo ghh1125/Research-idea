@@ -47,7 +47,7 @@ research-idea resume --project ./research-projects/demo
 
 ### 对话终端：在同一个窗口讨论、研究和调整设置
 
-启动页标识为 `◆ RESEARCH IDEA — IDEAS ONLY · From papers to research proposals`，交付研究方案与验证设计，不执行科学实验。底部长期显示 `/intro` 使用介绍和常用命令。
+启动页用绿色大号 ASCII `IDEA` 标识，配有 `RESEARCH` 和 `IDEAS ONLY · From papers to research proposals`，下方显示编号使用说明。交付研究方案与验证设计，不执行科学实验。底部长期显示 `/intro` 使用介绍和常用命令。
 
 ```bash
 research-idea chat --project ./research-projects/my-idea

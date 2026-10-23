@@ -49,7 +49,24 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 BUDGET_KEYS = ('max_papers', 'max_candidates', 'max_rounds', 'max_calls', 'max_seconds', 'timeout_s')
-BRAND = '◆ RESEARCH IDEA\n  IDEAS ONLY · From papers to research proposals'
+BRAND = r'''             R E S E A R C H
+
+       ___ ____  _____    _
+      |_ _|  _ \| ____|  / \
+       | || | | |  _|   / _ \
+       | || |_| | |___ / ___ \
+      |___|____/|_____/_/   \_\
+
+       IDEAS ONLY
+       From papers to research proposals'''
+WELCOME_NOTES = '''使用说明 / NOTES
+1. 直接输入方向即可讨论；/model 选模型，/reasoning 调整思考强度。
+2. /topic 确认正式主题；/scope 配置文献范围；/budget 查看调用和时间预算。
+3. /run 开始文献研究，最后得到 idea 方案与第一步验证设计。
+4. [paper] 对应论文，[evidence] 对应原文；/evidence ID 可以追溯依据。
+5. 方案是待验证假设，程序不执行科学实验；[thinking] 表示等待模型答复。
+6. /stop 停止并保留检查点，/run 继续；重开同一项目可恢复。
+输入 /intro 看完整使用介绍，/help 看所有命令。'''
 
 
 def safe_text(text):
@@ -59,7 +76,7 @@ def safe_text(text):
 
 def fragments(tag, text):
     if tag == 'brand':
-        return [('ansicyan bold', '\n' + safe_text(text) + '\n')]
+        return [('ansigreen bold', '\n' + safe_text(text) + '\n')]
     color = COLORS.get(tag, 'ansicyan')
     result = [(color + ' bold', f'\n── [{safe_text(tag)}] ' + '─' * 34 + '\n')]
     pattern = r'(ev_[a-zA-Z0-9_]+|https?://[^\s]+|arxiv:[^\s]+|doi:[^\s]+)'
@@ -399,7 +416,7 @@ class Chat:
                                      bottom_toolbar=self.toolbar, refresh_interval=1)
         with patch_stdout():
             self.show('brand', BRAND)
-            self.show('system', f'项目：{self.project}\n直接输入研究方向，或 /intro 查看使用介绍。/model 换模型，/reasoning 调强度，/run 开始研究。\n分析输出为可核查摘要；[thinking] 仅表示等待模型答复。')
+            self.show('system', WELCOME_NOTES + f'\n\n项目：{self.project}')
             try:
                 while True:
                     try:
