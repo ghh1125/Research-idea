@@ -219,15 +219,36 @@ def enrich_selected(paper, timeout_s=15):
             return dict(paper, abstract=abstract, pdf_url=link.replace('/forum?', '/pdf?'),
                         locations=[{'landing_page_url': link}])
     if paper.get('venue') == 'COLM':
-        # The official accepted list has titles only; match an exact normalized
-        # title before attaching an independently found preprint. No fuzzy join.
-        clean = lambda value: re.sub(r'[^\w]', '', value.casefold())
-        title = paper['title'].replace('"', '')
-        found = discover('ti:"' + title + '"', source='arxiv', limit=3, timeout_s=timeout_s)
-        for match in found:
-            if clean(match['title']) == clean(paper['title']):
-                return dict(paper, abstract=match['abstract'], pdf_url=match.get('pdf_url'),
-                            arxiv_id=match.get('arxiv_id'), aliases=list(set(paper['aliases'] + match['aliases'])),
-                            locations=[{'landing_page_url': match['url']}])
+        matched = match_preprint(paper, timeout_s)
+        if matched:
+            return matched
         raise LiteratureError('COLM accepted title has no exact-title preprint match in the bounded lookup')
     return paper
+
+
+def match_preprint(paper, timeout_s=15):
+    """Attach a public preprint only after exact normalized title matching.
+
+    Conference metadata stays intact; the body can be an earlier arXiv version.
+    Its identity and version are recorded separately for downstream comparison.
+    """
+    from .literature import discover
+    clean = lambda value: re.sub(r'[^\w]', '', value.casefold())
+    title = paper['title'].replace('"', '')
+    found = discover('ti:"' + title + '"', source='arxiv', limit=3, timeout_s=timeout_s)
+    for match in found:
+        if clean(match['title']) != clean(paper['title']):
+            continue
+        authors = {clean(a) for a in paper.get('authors', [])}
+        matched_authors = {clean(a) for a in match.get('authors', [])}
+        if authors and matched_authors and not authors.intersection(matched_authors):
+            continue
+        return dict(paper, abstract=paper.get('abstract') or match.get('abstract', ''),
+            pdf_url=match.get('pdf_url'), arxiv_id=match.get('arxiv_id'),
+            version=match.get('version'),
+            aliases=sorted(set(paper.get('aliases', [paper['id']]) + match.get('aliases', [match['id']]))),
+            locations=paper.get('locations', []) + [{'landing_page_url': match['url']}],
+            full_text_origin={'kind': 'arxiv_preprint', 'url': match['url'],
+                'version': match.get('version'), 'publication_date': match.get('publication_date'),
+                'match': 'normalized_exact_title'})
+    return None

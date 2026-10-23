@@ -10,7 +10,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch, AsyncMock
 
-from research_idea.backend_types import BackendResult
+from research_idea.backend_types import BackendError, BackendResult
 from research_idea.chat import Chat, initialize, model_catalog, fragments, safe_text
 from research_idea.chat_worker import chat_turn, research
 from research_idea.cli import build_parser, main
@@ -109,6 +109,24 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(store.get('calls_used'), 1)
         self.assertGreater(store.get('elapsed_s'), 0)
         store.close()
+
+    async def test_chat_total_deadline_reports_budget_and_preserves_input(self):
+        self.chat.settings(max_seconds=60, timeout_s=120)
+        with patch('research_idea.chat_worker.time.monotonic', return_value=0) as clock:
+            class Backend:
+                def generate(self, spec):
+                    clock.return_value = 60
+                    raise BackendError('model task timed out')
+            with patch('research_idea.chat_worker.make_backend', return_value=Backend()), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(BudgetExhausted, 'max_seconds'):
+                    chat_turn(self.project, '保留这条讨论')
+        store = Store(self.project)
+        try:
+            self.assertEqual(store.get('calls_used'), 1)
+            self.assertEqual(store.get('elapsed_s'), 60)
+            self.assertEqual(store.get('chat_messages')[-1]['content'], '保留这条讨论')
+        finally:
+            store.close()
 
     async def test_research_worker_emits_findings_and_finishes_with_idea(self):
         store = Store(self.project)

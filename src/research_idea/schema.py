@@ -22,6 +22,8 @@ STRINGS = array(STR)
 PLAN_SEARCH = obj(research_question=STR, scope=STR,
     queries=array(obj(query=STR, purpose=string(["background", "mechanism", "counterevidence"]), rationale=STR)),
     assumptions=STRINGS)
+SCREEN_PAPERS = obj(selection_summary=STR,
+    selected=array(obj(paper_id=STR, reason=STR, reading_question=STR)))
 EVIDENCE = obj(observations=array(obj(statement=STR, quote=STR, kind=string(["reported_result", "author_claim", "limitation"]), conditions=STR, source_section=STR)))
 CLAIM_AUDIT = obj(
     paper_id=STR,
@@ -83,7 +85,7 @@ PAPER_CARD = obj(paper_id=STR, paper_type=string(["method", "empirical", "theory
     opportunities=array(obj(hypothesis=STR, evidence_ids=STRINGS, why_meaningful=STR, first_test=STR, falsifier=STR)),
     reading_gaps=STRINGS,
     followup_requests=array(obj(target_id=STR, question=STR, decision_impact=STR)))
-SCHEMAS = {"plan_search": PLAN_SEARCH, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD,
+SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD,
     "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 
 

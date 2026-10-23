@@ -250,6 +250,33 @@ class ControllerExecutionTests(unittest.TestCase):
         self.assertEqual(len(backend.calls), 1)
         self.assertEqual(self.store.task_summary(), {"failed": 1})
 
+    def test_total_deadline_during_call_is_budget_exhaustion(self):
+        backend = FakeBackend([])
+        controller = self.controller(backend, timeout_s=120, max_seconds=60)
+
+        def expire(task):
+            self.assertLessEqual(task.timeout_s, 60)
+            controller.started -= 61
+            raise BackendError("model exceeded the remaining task timeout")
+
+        backend.generate = expire
+        controller.initial_search = lambda: None
+        controller.retrieve_full_texts = lambda: None
+        controller.read_papers = lambda: None
+        controller.audit_papers = lambda: None
+        with self.assertRaisesRegex(BudgetExhausted, "max_seconds"):
+            controller.run()
+        self.assertEqual(self.store.get("status"), "budget_exhausted")
+        self.assertEqual(self.store.get("calls_used"), 1)
+        self.assertGreaterEqual(self.store.get("elapsed_s"), 60)
+        self.assertEqual(self.store.task_summary(), {"failed": 1})
+
+    def test_single_call_timeout_keeps_backend_error_with_time_left(self):
+        backend = FakeBackend([BackendError("model exceeded the 20s task timeout")])
+        with self.assertRaises(BackendError):
+            self.controller(backend, timeout_s=20, max_seconds=60).task("map", {})
+        self.assertEqual(len(backend.calls), 1)
+
     def test_parse_value_error_repairs_without_a_previous_result_object(self):
         backend = FakeBackend([ValueError('malformed structured output'), valid_shape(SCHEMAS['map'])])
         self.controller(backend).task('map', {})
@@ -327,6 +354,59 @@ class ControllerExecutionTests(unittest.TestCase):
         self.assertIn("Does budget explain the effect?", backend.calls[0].prompt)
         controller.focus_sources(candidate)
         self.assertEqual(len(backend.calls), 2)
+
+    def test_comparison_interruption_resumes_saved_draft_with_new_papers(self):
+        self.store.put('papers', {'id': 'paper-1', 'title': 'Budget study', 'content_kind': 'abstract'})
+        self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
+        proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
+        proposal['motivation']['evidence_ids'] = ['ev-1']
+        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
+        method = EvidenceIntegrityTests().spec('ev-1')
+        first_backend = FakeBackend([method])
+        first = self.controller(first_backend, max_rounds=1)
+
+        def interrupted_search(item):
+            self.assertEqual(self.store.rows('candidates')[0]['spec'], method)
+            self.store.put('papers', {'id': 'paper-2', 'title': 'New comparison source'})
+            raise BudgetExhausted('Comparison stopped after saving a new source')
+
+        first.search_for_candidate = interrupted_search
+        with self.assertRaises(BudgetExhausted):
+            first.develop_candidate(candidate)
+        self.assertEqual([task.stage for task in first_backend.calls], ['develop'])
+        saved = self.store.rows('candidates')[0]
+        self.assertFalse(saved.get('development_complete', False))
+        resumed_backend = FakeBackend([valid_shape(SCHEMAS['review'])])
+        resumed = self.controller(resumed_backend, max_rounds=1)
+        resumed.develop_candidate(saved)
+        self.assertEqual([task.stage for task in resumed_backend.calls], ['review'])
+        self.assertEqual(saved['spec'], method)
+        self.assertTrue(saved['development_complete'])
+        self.assertNotIn('pending_round', saved)
+        self.assertEqual(self.store.get('calls_used'), 2)
+
+    def test_full_text_upgrade_rebinds_draft_before_review(self):
+        self.store.put('papers', {'id': 'paper-1', 'title': 'Budget study', 'content_kind': 'abstract'})
+        self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
+        proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
+        proposal['motivation']['evidence_ids'] = ['ev-1']
+        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
+        method = EvidenceIntegrityTests().spec('ev-1')
+        refreshed = EvidenceIntegrityTests().spec('ev-2')
+        backend = FakeBackend([method, refreshed, valid_shape(SCHEMAS['review'])])
+        controller = self.controller(backend, max_rounds=1)
+
+        def upgrade(item):
+            self.store.replace_evidence('paper-1', [{'id': 'ev-2', 'paper_id': 'paper-1', 'source_kind': 'full_text'}])
+
+        controller.search_for_candidate = upgrade
+        controller.focus_sources = lambda item: None
+        controller.audit_papers = lambda: None
+        controller.develop_candidate(candidate)
+        self.assertEqual([task.stage for task in backend.calls], ['develop', 'develop', 'review'])
+        self.assertIn('source_refresh', backend.calls[1].prompt)
+        self.assertEqual(candidate['spec']['motivation']['evidence_ids'], ['ev-2'])
+        check_references(candidate['spec'], {'ev-2'}, {'paper-1'})
 
 
 class SchemaBoundaryTests(unittest.TestCase):

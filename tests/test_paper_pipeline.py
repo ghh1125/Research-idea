@@ -48,6 +48,11 @@ class PipelineBackend:
                       "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion."}
                                   for query, purpose in zip(queries, ("background", "mechanism", "counterevidence"))],
                       "assumptions": ["Resource access remains unspecified."]}
+        elif task.stage == "screen_papers":
+            output = {'selection_summary': 'Read the synthetic routing sources.',
+                'selected': [{'paper_id': p['id'], 'reason': 'Direct routing study.',
+                              'reading_question': 'Which controls isolate the routing signal?'}
+                             for p in payload['papers'][:payload['max_papers']]]}
         elif task.stage in {"extract", "inspect_source", "read_section"}:
             observations = []
             for line in payload["excerpt"].splitlines():
@@ -136,6 +141,8 @@ class PaperPipelineTests(unittest.TestCase):
         first_audit = trace.index(("model", "audit_claims"))
         first_map = trace.index(("model", "map"))
         self.assertLess(last_search, first_extract)
+        self.assertLess(last_search, trace.index(("model", "screen_papers")))
+        self.assertLess(trace.index(("model", "screen_papers")), first_extract)
         self.assertLess(first_extract, first_audit)
         self.assertLess(first_audit, first_map)
         self.assertLess(first_map, trace.index(("model", "propose")))
@@ -166,6 +173,7 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertEqual(search.call_args_list[-1].args[0], "candidate routing counterexamples")
         self.assertEqual(search.call_args_list[-1].kwargs["limit"], 20)
         self.assertIn("candidate", [payload for stage, payload in backend.calls if stage == "plan_search"][-1])
+        self.assertEqual([payload for stage, payload in backend.calls if stage == 'screen_papers'][-1]['candidate'], candidate['proposal'])
         self.assertEqual(set(self.store.get("search_plans")), {"initial", "candidate-1"})
 
     def test_no_search_and_demo_do_not_plan_or_call_discovery(self):
@@ -199,7 +207,7 @@ class PaperPipelineTests(unittest.TestCase):
         resumed = PipelineBackend()
         with patch("research_idea.literature.discover", side_effect=[[paper("second")], [paper("third")]]) as search:
             self.controller(resumed, max_papers=6).initial_search()
-        self.assertEqual(resumed.calls, [])
+        self.assertEqual([stage for stage, _ in resumed.calls], ['screen_papers'])
         self.assertEqual([call.args[0] for call in search.call_args_list], QUERIES[1:])
         self.assertEqual(len(self.store.rows("papers")), 3)
 

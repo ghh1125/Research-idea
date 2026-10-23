@@ -4,6 +4,7 @@ from __future__ import annotations
 
 STAGE_LABELS = {
     'plan_search': ('search', '1/4 · 找论文'),
+    'screen_papers': ('search', '1/4 · 选择值得精读的论文'),
     'extract': ('read', '2/4 · 阅读论文'),
     'read_section': ('read', '2/4 · 阅读正文'),
     'paper_card': ('analysis', '2/4 · 梳理论文的方法与启发'),
@@ -55,6 +56,11 @@ def activity_summary(stage, result):
         for item in result.get('queries', []):
             add('检索', item['query'])
             add('为什么找它', item['rationale'])
+    elif stage == 'screen_papers':
+        add('选读思路', result.get('selection_summary'))
+        for item in result.get('selected', []):
+            add('选读原因', item['reason'])
+            add('要从正文确认什么', item['reading_question'])
     elif stage == 'paper_card':
         labels = {'problem': '它解决什么问题', 'motivation': '为什么这样设计',
                   'method': '具体做法', 'results': '主要结果', 'idea_relevance': '对 idea 的启发'}

@@ -273,6 +273,9 @@ def export_report(store: Store, output_dir: Path | None = None):
         lines.append(f"- `{p['id']}` — {p['title']}；{p.get('publication_date') or p.get('year') or '日期未核实'}；{venue}；{', '.join(p.get('categories', [])) or '无 arXiv 分类'}；{p.get('content_kind', 'abstract')}；{p.get('url', '')}")
         if p.get("full_text_error"):
             lines.append("  全文缺口：" + str(p["full_text_error"]))
+        if p.get('full_text_origin'):
+            origin = p['full_text_origin']
+            lines.append(f"  实际阅读版本：arXiv {origin.get('version') or '版本未标明'}；{origin.get('url', '')}；会议元数据与预印本版本分别保留。")
     lines.extend(["", "## 原文证据", ""])
     for e in evidence:
         lines.extend([f"### {e['id']}", "", f"来源 `{e['paper_id']}`，第 {e['page']} 页 / 第 {e['line']} 行；{e['source_kind']}；{e['reading_coverage']}", "", e["statement"], "", "> " + e["quote"].replace("\n", "\n> "), "", "条件：" + e["conditions"], ""])

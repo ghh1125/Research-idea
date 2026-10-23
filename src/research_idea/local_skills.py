@@ -15,7 +15,7 @@ from typing import Any
 MAX_FILE_BYTES = 32 * 1024
 MAX_DISCOVERY_ENTRIES = 5000
 MAX_DEPTH = 3
-ALL_STAGES = ("plan_search", "extract", "read_section", "paper_card", "audit_claims", "map", "propose", "develop", "review", "refine", "inspect_source")
+ALL_STAGES = ("plan_search", "screen_papers", "extract", "read_section", "paper_card", "audit_claims", "map", "propose", "develop", "review", "refine", "inspect_source")
 BUILTIN_ROOT = Path(__file__).parent / "builtin_skills"
 BUILTIN_NAMES = (
     "research-idea-read-evidence", "research-idea-motivation", "research-idea-compare-methods",

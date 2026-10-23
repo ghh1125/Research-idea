@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 import time
 
-from .backend_types import TaskSpec
+from .backend_types import BackendError, TaskSpec
 from .backends import make_backend
 from .config import load_config
 from .controller import Controller, BudgetExhausted
@@ -131,6 +131,10 @@ def chat_turn(project, message):
                             'model': cfg['model'], 'reasoning_effort': cfg['reasoning_effort']})
             store.set('chat_messages', history)
             event('assistant', answer)
+        except BackendError as exc:
+            if elapsed + time.monotonic() - started >= cfg['max_seconds']:
+                raise BudgetExhausted('累计时间预算已用完；用 /budget max_seconds 增加后继续。') from exc
+            raise
         finally:
             if invoked:
                 store.set('elapsed_s', elapsed + time.monotonic() - started)
@@ -193,7 +197,7 @@ def main():
         event('stopped', '已停止；研究检查点已保留，可用 /run 继续。')
         return 130
     except BudgetExhausted:
-        event('budget', '本轮预算已用完，方案和进度已保存。用 /budget 调整后 /run 继续。')
+        event('budget', '本轮预算已用完，方案和进度已保存。用 /budget 查看；调整 max_seconds（累计时间）或 max_calls（调用次数）后 /run 继续。')
         return 3
     except (ValueError, RuntimeError, OSError) as exc:
         event('error', error_summary(exc))

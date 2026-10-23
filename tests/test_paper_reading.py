@@ -186,6 +186,9 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.assertEqual(card["inventory"]["sections"][1]["text_coverage"], "unread")
         self.assertEqual(card["followup_attempts"][0]["status"], "additional_text_supplied")
         self.assertEqual(len(self.store.rows("evidence")), 2)
+        card_payload = [data for stage, data in backend.calls if stage == 'paper_card'][-1]
+        self.assertEqual(card_payload['citation_groups']['reported_result_ids'], [])
+        self.assertEqual(card_payload['citation_groups']['author_limitation_ids'], [])
 
     def test_resume_replays_followup_without_new_backend_calls(self):
         self.run_read()
@@ -216,16 +219,24 @@ class PaperReadingIntegrationTests(unittest.TestCase):
     def test_zero_followup_budget_retains_explicit_unread_request(self):
         _, backend = self.run_read(max_followup_reads=0)
         self.assertEqual(sum(stage == "read_section" for stage, _ in backend.calls), 1)
+        self.assertEqual(sum(stage == "paper_card" for stage, _ in backend.calls), 1)
         card = self.store.get("paper_cards")["p1"]
         self.assertEqual(card["followup_attempts"][0]["status"], "reading_limit_reached")
         self.assertEqual(card["inventory"]["characters_supplied"], 512)
+        _, resumed = self.run_read(max_followup_reads=0, max_calls=2)
+        self.assertEqual(resumed.calls, [])
+        self.assertEqual(self.store.get("paper_cards")["p1"], card)
 
     def test_already_supplied_target_does_not_repeat_identical_text(self):
         _, backend = self.run_read(max_paper_read_chunks=3)
         self.assertEqual(sum(stage == "read_section" for stage, _ in backend.calls), 3)
+        self.assertEqual(sum(stage == "paper_card" for stage, _ in backend.calls), 1)
         card = self.store.get("paper_cards")["p1"]
         self.assertEqual(card["followup_attempts"][0]["status"], "no_unread_target_text")
         self.assertEqual(card["inventory"]["text_coverage"], "complete_supplied_text")
+        _, resumed = self.run_read(max_paper_read_chunks=3, max_calls=4)
+        self.assertEqual(resumed.calls, [])
+        self.assertEqual(self.store.get("paper_cards")["p1"], card)
 
     def test_budget_stop_after_new_evidence_does_not_export_old_card(self):
         with self.assertRaises(BudgetExhausted):

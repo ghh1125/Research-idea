@@ -20,7 +20,12 @@ class DemoBackend:
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
         refs = [e["id"] for e in payload.get("evidence", [])]
         papers = [p["id"] for p in payload.get("papers", [])]
-        if task.stage == "extract":
+        if task.stage == "screen_papers":
+            output = {'selection_summary': 'Synthetic selection for workflow demonstration.',
+                'selected': [{'paper_id': p['id'], 'reason': 'Synthetic topic-related source.',
+                              'reading_question': 'Which synthetic statement illustrates the workflow?'}
+                             for p in payload['papers'][:payload['max_papers']]]}
+        elif task.stage == "extract":
             lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
             output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
         elif task.stage == "map":

@@ -665,7 +665,30 @@ def fetch_full_text(paper: dict, destination: Path | None = None,
     failure. Only successful nonempty PDF text extraction upgrades content_kind.
     """
     from .fulltext import fetch_full_text as fetch
-    return fetch(paper, destination=destination, timeout_s=timeout_s)
+    if (isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float))
+            or not math.isfinite(timeout_s) or timeout_s <= 0):
+        return fetch(paper, destination=destination, timeout_s=timeout_s)
+    deadline = time.monotonic() + timeout_s
+    fallback = bool(paper.get('venue') and paper.get('source') == 'official_proceedings'
+                    and not paper.get('arxiv_id'))
+    result = fetch(paper, destination=destination, timeout_s=timeout_s / 2 if fallback else timeout_s)
+    if result.get('content_kind') == 'full_text' or not fallback:
+        return result
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return result
+    try:
+        from .proceedings import match_preprint
+        alternate = match_preprint(paper, timeout_s=min(10, remaining / 2))
+        remaining = deadline - time.monotonic()
+        if alternate and remaining > 0:
+            recovered = fetch(alternate, destination=destination, timeout_s=remaining)
+            recovered['primary_full_text_error'] = result.get('full_text_error')
+            return recovered
+    except (LiteratureError, OSError, ValueError):
+        # Preserve the primary source's diagnostic if the bounded lookup fails.
+        pass
+    return result
 
 
 def read_source(path: Path, title: str | None = None) -> dict[str, Any]:

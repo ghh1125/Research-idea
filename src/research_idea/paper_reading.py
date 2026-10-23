@@ -251,6 +251,10 @@ def read_paper(controller, paper):
         payload = {"paper_id": paper["id"], "title": paper["title"], "topic": controller.store.get("topic"),
                    "quote_gaps": [g for g in current_quote_gaps(controller.store).values() if g['paper_id'] == paper['id']],
                    "inventory": coverage, "evidence": list(collected.values()), "followup_attempts": attempts}
+        payload['citation_groups'] = {
+            'reported_result_ids': [e['id'] for e in collected.values() if e['kind'] == 'reported_result'],
+            'author_limitation_ids': [e['id'] for e in collected.values() if e['kind'] == 'limitation'],
+        }
         from .controller import OutputValidationError
         try:
             result = controller.task("paper_card", payload, lambda value: validate_card(value, paper, list(collected.values()), coverage))
@@ -282,8 +286,13 @@ def read_paper(controller, paper):
             extra_reads += 1
             attempts.append({**request, "status": "additional_text_supplied", "chunk_id": available[0]["id"]})
         save()
-    if attempts:
+    if extra_reads:
         synthesize()
+    elif attempts:
+        # A request can target text already supplied, or exceed the reading
+        # limit. Record that outcome without paying for an identical synthesis.
+        cards[paper["id"]]["followup_attempts"] = list(attempts)
+        controller.store.set("paper_cards", cards)
 
 
 def current_cards(papers, evidence, saved, readings):

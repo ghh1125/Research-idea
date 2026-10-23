@@ -6,17 +6,24 @@ import unittest
 from unittest.mock import patch
 
 from research_idea.config import DEFAULTS
+from research_idea.backend_types import BackendResult
 from research_idea.controller import BudgetExhausted, Controller
 from research_idea.literature import LiteratureError, normalize_paper
 from research_idea.report import export_report
 from research_idea.store import Store
 
 
-class UnusedBackend:
+class ScreeningBackend:
     name = "test"
 
     def generate(self, task):
-        raise AssertionError("Retrieval must not invoke a model")
+        if task.stage != 'screen_papers':
+            raise AssertionError('Retrieval may only call metadata screening')
+        data = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+        return BackendResult({'selection_summary': 'Read the conflict study.',
+            'selected': [{'paper_id': p['id'], 'reason': 'Relevant conflict problem.',
+                          'reading_question': 'How is conflicting evidence controlled?'}
+                         for p in data['papers'][:data['max_papers']]]})
 
 
 class RetrievalFlowTests(unittest.TestCase):
@@ -36,7 +43,7 @@ class RetrievalFlowTests(unittest.TestCase):
         self.temp.cleanup()
 
     def controller(self, **overrides):
-        return Controller(self.store, UnusedBackend(), dict(self.config, **overrides))
+        return Controller(self.store, ScreeningBackend(), dict(self.config, **overrides))
 
     def test_venue_filter_and_full_text_are_used_and_cached(self):
         full = dict(self.paper, content_kind="full_text", text="Methods\nActual extracted source.")
@@ -52,7 +59,7 @@ class RetrievalFlowTests(unittest.TestCase):
         ledger = list(self.store.get("search_ledger").values())[0]
         self.assertEqual(ledger["source"], "openalex")
         self.assertEqual(ledger["found"], 1)
-        self.assertIsNone(self.store.get("calls_used"))
+        self.assertEqual(self.store.get("calls_used"), 1)
 
     def test_failed_full_text_remains_abstract_with_reported_gap(self):
         with patch("research_idea.literature.discover", return_value=[self.paper]), \
@@ -77,6 +84,42 @@ class RetrievalFlowTests(unittest.TestCase):
             for _ in range(3):
                 self.controller().retrieve_full_texts()
         self.assertEqual(fetch.call_count, 2)
+
+    def test_recovered_or_removed_source_is_not_a_current_retrieval_gap(self):
+        self.store.put('papers', self.paper)
+        self.store.set('full_text_ledger', {
+            'old': {'paper_id': self.paper['id'], 'status': 'failed', 'error': 'HTTP 403'},
+            'removed': {'paper_id': 'no-longer-selected', 'status': 'failed', 'error': 'HTTP 404'},
+        })
+        self.assertEqual(len(self.controller().context()['retrieval_gaps']), 1)
+        self.store.put('papers', dict(self.paper, content_kind='full_text', text='Recovered source text.'))
+        self.assertEqual(self.controller().context()['retrieval_gaps'], [])
+        self.assertEqual(len(self.store.get('full_text_ledger')), 2)
+
+    def test_enriched_download_url_does_not_retry_the_same_failure_in_one_run(self):
+        source = dict(self.paper, source='official_proceedings')
+        self.store.put('papers', source)
+        enriched = dict(source, pdf_url='https://aclanthology.org/2024.emnlp-main.1.pdf')
+        with patch('research_idea.proceedings.enrich_selected', return_value=enriched), \
+             patch('research_idea.literature.fetch_full_text', side_effect=LiteratureError('HTTP 403')) as fetch:
+            controller = self.controller()
+            controller.retrieve_full_texts()
+            controller.retrieve_full_texts()
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(self.store.rows('papers')[0]['pdf_url'], enriched['pdf_url'])
+
+    def test_metadata_access_failure_still_attempts_public_full_text(self):
+        source = dict(self.paper, source='official_proceedings')
+        self.store.put('papers', source)
+        full = dict(source, content_kind='full_text', text='Text from the matched public source.')
+        with patch('research_idea.proceedings.enrich_selected', side_effect=LiteratureError('HTTP 403')), \
+             patch('research_idea.literature.fetch_full_text', return_value=full) as fetch:
+            self.assertTrue(self.controller().retrieve_full_texts())
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(self.store.rows('papers')[0]['content_kind'], 'full_text')
+        entry = next(iter(self.store.get('full_text_ledger').values()))
+        self.assertEqual(entry['metadata_error'], 'HTTP 403')
+        self.assertEqual(entry['status'], 'completed')
 
     def test_imported_only_and_disabled_fetch_do_not_access_network(self):
         self.store.put("papers", self.paper)
