@@ -103,6 +103,11 @@ class ScopeTests(unittest.TestCase):
             for key, value in SCOPE.items():
                 self.assertEqual(call[key], value)
         self.assertEqual(found.coverage["selected_counts"], {"conference": 4, "arxiv_preprint": 2})
+        calls.clear()
+        with patch.object(lit, "discover", side_effect=provider):
+            small = original('agent environments', source='hybrid', venues=['ICML'], limit=2, **SCOPE)
+        self.assertEqual([c["source"] for c in calls], ['openalex'])
+        self.assertEqual(small.coverage["selected_counts"], {"conference": 2, "arxiv_preprint": 0})
 
     def test_hybrid_fallback_keeps_scope_and_marks_conference_failure(self):
         original = lit.discover

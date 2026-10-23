@@ -497,7 +497,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         coverage["requested_venues"] = venues
         coverage["priority"] = "verified conferences first; up to one third reserved for CS arXiv preprints"
         coverage["providers"] = {}
-        primary_limit = limit - (max(1, limit // 3) if limit > 1 else 0)
+        primary_limit = limit - limit // 3
         papers = []
         for provider, requested_venues, requested_limit in [
             ("openalex", venues, primary_limit), ("arxiv", [], limit),
