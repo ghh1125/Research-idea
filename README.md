@@ -111,7 +111,7 @@ research-idea start "如何设计促进 agent 适应的交互环境" \
   --literature-preset ai-recent \
   --constraints "资源尚未确定；先设计无需训练的最小验证" \
   --max-papers 6 --max-candidates 1 --max-rounds 2 \
-  --max-calls 80 --max-seconds 6600 --timeout-s 600
+  --max-calls 80 --max-seconds 6600 --timeout-s 1200
 ```
 
 | 选择 | 参数 | 说明 |
@@ -123,7 +123,7 @@ research-idea start "如何设计促进 agent 适应的交互环境" \
 | 资源限制 | `--constraints "单张24GB GPU，两周"` | 仅填写实际拥有的条件；未知可以明确写未知 |
 | 文献范围 | `--literature-preset ai-recent --since YYYY-MM-DD --until YYYY-MM-DD` | 日期、CS 分类和会议筛选 |
 | 研究规模 | `--max-papers 6 --max-candidates 1 --max-rounds 2` | 控制文献、候选和修订轮数 |
-| 调用与时间 | `--max-calls 80 --max-seconds 6600 --timeout-s 600` | 调用总数、累计运行秒数、单次调用超时 |
+| 调用与时间 | `--max-calls 80 --max-seconds 6600 --timeout-s 1200` | 调用总数、累计运行秒数、单次调用超时 |
 | 先配置 | `--setup-only` | 保存选项并导入资料，不调用模型 |
 
 选项保存在项目的 `research.toml`，`resume` 沿用它们；也可在 `init/start/run/resume` 中覆盖模型、强度、资源和预算。模型/强度可选值以所选模型及 Codex 客户端为准，程序不会自动降级。通用强度值为 `none/minimal/low/medium/high/xhigh/max/ultra`；这不代表每个模型都支持全部值。GPT-6.1 Sol 的常用选择为 `low/medium/high/xhigh/max`，不支持 `none/minimal`。参见 [OpenAI 模型文档](https://developers.openai.com/api/docs/models/gpt-6.1-sol)与 [Codex 配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。
@@ -136,17 +136,17 @@ max_candidates = 1
 max_rounds = 2
 max_calls = 80
 max_seconds = 6600
-timeout_s = 600
+timeout_s = 1200
 ```
 
-思考强度作为每次 `codex` 调用的配置覆盖传入，不修改全局设置；变更强度会重新计算相关任务和候选。其他后端暂不接受非空 `reasoning_effort`，切换时用 `--reasoning-effort inherit` 清除它。未指定模型/强度的新项目继续沿用 Codex 配置。预算是上限，不保证在上限内完成；高级别思考和长方案可能需要更长的单次超时。
+思考强度作为每次 `codex` 调用的配置覆盖传入，不修改全局设置；变更强度会重新计算相关任务和候选。其他后端暂不接受非空 `reasoning_effort`，切换时用 `--reasoning-effort inherit` 清除它。未指定模型/强度的新项目继续沿用 Codex 配置。预算是上限，不保证在上限内完成；交互式新项目默认允许单次等待 20 分钟，累计预算仍为 110 分钟；已有项目配置保持不变，可用 `/budget timeout_s 1200` 调整。
 
 ```bash
 research-idea start --topic-file ./brief.txt --project ./research-projects/my-idea \
   --model gpt-6.1-sol --reasoning-effort high --setup-only
 research-idea run --project ./research-projects/my-idea
 research-idea status --project ./research-projects/my-idea
-research-idea resume --project ./research-projects/my-idea --timeout-s 600
+research-idea resume --project ./research-projects/my-idea --timeout-s 1200
 ```
 
 不安装包也可以运行：

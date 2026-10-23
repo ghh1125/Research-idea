@@ -126,7 +126,7 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertEqual(cfg['model'], 'account-model')
         self.assertEqual(cfg['reasoning_effort'], 'high')
         self.assertFalse(cfg['auto_search'])
-        self.assertEqual((cfg['max_papers'], cfg['max_rounds'], cfg['timeout_s']), (6, 2, 600))
+        self.assertEqual((cfg['max_papers'], cfg['max_rounds'], cfg['timeout_s']), (6, 2, 1200))
 
     def test_interactive_eof_does_not_create_project(self):
         with patch('sys.stdin.isatty', return_value=True), patch('builtins.input', side_effect=EOFError), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):

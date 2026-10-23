@@ -144,7 +144,7 @@ def initialize(args):
                 args.reasoning_effort = 'medium'
         if args.literature_preset is None and args.search_source is None and args.venues is None:
             args.literature_preset = 'ai-recent'
-        for key, value in {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2, 'max_seconds': 6600, 'timeout_s': 600}.items():
+        for key, value in {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2, 'max_seconds': 6600, 'timeout_s': 1200}.items():
             if getattr(args, key) is None:
                 setattr(args, key, value)
     with project_lock(project):
