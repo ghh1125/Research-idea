@@ -17,6 +17,7 @@ from research_idea.config import DEFAULTS, load_config, write_config
 from research_idea.controller import Controller, BudgetExhausted, select_excerpt, make_evidence
 from research_idea.demo import DEMO_PAPERS, DEMO_TOPIC, DemoBackend
 from research_idea.literature import LiteratureError
+from research_idea.locking import project_lock
 from research_idea.store import Store
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +91,26 @@ class CLIIntegrationTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_progress_can_be_inspected_while_controller_holds_writer_lock(self):
+        self.assertEqual(self.call("init", "topic", "--project", self.project).returncode, 0)
+        store = Store(self.project)
+        try:
+            store.set("status", "running")
+            store.set("calls_used", 2)
+        finally:
+            store.close()
+        with project_lock(self.project):
+            status = self.call("status", "--project", self.project)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertEqual(json.loads(status.stdout)["status"], "running")
+            self.assertEqual(json.loads(status.stdout)["calls_used"], 2)
+            for args in [("inspect",), ("inspect", "--events")]:
+                inspected = self.call(*args, "--project", self.project)
+                self.assertEqual(inspected.returncode, 0, inspected.stderr)
+            resumed = self.call("resume", "--project", self.project)
+            self.assertNotEqual(resumed.returncode, 0)
+            self.assertIn("Another process is writing", resumed.stderr)
+
 
 class RecoveryTests(unittest.TestCase):
     def test_budget_resume_keeps_cohort_when_internal_evidence_grows(self):
@@ -139,7 +160,7 @@ class RecoveryTests(unittest.TestCase):
 class SetupAndSkillsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.base = Path(self.tmp.name)
+        self.base = Path(self.tmp.name).resolve()
         self.project = self.base / "project"
         self.skills_root = self.base / "skills"
         self.first_skill = self.make_skill("test-research-a", "Trace claims to evidence.")
@@ -272,6 +293,20 @@ class SetupAndSkillsTests(unittest.TestCase):
         cfg = load_config(self.project)
         self.assertEqual(cfg["skill_paths"], [str(self.second_skill)])
         self.assertEqual(cfg["skill_roots"], [str(self.second_skill.parent)])
+
+    def test_recent_ai_preset_and_explicit_scope_overrides_persist(self):
+        self.init("--literature-preset", "ai-recent", "--since", "2024-01-01",
+                  "--until", "2026-10-23", "--arxiv-categories", "cs.AI", "cs.CL")
+        self.init()
+        cfg = load_config(self.project)
+        self.assertEqual(cfg["search_source"], "hybrid")
+        self.assertIn("ICLR", cfg["search_venues"])
+        self.assertEqual(cfg["search_since"], "2024-01-01")
+        self.assertEqual(cfg["search_until"], "2026-10-23")
+        self.assertTrue(cfg["search_cs_only"])
+        self.assertEqual(cfg["arxiv_categories"], ["cs.AI", "cs.CL"])
+        self.init("--source", "arxiv", "--venues")
+        self.assertEqual(load_config(self.project)["search_venues"], [])
 
     def test_run_and_resume_apply_settings_before_backend(self):
         self.init()

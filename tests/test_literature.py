@@ -60,10 +60,32 @@ class LiteratureTests(unittest.TestCase):
         with patch.object(lit, "_request_bytes", return_value=ATOM) as request:
             papers = lit.discover("RAG & uncertainty")
         query = parse_qs(urlparse(request.call_args.args[0]).query)
-        self.assertEqual(query["search_query"], ["all:RAG & uncertainty"])
+        self.assertEqual(query["search_query"], ["all:RAG AND all:uncertainty"])
         self.assertEqual(papers[0]["title"], "A paper")
         self.assertEqual(papers[0]["content_kind"], "abstract")
         self.assertNotIn("text", papers[0])
+
+    def test_arxiv_plain_queries_keep_all_terms_phrases_and_boolean_operators(self):
+        cases = {
+            'LLM agents "environment design"': 'all:LLM AND all:agents AND all:"environment design"',
+            '(LLM OR "language model") environment': '( all:LLM OR all:"language model" ) AND all:environment',
+            'agents ANDNOT games': 'all:agents ANDNOT all:games',
+        }
+        for query, expected in cases.items():
+            with self.subTest(query=query), patch.object(lit, "_request_bytes", return_value=ATOM) as request, \
+                 patch.object(lit, "_last_arxiv_request", 0):
+                papers = lit.discover(query)
+                params = parse_qs(urlparse(request.call_args.args[0]).query)
+                self.assertEqual(params["search_query"], [expected])
+                self.assertEqual(papers.coverage["query_expression"], expected)
+
+    def test_arxiv_native_query_fields_are_preserved(self):
+        for query in ['ti:"environment design" AND cat:cs.LG', 'co:"code available"',
+                      'jr:NeurIPS', 'rn:1234', 'submittedDate:[202501010000 TO 202612312359]']:
+            with self.subTest(query=query), patch.object(lit, "_request_bytes", return_value=ATOM) as request, \
+                 patch.object(lit, "_last_arxiv_request", 0):
+                lit.discover(query)
+                self.assertEqual(parse_qs(urlparse(request.call_args.args[0]).query)["search_query"], [query])
 
     def test_arxiv_error_and_entity_rejected(self):
         for data in [b"not xml", b"<!DOCTYPE foo><feed/>", b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/api/errors#1</id></entry></feed>']:
@@ -128,7 +150,7 @@ class LiteratureTests(unittest.TestCase):
             p = Path(temp)/"strange name; echo.pdf"
             p.write_bytes(b"%PDF dummy")
             def extract(argv, **kwargs):
-                self.assertEqual(argv[-2], str(p))
+                self.assertEqual(argv[-2], str(p.resolve()))
                 self.assertNotIn("shell", kwargs)
                 Path(argv[-1]).write_text("Page 1\fPage 2", encoding="utf-8")
                 return subprocess.CompletedProcess(argv, 0)

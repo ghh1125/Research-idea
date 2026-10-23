@@ -249,6 +249,7 @@ def export_report(store: Store, output_dir: Path | None = None):
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
         "manual_search_ledger": store.get("manual_search_ledger", []),
+        "search_scope": store.get("active_search_scope", {}),
         "full_text_ledger": store.get("full_text_ledger", {}),
         "search_plans": store.get("search_plans", {}),
         "paper_claim_audits": current_claim_audits(papers, evidence, store.get("paper_claim_audits", {})),
@@ -311,10 +312,17 @@ def export_report(store: Store, output_dir: Path | None = None):
                 "假设：", "", bullets(plan["assumptions"]), ""])
     lines.extend(["## 检索与阅读覆盖", "",
         "检索结果受来源索引、查询、会议过滤和数量预算限制；未检索到不等于不存在。全文下载成功也不等于每一节都已阅读。", ""])
+    scope = data["search_scope"]
+    if scope:
+        lines.extend([f"当前联网检索日期：{scope.get('since') or '不限起点'} 至 {scope.get('until') or '不限终点'}；"
+                      f"来源：{scope.get('source', 'unknown')}；CS 硬限制：{scope.get('cs_only', False)}；"
+                      f"arXiv 分类：{', '.join(scope.get('arxiv_categories', [])) or '不限'}。", "",
+                      "已有或显式导入的资料保留为项目上下文；上述限制针对新执行的联网检索。", ""])
     searches = list(data["search_ledger"].values()) + data["manual_search_ledger"]
     if searches:
-        lines.extend([table(["查询", "来源", "会议范围", "状态", "返回记录"],
+        lines.extend([table(["查询", "来源", "会议范围", "日期范围", "状态", "返回记录"],
             [(s.get("query", ""), s.get("source", ""), ", ".join(s.get("venues", [])) or "不限会议",
+              (s.get("filters", {}).get("since") or "不限起点") + " 至 " + (s.get("filters", {}).get("until") or "不限终点"),
               s.get("status", "unknown"), s.get("found", s.get("added", 0))) for s in searches]), ""])
         gaps = [f"{s.get('query', '')}：{gap}" for s in searches
                 for gap in (s.get("coverage") or {}).get("gaps", [])]
@@ -324,7 +332,8 @@ def export_report(store: Store, output_dir: Path | None = None):
         lines.extend(["本项目没有已记录的联网检索；仅据提供的来源分析。", ""])
     lines.extend(["## 文献与来源", ""])
     for p in papers:
-        lines.append(f"- `{p['id']}` — {p['title']}；{p.get('venue') or '会议未核实'}；{p.get('content_kind', 'abstract')}；{p.get('url', '')}")
+        venue = p.get('venue') or ('arXiv 预印本' if p.get('source') == 'arxiv' else '会议未核实')
+        lines.append(f"- `{p['id']}` — {p['title']}；{p.get('publication_date') or p.get('year') or '日期未核实'}；{venue}；{', '.join(p.get('categories', [])) or '无 arXiv 分类'}；{p.get('content_kind', 'abstract')}；{p.get('url', '')}")
         if p.get("full_text_error"):
             lines.append("  全文缺口：" + str(p["full_text_error"]))
     lines.extend(["", "## 原文证据", ""])

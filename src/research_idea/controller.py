@@ -16,6 +16,7 @@ from .motivation import assess_motivation
 from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAMES
 from .claims import assess_claims, current_claim_audits
 from .search_planning import normalize_search_plan
+from .search_scope import config_scope
 from .paper_reading import read_paper, current_cards
 
 
@@ -158,6 +159,8 @@ class Controller:
             [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
             for stage in ("extract", "inspect_source", "read_section")}
         self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
+        self.store.set("active_search_scope", {"source": config["search_source"],
+                       "venues": config.get("search_venues", []), **config_scope(config)})
         if self.store.get("active_skills") != self.skill_manifest:
             self.store.set("active_skills", self.skill_manifest)
             self.store.event("skills_loaded", {"skills": self.skill_manifest})
@@ -228,6 +231,7 @@ class Controller:
         evidence = self.store.rows("evidence")
         searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
         return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+                "search_filters": config_scope(self.config),
                 "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
                 "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "content_kind", "full_text_error")} for p in papers],
@@ -338,7 +342,8 @@ class Controller:
 
     def plan_search(self, candidate=None):
         payload = {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
-                   "venues": self.config.get("search_venues", []), "source": self.config["search_source"]}
+                   "venues": self.config.get("search_venues", []), "source": self.config["search_source"],
+                   "filters": config_scope(self.config)}
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
         result = self.task("plan_search", payload, normalize_search_plan)
@@ -412,12 +417,14 @@ class Controller:
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
 
     def search_once(self, query, reason, max_new=None):
-        from .literature import discover, deduplicate
+        from .literature import discover, deduplicate, arxiv_query_expression
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return False
         # Successful searches are cached; interrupted/transient failures get one retry.
         venues = self.config.get("search_venues", [])
-        key = digest([query, self.config["search_source"], venues])
+        expression = arxiv_query_expression(query) if self.config["search_source"] == "arxiv" else query
+        scope = config_scope(self.config)
+        key = digest([expression, self.config["search_source"], venues, scope])
         ledger = self.store.get("search_ledger", {})
         previous = ledger.get(key, {})
         if previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
@@ -428,13 +435,13 @@ class Controller:
             return False
         self.check_budget()
         ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"],
-                       "venues": venues, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
+                       "venues": venues, "filters": scope, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
         self.store.set("search_ledger", ledger)
         try:
             limit = min(room, 5, max_new if max_new is not None else 5)
             found = discover(query, source=self.config["search_source"], limit=limit,
-                timeout_s=min(30, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
-                venues=venues)
+                timeout_s=min(60, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
+                venues=venues, **scope)
             added, updated, selected = 0, 0, set()
             for paper in deduplicate(found):
                 aliases = set(paper["aliases"])

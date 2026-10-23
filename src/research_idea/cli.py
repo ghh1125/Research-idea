@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import json
 import os
 from pathlib import Path
@@ -19,6 +20,7 @@ from .locking import project_lock
 from .report import export_report
 from .store import Store, now
 from .local_skills import builtin_skill_paths, discover_skills, discovery_roots, load_selected_skills
+from .search_scope import AI_VENUES, recent_defaults, config_scope
 
 
 def emit(value):
@@ -42,10 +44,10 @@ def ensure_project(project: Path, topic: str | None = None, overrides=None):
     return store
 
 
-def require_project(project: Path):
+def require_project(project: Path, *, readonly: bool = False):
     if not (project / "research.sqlite3").is_file():
         raise ValueError("Project not initialized. Run 'research-idea init TOPIC --project PATH'.")
-    return Store(project)
+    return Store(project, readonly=readonly)
 
 
 def import_papers(store, records, kind=None):
@@ -150,9 +152,22 @@ def validate_active_skills(cfg, project):
     return load_selected_skills(selectors, project=project, extra_roots=cfg["skill_roots"], max_chars=cfg["skill_max_chars"])
 
 
+def apply_scope_options(args, cfg):
+    before = dict(cfg)
+    if getattr(args, "literature_preset", None) == "ai-recent":
+        cfg.update(recent_defaults(), search_source="hybrid", search_venues=list(AI_VENUES))
+    for arg, key in (("since", "search_since"), ("until", "search_until"),
+                     ("cs_only", "search_cs_only"), ("arxiv_categories", "arxiv_categories")):
+        value = getattr(args, arg, None)
+        if value is not None:
+            cfg[key] = value
+    config_scope(cfg)
+    return cfg != before
+
+
 def execution_config(args, project):
     cfg = load_config(project)
-    changed = False
+    changed = apply_scope_options(args, cfg)
     for key in ("backend", "model", "codex_bin", "codex_profile"):
         value = getattr(args, key, None)
         if value is not None:
@@ -169,7 +184,7 @@ def execution_config(args, project):
     if venues is not None:
         from .literature import normalize_venues
         cfg["search_venues"] = normalize_venues(venues)
-        if cfg["search_venues"] and source is None:
+        if cfg["search_venues"] and source is None and cfg["search_source"] != "hybrid":
             cfg["search_source"] = "openalex"
         changed = True
     if cfg["search_venues"] and cfg["search_source"] == "arxiv":
@@ -197,11 +212,14 @@ def skill_metadata(items):
 
 def execute_manual_search(store, args, cfg, project):
     from .literature import normalize_venues, fetch_full_text
+    cfg = dict(cfg)
+    apply_scope_options(args, cfg)
     venues = normalize_venues(args.venues if args.venues is not None else cfg["search_venues"])
-    source = args.source or ("openalex" if venues else cfg["search_source"])
+    source = args.source or ("openalex" if venues and cfg["search_source"] != "hybrid" else cfg["search_source"])
     if venues and source == "arxiv":
         raise ValueError("Venue filtering requires OpenAlex. Use --source openalex; arxiv does not verify conference venues.")
-    entry = {"query": args.query, "source": source, "venues": venues, "time": now(),
+    scope = config_scope(cfg)
+    entry = {"query": args.query, "source": source, "venues": venues, "filters": scope, "time": now(),
              "status": "started", "found": 0, "full_text_fetched": 0, "full_text_errors": 0,
              "full_text_requested": args.full_text}
     ledger = (store.get("manual_search_ledger", []) + [entry])[-100:]
@@ -210,8 +228,8 @@ def execute_manual_search(store, args, cfg, project):
     deadline = time.monotonic() + cfg["max_seconds"]
     try:
         papers = discover(args.query, source=source, limit=args.limit,
-                          timeout_s=min(30, cfg["max_seconds"]),
-                          api_key_env=cfg.get("search_api_key_env") or None, venues=venues)
+                          timeout_s=min(60, cfg["max_seconds"]),
+                          api_key_env=cfg.get("search_api_key_env") or None, venues=venues, **scope)
     except (LiteratureError, OSError, ValueError) as exc:
         entry.update(status="failed", error_type=type(exc).__name__)
         store.set("manual_search_ledger", ledger)
@@ -301,7 +319,17 @@ def build_parser():
     sub = parser.add_subparsers(dest="command", required=True)
     def project_arg(p):
         p.add_argument("--project", type=Path, required=True, help="Project directory")
+    def scope_args(p):
+        p.add_argument("--literature-preset", choices=["ai-recent"], default=None,
+                       help="Recent AI conferences first, with CS arXiv supplementation")
+        p.add_argument("--since", default=None, help="Earliest publication date (YYYY-MM-DD)")
+        p.add_argument("--until", default=None, help="Latest publication date (YYYY-MM-DD)")
+        p.add_argument("--cs-only", action=argparse.BooleanOptionalAction, default=None,
+                       help="Require CS category/field or a verified AI conference")
+        p.add_argument("--arxiv-categories", nargs="*", action="extend", default=None,
+                       help="Allowed arXiv categories, such as cs.* or cs.CL cs.AI")
     def backend_args(p):
+        scope_args(p)
         p.add_argument("--backend", choices=["codex", "claude", "api"], default=None)
         p.add_argument("--model", default=None)
         p.add_argument("--codex-bin", default=None, help="Codex executable name or path")
@@ -310,9 +338,9 @@ def build_parser():
         p.add_argument("--skill-root", action="append", type=Path, default=None, help="Additional skill discovery root; repeatable")
         p.add_argument("--no-builtin-skills", dest="builtin_skills", action="store_false", default=None,
                        help="Disable the built-in research skills for this project")
-        p.add_argument("--source", "--search-source", dest="search_source", choices=["arxiv", "openalex"], default=None,
+        p.add_argument("--source", "--search-source", dest="search_source", choices=["arxiv", "openalex", "hybrid"], default=None,
                        help="Search provider; venue filters select OpenAlex automatically")
-        p.add_argument("--venues", nargs="+", action="extend", default=None,
+        p.add_argument("--venues", nargs="*", action="extend", default=None,
                        help="会议筛选，例如 ACL EMNLP NAACL COLM；名单见 venues")
         p.add_argument("--fetch-full-text", action=argparse.BooleanOptionalAction, default=None,
                        help="Persist automatic full-text retrieval (default: enabled)")
@@ -344,10 +372,11 @@ def build_parser():
     p.add_argument("--kind", choices=["full_text", "abstract", "notes"], help="Explicit source type; use full_text only for actual paper text")
     p = sub.add_parser("search", help="Search papers and optionally retrieve their full text")
     project_arg(p)
+    scope_args(p)
     p.add_argument("query")
-    p.add_argument("--source", choices=["arxiv", "openalex"], default=None)
+    p.add_argument("--source", choices=["arxiv", "openalex", "hybrid"], default=None)
     p.add_argument("--limit", type=int, default=10)
-    p.add_argument("--venues", nargs="+", action="extend", default=None,
+    p.add_argument("--venues", nargs="*", action="extend", default=None,
                    help="Curated conference names; implies --source openalex")
     p.add_argument("--full-text", action="store_true", help="Attempt bounded full-text retrieval; retain abstracts on failure")
     sub.add_parser("venues", help="列出支持的会议筛选（不是完整、实时的 CCF 目录）")
@@ -426,7 +455,8 @@ def execute(args):
             raise ValueError("No topic supplied. Use research-idea start '研究主题' --project PATH") from None
         if not args.topic:
             raise ValueError("Research topic cannot be empty")
-    with project_lock(project):
+    readonly = command in {"status", "inspect"}
+    with nullcontext() if readonly else project_lock(project):
         store = None
         try:
             cfg = None
@@ -446,7 +476,7 @@ def execute(args):
             elif command in {"init", "run", "start"}:
                 store = ensure_project(project, getattr(args, "topic", None), cfg)
             else:
-                store = require_project(project)
+                store = require_project(project, readonly=readonly)
             if config_changed:
                 write_config(project, cfg)
             if command == "start" and start_records:

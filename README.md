@@ -53,7 +53,7 @@ PYTHONPATH=src python -m research_idea demo --project ./research-projects/demo
 
 ## 本地 Codex 与两类 skill
 
-`research-idea` 调用你机器上的 Codex CLI，沿用 Codex 自己管理的登录、模型及用户配置，不要求为 Codex 模式另外提供 API key。可用 `codex login status` 确认当前登录方式：ChatGPT 登录使用该账户对应的订阅额度与限制；API key 登录按 API 方式计费。本工具不读取剩余额度、不复制登录凭据，也不会自动把 API 登录改成订阅登录。实际认证以 Codex 为准；例如继承的 `CODEX_API_KEY` 可覆盖已保存登录方式。当前开发环境没有安装真实 Codex，所以真实账户兼容性仍需本机确认。可先运行 `research-idea doctor` 查看命令路径。
+`research-idea` 调用你机器上的 Codex CLI，沿用 Codex 自己管理的登录、模型及用户配置，不要求为 Codex 模式另外提供 API key。可用 `codex login status` 确认当前登录方式：ChatGPT 登录使用该账户对应的订阅额度与限制；API key 登录按 API 方式计费。本工具不读取剩余额度、不复制登录凭据，也不会自动把 API 登录改成订阅登录。实际认证以 Codex 为准；例如继承的 `CODEX_API_KEY` 可覆盖已保存登录方式。已使用本机 Codex CLI 0.160.1 与 `gpt-6.1-sol` 验证结构化输出及网络重连后的成功结果；其他版本和账户仍需本机确认。可先运行 `research-idea doctor` 查看命令路径。
 
 一次创建项目、导入本地论文并开始构思：
 
@@ -145,6 +145,32 @@ research-idea search "conflicting evidence language models" \
 `search` 支持 arXiv 和 OpenAlex；按会议检索时，COLM 另外使用 OpenReview 的录用记录。网络、索引覆盖和 API 配额取决于运行环境；OpenAlex 可用 `search_api_key_env` 指定密钥环境变量。建议使用英文检索词，并把机制、条件和竞争解释拆成不同查询。自动流程先调用模型把研究意图整理成最多三条英文检索词，覆盖背景、机制和反面证据；计划与实际搜索分别记录。初始检索只使用约一半的文献容量，另一半留给候选 idea 的定向检索。已导入足够文献时可跳过初始检索；`--no-search` 完全跳过检索规划和联网。
 
 ### 会议论文与全文
+
+推荐先用近期 AI/CS 范围启动：
+
+```bash
+research-idea start "如何设计持续演化的 LLM agent 交互环境" \
+  --project ./research-projects/agent-environment \
+  --backend codex --model gpt-6.1-sol \
+  --literature-preset ai-recent
+```
+
+`ai-recent` 先检索 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI 的已核实主会来源，再以 arXiv CS 预印本补充；预印本不会冒认为录用论文。每次混合检索先为会议分配约三分之二的名额，其余留给预印本；会议索引失败或结果不足时可以补充更多 CS 预印本，报告明确记录实际构成和缺口。
+
+新项目默认限制 CS，从上一年 1 月 1 日到创建当天；例如 2026-10-23 创建的项目使用 `2025-01-01` 至 `2026-10-23`。日期在项目配置中固定，重新选择预设或显式传入日期可更新。也可以精确覆盖：
+
+```bash
+research-idea start "你的研究方向" \
+  --project ./research-projects/scoped --backend codex \
+  --literature-preset ai-recent \
+  --since 2025-01-01 --until 2026-10-23 \
+  --venues NeurIPS ICML ICLR ACL EMNLP \
+  --arxiv-categories cs.AI cs.CL cs.LG cs.MA
+```
+
+对应配置为 `search_source = "hybrid"`、`search_since`、`search_until`、`search_cs_only = true`、`arxiv_categories` 和 `search_venues`。arXiv 请求同时携带分类和首次提交日期范围；OpenAlex 使用发表日期、出版来源 ID，未指定会议时使用 Computer Science 字段。返回记录还要再次通过日期和领域检查，缺少必要元数据的记录被排除并保留原因。旧论文的新版本不会仅因更新时间较新就通过日期筛选。普通关键词以 AND 组合，带引号短语和原生布尔查询保留。
+
+这些限制作用于新执行的联网检索。已有资料和显式导入的经典论文保留为项目上下文；要建立完全受新范围约束的语料，请使用新项目目录。范围和会议变化进入检索缓存身份，不能拿旧范围的缓存当成新检索结果。`--no-cs-only` 可取消 CS 字段检查；arXiv 分类仍由 `--arxiv-categories` 单独控制。传入不带值的 `--venues` 可以清空已保存的会议范围。
 
 ```bash
 research-idea venues
@@ -292,6 +318,8 @@ research-idea inspect --project ./research-projects/conflict --events
 research-idea export --project ./research-projects/conflict
 ```
 
+`status` 和 `inspect` 使用 SQLite 只读快照，可在研究流程运行期间查看进度；修改项目的命令仍受单写入进程锁保护。
+
 输出位于项目的 `outputs/report.md`、`report.json` 和各候选 Markdown 文件。逐篇分析卡位于 `outputs/papers/`。JSON 报告的 `schema_version` 为 `4`，包含问题—动机—方法的论证、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及 `feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
 
 ## 开发与测试
@@ -300,6 +328,6 @@ research-idea export --project ./research-projects/conflict
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-测试覆盖证据定位、引用一致性、断点恢复、预算、CLI 协议、API 本机 HTTP、超时、文献解析、本地 skill 和缓存失效。开发环境未安装 Codex/Claude CLI，未连接真实模型账户、远程学术搜索或 GPU；这些真实环境联调仍需完成。离线测试通过不能证明生成 idea 的研究质量。
+测试覆盖证据定位、引用一致性、断点恢复、预算、CLI 协议、API 本机 HTTP、超时、文献解析、本地 skill、范围筛选和缓存失效。已在 macOS 使用真实 Codex CLI 与 `gpt-6.1-sol` 验证结构化输出、重连恢复，并检索下载真实 arXiv CS 论文。会议检索在本次环境遇到 OpenAlex HTTP 429、OpenReview HTTP 403，报告保留这些覆盖缺口；Claude/API 真实账户、GPU 和系统性的 idea 质量评估仍待完成。离线测试通过不能证明研究质量。
 
 下一步重点是用真实主题评估能否产出值得做、可开始验证的 idea，而不是继续增加流程。参见 [架构](docs/architecture.md) 和 [借鉴来源](docs/sources.md)。

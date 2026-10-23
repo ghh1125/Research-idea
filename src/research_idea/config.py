@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tomllib
+from .search_scope import recent_defaults, config_scope
 
 DEFAULTS = {
     "backend": "codex", "model": "", "api_provider": "openai-compatible",
@@ -17,6 +18,7 @@ DEFAULTS = {
     "deep_reading": True, "max_paper_read_chunks": 3, "max_followup_reads": 2,
     "search_venues": [], "fetch_full_text": True,
     "search_api_key_env": "", "constraints": "Resources unspecified; do not assume GPU access, model weights, logits, labels, or unlimited API budget.",
+    **recent_defaults(),
 }
 
 PROVIDER_DEFAULTS = {
@@ -49,7 +51,7 @@ def _validated_settings(supplied: dict) -> dict:
         raise ValueError("codex_bin must be a nonempty executable name or path")
     if "\x00" in data["codex_profile"]:
         raise ValueError("codex_profile must not contain a null character")
-    for key in ("skill_paths", "skill_roots"):
+    for key in ("skill_paths", "skill_roots", "arxiv_categories"):
         if not isinstance(data[key], list) or any(
             not isinstance(value, str) or not value.strip() or "\x00" in value for value in data[key]
         ):
@@ -80,12 +82,14 @@ def _validated_settings(supplied: dict) -> dict:
             raise ValueError(f"{key} must be a boolean")
     if data["deep_reading"] and data["source_chars"] < 256:
         raise ValueError("deep_reading requires source_chars >= 256")
-    if data["search_source"] not in {"arxiv", "openalex"}:
-        raise ValueError("search_source must be arxiv or openalex")
+    config_scope(data)
+    if data["search_source"] not in {"arxiv", "openalex", "hybrid"}:
+        raise ValueError("search_source must be arxiv, openalex or hybrid")
     if data["search_venues"]:
         if "search_source" in supplied and data["search_source"] == "arxiv":
             raise ValueError("Venue filtering requires search_source='openalex'; arxiv does not verify conference venues")
-        data["search_source"] = "openalex"
+        if data["search_source"] != "hybrid":
+            data["search_source"] = "openalex"
     if data["api_max_tokens_field"] not in {"max_completion_tokens", "max_tokens"}:
         raise ValueError("api_max_tokens_field must be max_completion_tokens or max_tokens")
     return data

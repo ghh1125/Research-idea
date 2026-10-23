@@ -96,7 +96,7 @@ class BackendTests(unittest.TestCase):
                 self.assertEqual(prompt, "")
                 return "[]"
             Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"selected"}')
-            return ""
+            return '{"type":"turn.completed"}'
         with patch.dict(os.environ, {"CODEX_HOME": str(self.root / "saved-auth-home")}), patch("research_idea.backends.cli.run_cli", side_effect=execute):
             result = CodexBackend({"codex_bin": selected, "codex_profile": profile}, self.root).generate(task(self.root))
             self.assertEqual(os.environ["CODEX_HOME"], str(self.root / "saved-auth-home"))
@@ -124,6 +124,34 @@ class BackendTests(unittest.TestCase):
             return '{"type":"turn.failed"}'
         with patch("research_idea.backends.cli.run_cli", side_effect=execute), self.assertRaises(BackendError):
             CodexBackend({}, self.root).generate(task(self.root))
+
+    def test_codex_recovered_stream_error_accepts_completed_turn(self):
+        def execute(argv, *args):
+            if "mcp" in argv:
+                return "[]"
+            Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"recovered"}')
+            return '\n'.join([
+                json.dumps({"type": "error", "message": "Reconnecting... 2/5 (stream disconnected)"}),
+                json.dumps({"type": "turn.completed", "usage": {"output_tokens": 8}}),
+            ])
+        with patch("research_idea.backends.cli.run_cli", side_effect=execute):
+            result = CodexBackend({}, self.root).generate(task(self.root))
+        self.assertEqual(result.output, {"answer": "recovered"})
+        self.assertEqual(result.usage["output_tokens"], 8)
+
+    def test_codex_result_requires_successful_terminal_event(self):
+        streams = ["", '{"type":"error","message":"disconnected"}',
+                   '{"type":"turn.completed"}\n{"type":"error"}',
+                   '{"type":"turn.failed"}\n{"type":"turn.completed"}']
+        for stream in streams:
+            with self.subTest(stream=stream):
+                def execute(argv, *args):
+                    if "mcp" in argv:
+                        return "[]"
+                    Path(argv[argv.index("--output-last-message") + 1]).write_text('{"answer":"partial"}')
+                    return stream
+                with patch("research_idea.backends.cli.run_cli", side_effect=execute), self.assertRaises(BackendError):
+                    CodexBackend({}, self.root).generate(task(self.root))
 
     def test_codex_enabled_mcp_stops_before_task_is_sent(self):
         for inventory in [[{"name": "external", "enabled": True}], [{"name": "unknown"}]]:

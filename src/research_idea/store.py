@@ -21,8 +21,15 @@ def digest(value) -> str:
 
 
 class Store:
-    def __init__(self, project: Path):
+    def __init__(self, project: Path, *, readonly: bool = False):
         self.project = project.resolve()
+        if readonly:
+            uri = (self.project / "research.sqlite3").as_uri() + "?mode=ro"
+            self.db = sqlite3.connect(uri, uri=True)
+            self.db.row_factory = sqlite3.Row
+            # WAL readers can inspect a consistent snapshot during a run.
+            self.db.execute("BEGIN")
+            return
         self.project.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.project / "research.sqlite3")
         self.db.row_factory = sqlite3.Row

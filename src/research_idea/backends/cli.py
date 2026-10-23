@@ -116,6 +116,8 @@ class CodexBackend:
                 raise BackendError("Could not read Codex structured result") from exc
             usage: dict[str, Any] = {}
             session_id = None
+            completed = False
+            pending_error = False
             for line in raw.splitlines():
                 try:
                     event = json.loads(line)
@@ -123,12 +125,21 @@ class CodexBackend:
                     continue
                 if not isinstance(event, dict):
                     continue
-                if event.get("type") in {"turn.failed", "error"}:
+                if event.get("type") == "turn.failed":
                     raise BackendError("Codex reported a failed execution; result was not accepted")
+                if event.get("type") == "error":
+                    # Codex also emits error events while reconnecting a stream.
+                    # A later successful terminal event confirms recovery.
+                    pending_error = True
                 if event.get("type") == "thread.started":
                     session_id = event.get("thread_id")
-                if event.get("type") == "turn.completed" and isinstance(event.get("usage"), dict):
-                    usage.update(event["usage"])
+                if event.get("type") == "turn.completed":
+                    completed = True
+                    pending_error = False
+                    if isinstance(event.get("usage"), dict):
+                        usage.update(event["usage"])
+            if not completed or pending_error:
+                raise BackendError("Codex did not confirm successful completion; result was not accepted")
             return BackendResult(result, usage, session_id, raw)
 
 

@@ -7,7 +7,7 @@ classified as notes unless the importing caller supplies stronger provenance.
 from __future__ import annotations
 
 import hashlib
-from datetime import date
+from datetime import date, datetime, timezone
 import json
 import math
 import os
@@ -22,6 +22,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from .search_scope import AI_VENUES, normalize_scope, exclusion_reason
 import xml.etree.ElementTree as ET
 
 from .venues import SOURCE_QUERIES, VENUES, canonical_venue, normalize_venues, supported_venues
@@ -312,10 +313,14 @@ def _openalex_paper(work: dict) -> dict:
     locations = [{key: loc.get(key) for key in ("landing_page_url", "pdf_url", "is_oa", "version", "source") if loc.get(key) is not None} for loc in locations]
     authors = [a.get("author", {}).get("display_name", "") for a in work.get("authorships", [])
                if isinstance(a, dict) and isinstance(a.get("author"), dict)]
+    topics = [work.get("primary_topic"), *(work.get("topics") or [])]
+    field_ids = sorted({str(t["field"].get("id", "")).rsplit("/", 1)[-1] for t in topics
+                        if isinstance(t, dict) and isinstance(t.get("field"), dict)})
     return normalize_paper({"id": work.get("id"), "title": work.get("title") or work.get("display_name"),
         "authors": authors, "year": work.get("publication_year"),
         "url": location.get("landing_page_url") or work.get("id") or "", "doi": work.get("doi"),
         "abstract": _abstract(work.get("abstract_inverted_index")), "source": "openalex", "content_kind": "abstract",
+        "publication_date": work.get("publication_date"), "field_ids": field_ids,
         "venue": canonical_venue(source.get("display_name", "")), "venue_name": source.get("display_name"),
         "venue_id": _source_id(source.get("id")), "venue_evidence": "primary_location.source" if source else None,
         "locations": locations, "pdf_url": next((l["pdf_url"] for l in locations if l.get("pdf_url")), None)})
@@ -336,6 +341,9 @@ def _query_score(query: str, title: str, abstract: str) -> int:
 
 def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> list[dict]:
     years = list(range(date.today().year, max(2023, date.today().year - 3), -1))
+    scope = coverage.get("filters", {})
+    years = [year for year in years if (not scope.get("since") or year >= int(scope["since"][:4]))
+             and (not scope.get("until") or year <= int(scope["until"][:4]))]
     info = {"years": years, "page_size": OPENREVIEW_PAGE_SIZE, "max_pages_per_year": OPENREVIEW_MAX_PAGES,
             "ranking": "lexical token overlap in title and abstract", "years_scanned": []}
     coverage["openreview_colm"] = info
@@ -365,8 +373,14 @@ def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> l
                     score = _query_score(query, title, abstract)
                     if not title or not score:
                         continue
+                    timestamp = note.get("pdate") or note.get("cdate")
+                    try:
+                        published = datetime.fromtimestamp(timestamp / 1000, timezone.utc).date().isoformat()
+                    except (TypeError, ValueError, OverflowError, OSError):
+                        published = None
                     paper = normalize_paper({"id": "openreview:" + identifier, "title": title,
                         "abstract": abstract, "authors": _openreview_value(content, "authors", []), "year": year,
+                        "publication_date": published,
                         "url": "https://openreview.net/forum?" + urlencode({"id": identifier}),
                         "pdf_url": "https://openreview.net/pdf?" + urlencode({"id": identifier}) if _openreview_value(content, "pdf") else None,
                         "doi": _openreview_value(content, "doi"), "source": "openreview", "content_kind": "abstract",
@@ -396,12 +410,63 @@ def _interleave(pools: list[list[dict]], limit: int) -> list[dict]:
     return deduplicate(selected)[:limit]
 
 
+def arxiv_query_expression(query: str) -> str:
+    """Require plain keywords together while preserving phrases/native syntax."""
+    if re.search(r"\b(?:all|ti|au|abs|co|jr|cat|rn|id|submittedDate):", query):
+        return query
+    if query.count('"') % 2:
+        raise LiteratureError("Unclosed quoted phrase in arXiv query")
+    tokens = re.findall(r'"[^\"]+"|[()]|[\w*?]+(?:[-./\'][\w*?]+)*', query)
+    expression, depth, need_term = [], 0, True
+    for token in tokens:
+        if token == "(":
+            if not need_term:
+                expression.append("AND")
+            expression.append(token)
+            depth += 1
+            need_term = True
+        elif token == ")":
+            if need_term or depth == 0:
+                raise LiteratureError("Invalid parentheses in arXiv query")
+            expression.append(token)
+            depth -= 1
+            need_term = False
+        elif token in {"AND", "OR", "ANDNOT"}:
+            if need_term:
+                raise LiteratureError("Missing term before arXiv Boolean operator")
+            expression.append(token)
+            need_term = True
+        else:
+            if not need_term:
+                expression.append("AND")
+            expression.append("all:" + token)
+            need_term = False
+    if need_term or depth:
+        raise LiteratureError("Incomplete arXiv query")
+    return " ".join(expression)
+
+
+def _filter_scope(papers, scope, coverage, source):
+    kept = []
+    excluded = coverage.setdefault("excluded", [])
+    for paper in papers:
+        reason = exclusion_reason(paper, scope, source, verified_venue=bool(paper.get("venue")))
+        if reason:
+            excluded.append({"paper_id": paper["id"], "reason": reason})
+        else:
+            kept.append(paper)
+    if excluded:
+        coverage["gaps"].append(f"{len(excluded)} records excluded by date/domain metadata checks")
+    return kept
+
+
 def discover(query: str, source: str = "arxiv", limit: int = 10,
              timeout_s: float = 30, api_key_env: str | None = None,
-             venues: list[str] | None = None) -> DiscoveryResults:
+             venues: list[str] | None = None, since: str = "", until: str = "",
+             cs_only: bool = False, arxiv_categories: list[str] | None = None) -> DiscoveryResults:
     """Retrieve bounded metadata pages. No full-text retrieval is implied.
 
-    arXiv accepts its native query syntax; plain strings are searched with all:.
+    arXiv accepts native syntax; plain terms/phrases use all: joined with AND.
     OpenAlex uses a bearer token only when api_key_env is explicitly supplied.
     Venue scopes use one source-resolution page per known name (two for NAACL's
     rename) and one work page per venue; COLM uses public accepted-note scans.
@@ -413,21 +478,62 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         raise LiteratureError("Result limit must be between 1 and 100")
     if not isinstance(timeout_s, (int, float)) or isinstance(timeout_s, bool) or not math.isfinite(timeout_s) or timeout_s <= 0:
         raise LiteratureError("Request timeout must be positive and finite")
-    if source not in {"arxiv", "openalex"}:
-        raise LiteratureError("Unknown source; choose arxiv or openalex")
+    if source not in {"arxiv", "openalex", "hybrid"}:
+        raise LiteratureError("Unknown source; choose arxiv, openalex or hybrid")
     try:
         venues = normalize_venues(venues)
+        scope = normalize_scope(since, until, cs_only, arxiv_categories)
     except ValueError as exc:
         raise LiteratureError(str(exc)) from None
     if source == "arxiv" and venues:
         raise LiteratureError("arXiv does not provide reliable accepted-venue filters; choose openalex with venues")
     deadline = time.monotonic() + timeout_s
     coverage = {"requested_venues": venues, "source": source, "gaps": [],
+                "filters": scope,
                 "scope": "bounded metadata retrieval; not exhaustive literature or novelty coverage"}
     query = query.strip()
+    if source == "hybrid":
+        venues = venues or list(AI_VENUES)
+        coverage["requested_venues"] = venues
+        coverage["priority"] = "verified conferences first; up to one third reserved for CS arXiv preprints"
+        coverage["providers"] = {}
+        primary_limit = limit - (max(1, limit // 3) if limit > 1 else 0)
+        papers = []
+        for provider, requested_venues, requested_limit in [
+            ("openalex", venues, primary_limit), ("arxiv", [], limit),
+        ]:
+            remaining = limit - len(papers)
+            if not remaining:
+                break
+            try:
+                allowance = min(requested_limit, remaining)
+                budget = _remaining(deadline) * (0.7 if provider == "openalex" else 1)
+                found = discover(query, source=provider, limit=allowance, timeout_s=budget,
+                                 api_key_env=api_key_env, venues=requested_venues, **scope)
+                coverage["providers"][provider] = found.coverage
+                coverage["gaps"].extend(f"{provider}: {gap}" for gap in found.coverage["gaps"])
+                papers = deduplicate(papers + list(found))
+            except LiteratureError as exc:
+                coverage["providers"][provider] = {"status": "failed", "error": str(exc)}
+                coverage["gaps"].append(f"{provider}: {exc}")
+        coverage["selected_counts"] = {
+            "conference": sum(bool(p.get("venue")) for p in papers),
+            "arxiv_preprint": sum(not p.get("venue") for p in papers),
+        }
+        return DiscoveryResults(papers[:limit], coverage=coverage)
     if source == "arxiv":
         global _last_arxiv_request
-        expression = query if re.search(r"\b(?:all|ti|au|abs|cat|id):", query) else "all:" + query
+        expression = arxiv_query_expression(query)
+        filters = []
+        if scope["cs_only"]:
+            filters.append("cat:cs.*")
+        if scope["arxiv_categories"]:
+            filters.append("(" + " OR ".join("cat:" + c for c in scope["arxiv_categories"]) + ")")
+        if since or until:
+            filters.append(f"submittedDate:[{(since or '1991-01-01').replace('-', '')}0000 TO {(until or date.today().isoformat()).replace('-', '')}2359]")
+        if filters:
+            expression = "(" + expression + ") AND " + " AND ".join(filters)
+        coverage["query_expression"] = expression
         url = ARXIV_ENDPOINT + "?" + urlencode({"search_query": expression, "start": 0, "max_results": limit, "sortBy": "relevance", "sortOrder": "descending"})
         # arXiv asks serial clients to leave >=3 seconds between requests.
         with _arxiv_lock:
@@ -456,11 +562,13 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
             papers.append(normalize_paper({"id": identifier, "title": entry.findtext("a:title", "", ns),
                 "authors": [a.findtext("a:name", "", ns) for a in entry.findall("a:author", ns)],
                 "year": published[:4], "url": identifier, "doi": entry.findtext("x:doi", "", ns),
+                "publication_date": published[:10], "updated_date": entry.findtext("a:updated", "", ns)[:10],
+                "categories": [category.get("term", "") for category in entry.findall("a:category", ns)],
                 "abstract": entry.findtext("a:summary", "", ns), "source": "arxiv", "content_kind": "abstract",
                 "journal_ref": entry.findtext("x:journal_ref", "", ns), "venue": None,
                 "pdf_url": next((link.get("href") for link in entry.findall("a:link", ns)
                                   if link.get("type") == "application/pdf"), None)}))
-        return DiscoveryResults(deduplicate(papers), coverage=coverage)
+        return DiscoveryResults(_filter_scope(deduplicate(papers), scope, coverage, "arxiv"), coverage=coverage)
     headers = {}
     if api_key_env and (not venues or any(venue != "COLM" for venue in venues)):
         key = os.environ.get(api_key_env, "").strip()
@@ -478,6 +586,16 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         (venue, {"search": query, "per-page": limit,
                  "filter": "primary_location.source.id:" + "|".join(sid for sid, name in resolved.items() if name == venue)})
         for venue in other_venues if venue in resolved.values()]
+    for _, params in requests:
+        filters = [params["filter"]] if params.get("filter") else []
+        if since:
+            filters.append("from_publication_date:" + since)
+        if until:
+            filters.append("to_publication_date:" + until)
+        if scope["cs_only"] and not venues:
+            filters.append("topics.field.id:17")
+        if filters:
+            params["filter"] = ",".join(filters)
     papers = []
     coverage["openalex_work_queries"] = []
     for requested_venue, params in requests:
@@ -513,6 +631,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         if limit < sum(bool(pool) for pool in pools.values()):
             coverage["gaps"].append("Result limit is smaller than the number of matched venues; not every venue is represented")
         coverage["gaps"].extend(f"{venue}: no matching papers in the bounded retrieved metadata" for venue, pool in pools.items() if not pool)
+    papers = _filter_scope(papers, scope, coverage, "openalex")
     for paper in papers:
         paper["search_coverage"] = coverage
     return DiscoveryResults(deduplicate(papers)[:limit], coverage=coverage)

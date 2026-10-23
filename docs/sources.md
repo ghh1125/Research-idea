@@ -30,7 +30,7 @@
 - [ACL Anthology metadata example](https://aclanthology.org/2025.naacl-long.1/)：出版来源、NAACL 全称、DOI 与 PDF 的对应方式。
 - [CCF 人工智能目录](https://www.ccf.org.cn/Academic_Evaluation/AI/)：代码中的 `ccf-a-ai-2022` 固定于 2022 目录的人工智能 A 类七会；网站和后续目录可能更新，因此该预设不声称当前评级或完整 CCF-A 覆盖。
 
-后端采用已核对文档的接口，但本开发环境未进行真实 CLI/模型账户联调。以后复制第三方代码时，应单独核实许可证、固定版本并保留必要声明。
+后端采用已核对文档的接口；2026-10-23 已用真实 Codex CLI 与 `gpt-6.1-sol` 核对结构化输出和重连恢复。Claude/API 真实账户兼容性仍待验证。以后复制第三方代码时，应单独核实许可证、固定版本并保留必要声明。
 
 - [Codex local skills](https://developers.openai.com/codex/skills)：本地 SKILL.md 形式与路径约定。本 CLI 采用显式加载和阶段分配，未声称复制全部原生插件机制。
 
@@ -50,3 +50,16 @@
 ## 论文分析框架
 
 参考已安装 `nature-paper-card` 的来源范围、阅读覆盖、模块必要性和实验—主张证据链原则。Research-idea 自主实现有界九维分析卡和定向补读，不打包该技能正文，不要求生成完整长篇 Paper Card；分析只服务 idea 的意义、差异和最小验证路径。
+
+## 自动研究系统的文献检索对照
+
+2026-10-23 按固定源码版本检查，采用思路并自主实现，没有复制第三方代码：
+
+| 系统与源码 | 本次核对的行为 | 本项目采用的部分 |
+| --- | --- | --- |
+| [AutoResearchClaw，be4ba47](https://github.com/aiming-lab/AutoResearchClaw/blob/be4ba4755bf1b52220f25e13b2293b5956590070/researchclaw/literature/search.py) | 合并 OpenAlex、Semantic Scholar、arXiv；传递年份下限；去重后按引用数、年份排序。主入口没有统一强制 CS/会议范围 | 多源合并和去重；本项目继续按查询相关性与日期窗口筛选，不采用引用数优先 |
+| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | 指导优先最近两年，经典工作例外；示例 arXiv helper 调用未直接传入日期参数 | 近期工作优先与显式经典资料；本项目把日期落实为程序参数 |
+| [AI-Scientist，1de1dbc](https://github.com/SakanaAI/AI-Scientist/blob/1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb/ai_scientist/generate_ideas.py) | 检索函数请求标题、年份、会议、摘要等元数据；该入口的 S2 请求未添加时间或学科过滤 | 结构化元数据；本项目增加服务端过滤及返回后的核验 |
+| [Karpathy autoresearch，228791f](https://github.com/karpathy/autoresearch/blob/228791fb499afffb54b46200aca536f79142f117/program.md) | 指定固定训练、评测和实验循环；该文件没有文献检索流程 | 实验预算思路；不将它当作文献检索实现 |
+
+核对源码不能证明这些系统的总体研究质量。当前实现仍需评估检索召回、会议索引覆盖、全文读取和实际 idea 的质量。
