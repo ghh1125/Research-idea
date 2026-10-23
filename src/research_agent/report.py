@@ -91,7 +91,7 @@ def candidate_markdown(candidate):
         f"- 新颖性状态：{candidate.get('novelty_status', 'unchecked')}",
         f"- 动机审阅状态：{candidate.get('motivation_status', 'pending')}",
         f"- 可行性状态：{candidate.get('feasibility_status', 'pending')}",
-        f"- 研究进度：{candidate['research_status']}", f"- 实施状态：{candidate['execution_status']}",
+        f"- 研究进度：{candidate['research_status']}", f"- 流程执行状态：{candidate['execution_status']}",
         f"- 实验证据：{candidate['empirical_status']}", "",
         "### 问题与机制", "", f"**问题：** {p['problem']}", "", f"**假设：** {p['hypothesis']}", "",
         f"**机制：** {p['mechanism']}", "", f"**干预：** {p['intervention']}", "",
