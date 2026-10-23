@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.env
+.research/
+research-projects/
+examples/toy_metrics.json
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

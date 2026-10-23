@@ -1,0 +1,7 @@
+{
+  "argv": ["python", "toy_experiment.py"],
+  "cwd": ".",
+  "timeout_s": 10,
+  "metrics_file": "toy_metrics.json",
+  "protected_files": ["toy_evaluator.py"]
+}

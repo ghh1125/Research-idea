@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "research-agent-cli"
+version = "0.1.0"
+description = "Evidence-driven LLM/NLP research ideation with interchangeable execution backends"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+research = "research_agent.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,74 @@
+"""Explicit synthetic backend for offline product tests, never a model fallback."""
+from __future__ import annotations
+
+import json
+from .backend_types import BackendResult
+
+DEMO_TOPIC = "演示：长上下文中证据冲突的诊断实验（合成资料，不是研究结论）"
+DEMO_PAPERS = [
+    {"id": "demo-source-a", "title": "SYNTHETIC DEMO A — evidence conflict", "authors": [], "year": None, "url": "", "source": "synthetic_demo", "content_kind": "notes",
+     "text": "This is a synthetic demonstration, not a scientific paper.\nIn a hypothetical task, conflicting passages can lead to inconsistent answers even when both passages are supplied.\nNo experiments were performed and no performance numbers are available."},
+    {"id": "demo-source-b", "title": "SYNTHETIC DEMO B — diagnostic controls", "authors": [], "year": None, "url": "", "source": "synthetic_demo", "content_kind": "notes",
+     "text": "This is a synthetic demonstration, not a scientific paper.\nA hypothetical diagnostic could keep retrieval fixed while varying contradiction and passage order.\nThese statements illustrate data flow only and do not establish novelty or effectiveness."},
+]
+
+
+class DemoBackend:
+    name = "demo-synthetic"
+
+    def generate(self, task):
+        payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
+        refs = [e["id"] for e in payload.get("evidence", [])]
+        papers = [p["id"] for p in payload.get("papers", [])]
+        if task.stage == "extract":
+            lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
+            output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
+        elif task.stage == "map":
+            output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["diagnostic", "untested_assumption"], "evidence_ids": refs}
+        elif task.stage == "propose":
+            candidates = []
+            for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
+                candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
+                candidates[-1]["motivation"] = {"problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
+                    "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
+                    "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",
+                    "causal_explanation": "候选解释：证据关系或顺序影响模型使用已有信息。", "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
+                    "expected_progress": "在限定条件下区分错误来源，形成可证伪解释；不是声称提升指标。",
+                    "simplest_alternative": "随机交换顺序而不使用候选机制。", "necessity_test": "如果随机对照解释全部差异，则该机制没有额外解释力。"}
+            output = {"candidates": candidates, "no_candidate_reason": ""}
+        elif task.stage in {"develop", "refine"}:
+            overlap_evidence = payload["evidence"][0]
+            comparisons = [{"dimension": dim, "prior_detail": "只有合成笔记，尚无真实论文方法细节。",
+                "proposed_detail": "固定模型与检索条件，诊断证据冲突及顺序影响。", "relation": "unknown", "evidence_ids": []}
+                for dim in ("problem", "mechanism", "information", "objective", "evaluation", "claim")]
+            checks = [{"dimension": dim, "status": "unverified", "requirement": requirement, "evidence_ids": [],
+                "verification_plan": plan, "failure_action": "先解决该前提；未解决时不开始正式实验。"}
+                for dim, requirement, plan in [
+                    ("data_access", "可合法访问包含冲突条件的数据", "检查数据许可和十个样本"),
+                    ("inference_signal", "问题和证据可在推理时获得", "记录模型实际输入并检查答案泄漏"),
+                    ("interface", "模型接受文本并返回可解析答案", "运行一个真实模型接口样本"),
+                    ("learning_signal", "当前仅诊断，无训练监督", "核对实现未调用训练，评测答案仅进入评测器"),
+                    ("compute", "预算覆盖配对推理", "测量十对样本的费用与时延，再估算总预算"),
+                    ("evaluation", "变换保持任务语义且标签正确", "盲审成对样本并测试评测器"),
+                    ("minimal_test", "小样本能测出所操纵因素", "先做人工验证与oracle诊断，不能当作部署方法"),
+                ]]
+            changes = ["实现输入条件变换器", "保存逐样本预测和条件标签"]
+            if task.stage == "refine":
+                changes.append("增加随机信号对照")
+            output = {
+                "motivation": payload["candidate"]["motivation"],
+                "method": {"base_implementation": "尚未选择；需要检查实际模型推理接口。", "changes": changes, "inputs": "问题、完整证据、条件标签；答案只供评测。", "outputs": "答案和逐样本诊断结果", "trainable_parameters": "不训练：首先诊断现象", "frozen_parameters": "模型参数保持不变", "objective": "不适用：无训练阶段", "supervision": "需要人工核对的评测答案；当前尚未获取", "inference_steps": ["构造匹配输入", "固定预算调用模型", "保存预测"], "resource_requirements": "未知，先测少量样本延迟与调用成本", "assumptions": [{"statement": "数据中存在可控制的证据冲突", "status": "unverified", "evidence_ids": [], "check": "人工检查样本并验证变换保留任务语义"}]},
+                "prior_art": {"verdict": "uncertain", "justification": "合成资料不能支持查新结论。", "overlaps": [{"paper_id": overlap_evidence["paper_id"], "level": "topic", "covered_claim": "合成资料讨论相似主题", "evidence_ids": [overlap_evidence["id"]], "remaining_gap": "所有真实文献与机制仍待核查", "comparisons": comparisons}], "search_queries": ["long context conflicting evidence controlled evaluation"]},
+                "novelty_claim": {"type": "explanation", "claim": "演示待检验解释：输入证据关系可能影响回答稳定性。", "changed_variable": "冲突程度或段落顺序", "observable_consequence": "内容固定时，配对条件之间的答案稳定性差异", "falsifier": "检查充分后没有差异，或简单控制解释全部差异", "nontriviality": "拟区分错误来源而非增加模块；真实贡献尚需文献与实验验证。"},
+                "feasibility": {"checks": checks, "required_signals": [{"name": "问题与检索证据", "needed_at": "inference", "availability": "unverified", "evidence_ids": [], "acquisition_plan": "先取得并检查真实数据样本", "substitute": "没有合适样本则暂缓实验"}, {"name": "真实答案", "needed_at": "evaluation", "availability": "unverified", "evidence_ids": [], "acquisition_plan": "人工核对评测标签，禁止传入模型推理", "substitute": "缺少标签时只做人工诊断"}]},
+                "validation": {"weakest_assumption": "输入变换真实操纵了待研究因素", "first_test": "人工检查成对样本，再运行固定预算的配对诊断。", "baselines": ["原始输入", "简单顺序随机化"], "controls": ["相同模型和预算", "真实答案不进入推理输入"], "positive": "只支持该设置下存在值得进一步验证的诊断信号。", "negative": "检查实现和测量能力，再判断是否削弱假设。", "inconclusive": "记录不确定性，不能直接否定方向。", "budget_estimate": "未测量；执行前确定样本量、模型和费用上限。"},
+                "next_action": {"kind": "inspect_code", "description": "检查模型接口和数据条件变换器", "decision_impact": "确定关键输入与测量是否可获得。"},
+            }
+        elif task.stage == "review":
+            needs_revision = "增加随机信号对照" not in payload["method_spec"]["method"]["changes"]
+            output = {"verdict": "refine" if needs_revision else "continue", "issues": [{"severity": "important", "issue": "需要区分策略收益与随机选择带来的变化。", "evidence_ids": [], "action": "增加简单随机对照。"}] if needs_revision else [], "unresolved_questions": ["真实文献、数据和实测结果尚缺。"], "revision_instructions": "增加随机信号对照，保持原始问题。" if needs_revision else "", "next_action": {"kind": "revise" if needs_revision else "run_experiment", "description": "补充对照" if needs_revision else "在显式配置的实验环境运行诊断", "decision_impact": "区分方法机制与简单解释。"}}
+            output["motivation_assessment"] = {"problem_significance": "unclear", "causal_link": "plausible", "progress": "unclear",
+                "reason": "动机链可用于演示，但合成笔记不能证明真实问题的重要性或研究贡献。", "decisive_test": "先在真实样本确认问题，再比较干预与随机对照。"}
+        else:
+            raise ValueError(f"Unsupported demo stage {task.stage}")
+        return BackendResult(output=output, usage={"synthetic": True, "cost_usd": None})
