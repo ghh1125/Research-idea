@@ -66,12 +66,14 @@ API key 读取、请求协议和超时都留在适配器。适配器不把失败
 ## 状态与恢复
 
 - 任务：running / succeeded / failed。成功结果使用输入与后端配置散列缓存。
-- 项目：initialized / sources_changed / running / completed / budget_exhausted / blocked。
+- 项目：initialized / sources_changed / running / interrupted / completed / budget_exhausted / blocked。
 - 候选：proposed / specified_for_test / prerequisites_unverified / motivation_unresolved / needs_revision / implementation_blocked / round_limit_reached / overlap_requires_confirmation / no_detectable_progress。
 - 操作前提：`feasibility_status` 为 `prerequisites_unverified`（前提待核实）、`blocked`（前提阻塞）或 `specified_not_executed`（规格明确但未执行）；逐项依据另存，不能把流程完成当成实施已验证。
 - 实验证据：初始 untested；系统只输出验证计划，不执行科学实验。
 
 completed 表示这一轮软件工作结束，不表示 idea 已验证或具备发表价值。
+
+Ctrl+C 将项目记为 interrupted；未完成任务保留可重试的中断记录，已经保存成功的结果继续缓存。恢复时先将上次异常退出留下的 running 任务记为中断，避免旧任务长期显示为正在执行；调用与时间用量继续累计。
 
 候选批次在初次生成后冻结；内部补充证据不删除已有候选。显式导入、更换约束、用户对话补充或重新规划可以建立新批次，并归档旧批次。方法草稿在候选补查前保存，补查中断后用 `pending_round` 接着当前草稿；若全文升级使引用失效，则先更新来源引用。成功审阅后追加讨论记录，遇到预算中断可以续跑。项目文件锁防止两个控制器同时修改一个项目。`status` / `inspect` 通过 SQLite URI `mode=ro` 和 WAL 事务快照查看运行中的项目，不占用写入锁。
 

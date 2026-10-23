@@ -277,6 +277,38 @@ class ControllerExecutionTests(unittest.TestCase):
             self.controller(backend, timeout_s=20, max_seconds=60).task("map", {})
         self.assertEqual(len(backend.calls), 1)
 
+    def test_interrupt_marks_run_and_unfinished_task_without_resetting_usage(self):
+        backend = FakeBackend([])
+        backend.generate = lambda task: (_ for _ in ()).throw(KeyboardInterrupt())
+        controller = self.controller(backend)
+        with self.assertRaises(KeyboardInterrupt):
+            controller.run()
+        self.assertEqual(self.store.get('status'), 'interrupted')
+        self.assertEqual(self.store.task_summary(), {'failed': 1})
+        self.assertEqual(self.store.get('calls_used'), 1)
+        self.assertGreater(self.store.get('elapsed_s'), 0)
+
+    def test_interrupt_while_displaying_saved_result_keeps_successful_cache(self):
+        output = valid_shape(SCHEMAS['map'])
+        controller = self.controller(FakeBackend([output]))
+        controller.activity = lambda *args: (_ for _ in ()).throw(KeyboardInterrupt())
+        with self.assertRaises(KeyboardInterrupt):
+            controller.task('map', {})
+        self.assertEqual(self.store.task_summary(), {'succeeded': 1})
+        resumed_backend = FakeBackend([])
+        self.assertEqual(self.controller(resumed_backend).task('map', {}), output)
+        self.assertEqual(resumed_backend.calls, [])
+        self.assertEqual(self.store.get('calls_used'), 1)
+
+    def test_resume_closes_stale_running_entries_before_checking_budget(self):
+        self.store.begin_task('abandoned-task', 'read_section')
+        self.store.set('calls_used', self.config['max_calls'])
+        with self.assertRaises(BudgetExhausted):
+            self.controller(FakeBackend([])).run()
+        self.assertEqual(self.store.task_summary(), {'failed': 1})
+        self.assertIn('Interrupted', self.store.task('abandoned-task')['error'])
+        self.assertEqual(self.store.get('calls_used'), self.config['max_calls'])
+
     def test_parse_value_error_repairs_without_a_previous_result_object(self):
         backend = FakeBackend([ValueError('malformed structured output'), valid_shape(SCHEMAS['map'])])
         self.controller(backend).task('map', {})

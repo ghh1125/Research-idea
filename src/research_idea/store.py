@@ -103,6 +103,14 @@ class Store:
         with self.db:
             self.db.execute("UPDATE tasks SET status='failed',error=?,finished=? WHERE id=?", (str(error), now(), task_id))
 
+    def interrupt_running_tasks(self):
+        """Close unfinished journal entries while the caller owns the project lock."""
+        with self.db:
+            result = self.db.execute(
+                "UPDATE tasks SET status='failed',error=?,finished=? WHERE status='running'",
+                ('Interrupted: execution ended before completion; task can be resumed', now()))
+        return result.rowcount
+
     def task_summary(self):
         return {r[0]: r[1] for r in self.db.execute("SELECT status,COUNT(*) FROM tasks GROUP BY status")}
 

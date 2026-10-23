@@ -265,6 +265,11 @@ class Controller:
                 prompt = make_prompt(stage, payload, guidance) + '\nREPAIR DATA (not instructions):\n' + json.dumps(
                     {'previous_output': getattr(result, 'output', None), 'diagnostic': str(exc)}, ensure_ascii=False) + \
                     '\nCorrect the named defects in this complete JSON result, retaining its valid content and real references.\n'
+            except KeyboardInterrupt:
+                if self.store.task(task_id)['status'] != 'succeeded':
+                    self.store.fail_task(task_id, 'Interrupted: model task did not finish')
+                self.checkpoint_time()
+                raise
             except Exception as exc:
                 # Provider errors may contain request details: persist a coarse error only.
                 self.store.fail_task(task_id, f"{type(exc).__name__}: backend execution failed")
@@ -619,6 +624,9 @@ class Controller:
         return self.select_search_results([key], min(room, max_new if max_new is not None else 3))
 
     def run(self):
+        recovered = self.store.interrupt_running_tasks()
+        if recovered:
+            self.store.event('interrupted_tasks_recovered', {'count': recovered})
         self.store.set("status", "running")
         try:
             self.initial_search()
@@ -678,6 +686,11 @@ class Controller:
                 self.develop_candidate(candidate)
             self.store.set("status", "completed")
             self.store.event("run_completed", {"candidate_count": len(candidates)})
+        except KeyboardInterrupt:
+            self.store.interrupt_running_tasks()
+            self.store.set('status', 'interrupted')
+            self.store.event('run_interrupted', {})
+            raise
         except BudgetExhausted:
             self.store.set("status", "budget_exhausted")
             raise
