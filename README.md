@@ -45,6 +45,45 @@ research-idea inspect --project ./research-projects/demo
 research-idea resume --project ./research-projects/demo
 ```
 
+### 对话终端：在同一个窗口讨论、研究和调整设置
+
+启动页标识为 `◆ RESEARCH IDEA — IDEAS ONLY · From papers to research proposals`，交付研究方案与验证设计，不执行科学实验。底部长期显示 `/intro` 使用介绍和常用命令。
+
+```bash
+research-idea chat --project ./research-projects/my-idea
+# 交互终端中直接运行 research-idea 也会打开一个新的对话项目
+```
+
+直接输入文字即可与模型讨论，聊天记录保存在项目 SQLite 中。第一条消息默认成为研究主题，运行前可用 `/topic 新方向` 修改。`/run` 才开始正式的文献检索、论文分析和候选审阅，最后在窗口内显示 idea 方案与第一步验证。研究过程中仍可查看状态或停止；同一项目同一时刻执行一个任务。运行中的消息不会被静默丢弃或排队执行，界面会提示先停止。
+
+| 命令 | 用途 |
+| --- | --- |
+| `/intro` | 使用介绍：从输入研究方向到得到 idea；底部长期显示此入口和常用命令 |
+| `/model`、`/model gpt-6.1-sol` | 打开选择菜单或直接指定模型；`inherit` 沿用后端配置 |
+| `/reasoning`、`/reasoning high` | 选择思考强度；`inherit` 沿用 Codex 配置 |
+| `/models` | 显示 Codex 本地模型缓存的 ID、强度和更新时间；不是实时授权保证 |
+| `/account` | 查看后端、模型、配置档和登录方式；不读取或显示认证文件、密钥 |
+| `/topic`、`/topic 新方向` | 查看或设置正式研究主题；已有研究任务的项目请用 `/open 新目录` |
+| `/input /path/to/brief.txt` | 读取 UTF-8 多行文字并发送讨论 |
+| `/run`、`/stop` | 开始/恢复研究，或停止并保留检查点 |
+| `/papers`、`/papers "带空格的论文.pdf"` | 列出或导入论文 |
+| `/evidence ev_…` | 查看证据所属论文、链接、原文与位置 |
+| `/status`、`/report`、`/history` | 查看状态、idea 方案和最近对话 |
+| `/constraints 单卡24GB，两周` | 保存资源限制 |
+| `/scope ai-recent`、`/scope local` | 最近 AI 会议加 CS arXiv，或仅本地资料 |
+| `/scope 2025-01-01 2026-10-23` | 指定发表日期范围 |
+| `/budget`、`/budget max_calls 100` | 查看/修改预算；讨论与研究共用调用与时间预算 |
+| `/config`、`/open 项目目录` | 查看配置、打开已有或新项目 |
+| `/help`、`/exit` | 帮助和退出 |
+
+Enter 发送，先按 Esc 再按 Enter 换行，Tab 补全命令，↑↓ 浏览本次输入历史。多行粘贴作为一个输入框处理。Ctrl+C 停止正在运行的任务；空闲时清空输入。再次打开相同 `--project` 可继续对话或研究。
+
+输出用彩色标签分区：紫色 `[skill]` / `[review]`，青色 `[search]`，蓝色 `[paper]` / `[read]`，黄色 `[analysis]` / `[thinking]`，绿色 `[evidence]` / `[idea]`。证据 ID、来源链接、原文引文和缺口各有强调；文字标签使无颜色终端也可理解。`[thinking]` 仅表示等待模型回复，不展示模型隐藏思维链。研究阶段完成后展示通过结构及引用检查的分析结果；这不等于科学结论已验证。当前回复以完整答复显示，研究步骤逐项实时输出，不提供模型 token 流。
+
+所有步骤事件保存在 `terminal-events.jsonl`，聊天保存在 `research.sqlite3`，方案及论文分析卡保存在 `outputs/`。最终屏幕优先显示 idea；完整原文证据可用 `/evidence` 查询。
+
+`/account` 对 Codex 调用其 `login status`，只显示识别出的登录方式，不透传可能含敏感内容的输出。API 后端只显示认证环境变量是否设置；Claude 登录方式由其 CLI 管理。模型缓存可能过时或属于不同配置档，实际可用性以调用结果为准。界面不会自动更换失败的模型。
+
 ### 交互启动：逐项选择
 
 安装后运行：

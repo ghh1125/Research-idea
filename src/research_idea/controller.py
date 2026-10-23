@@ -142,9 +142,10 @@ def evidence_gate(spec: dict, evidence: list) -> tuple[str, list[str]]:
 
 
 class Controller:
-    def __init__(self, store: Store, backend: Backend, config: dict, progress=None):
+    def __init__(self, store: Store, backend: Backend, config: dict, progress=None, activity=None):
         self.store, self.backend, self.config = store, backend, config
         self.progress = progress or (lambda message: None)
+        self.activity = activity or (lambda stage, result, cached: None)
         self.started = time.monotonic()
         self.previous_elapsed = float(store.get("elapsed_s", 0))
         self.full_text_attempted = set()
@@ -178,6 +179,11 @@ class Controller:
 
     def task(self, stage, payload, checker=None):
         guidance = [s for s in self.skills if stage in s["stages"]]
+        if guidance:
+            self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
+        if payload.get('paper_id'):
+            paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
+            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))}\n{payload['paper_id']} · {paper.get('year', '')}\n{paper.get('url', '')}")
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
         fingerprint = [PROMPT_VERSION, stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
         if self.config.get("reasoning_effort"):
@@ -190,6 +196,7 @@ class Controller:
             if checker:
                 checker(result)
             self.progress(f"cached {stage}")
+            self.activity(stage, result, True)
             return result
         prompt = make_prompt(stage, payload, guidance)
         # A single bounded repair for invalid structured outputs or citations.
@@ -212,6 +219,7 @@ class Controller:
                 self.store.finish_task(task_id, result.output, result.usage)
                 self.checkpoint_time()
                 self.store.event("task_completed", {"task_id": task_id, "stage": stage, "backend": self.backend.name, "usage": result.usage})
+                self.activity(stage, result.output, False)
                 return result.output
             except ValueError as exc:
                 self.store.fail_task(task_id, str(exc))
@@ -439,6 +447,7 @@ class Controller:
         ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"],
                        "venues": venues, "filters": scope, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
         self.store.set("search_ledger", ledger)
+        self.progress(f"[search] {query}\n目的：{reason}\n范围：{scope}；来源：{self.config['search_source']}；会议：{venues}")
         try:
             limit = min(room, 5, max_new if max_new is not None else 5)
             found = discover(query, source=self.config["search_source"], limit=limit,
@@ -464,6 +473,10 @@ class Controller:
                                coverage=getattr(found, "coverage", {}))
             self.store.event("search", ledger[key])
             self.store.set("search_ledger", ledger)
+            self.progress(f"[search] 找到 {len(found)} 篇，新增 {added} 篇，更新 {updated} 篇")
+            for paper in papers:
+                if paper['id'] in selected:
+                    self.progress(f"[paper] {paper['title']} · {paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}")
             hydrated = self.retrieve_full_texts(selected)
             return bool(added or updated or hydrated)
         except BudgetExhausted:

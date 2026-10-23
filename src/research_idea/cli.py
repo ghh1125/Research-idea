@@ -392,6 +392,9 @@ def build_parser():
     p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None)
     p.add_argument("--no-search", action="store_true")
     p.add_argument("--setup-only", action="store_true")
+    p = sub.add_parser("chat", help="持续对话窗口：/model、/reasoning、/run、/stop")
+    p.add_argument("--project", type=Path, help="已有或新项目；省略时创建独立项目目录")
+    backend_args(p)
     p = sub.add_parser("run", help="Discover/import evidence and develop research candidates")
     p.add_argument("topic", nargs="?")
     p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
@@ -448,6 +451,9 @@ def build_parser():
 
 
 def execute(args):
+    if args.command == "chat":
+        from .chat import launch_chat
+        return launch_chat(args)
     if getattr(args, "topic_file", None):
         if args.topic:
             raise ValueError("Use either TOPIC or --topic-file, not both")
@@ -603,6 +609,10 @@ def execute(args):
 
 
 def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    if not argv and sys.stdin.isatty():
+        argv = ["chat"]
     args = build_parser().parse_args(argv)
     try:
         return execute(args)
