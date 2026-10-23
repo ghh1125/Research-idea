@@ -207,7 +207,9 @@ def _extract_pdf(pdf: Path, txt: Path, timeout_s: float) -> str:
     try:
         # A failed earlier candidate must not leave reusable extraction output.
         txt.unlink(missing_ok=True)
-        run_cli([executable, "-layout", "-enc", "UTF-8", str(pdf), str(txt)], "", pdf.parent, timeout_s)
+        # Reading order keeps two-column paragraphs contiguous. Physical layout
+        # interleaves unrelated columns and breaks grounded quote matching.
+        run_cli([executable, "-enc", "UTF-8", str(pdf), str(txt)], "", pdf.parent, timeout_s)
         if not txt.is_file() or txt.stat().st_size > MAX_PDF_BYTES:
             raise FullTextError("PDF extraction produced no bounded text file")
         text = txt.read_text(encoding="utf-8")
@@ -274,7 +276,8 @@ def fetch_full_text(paper: dict, destination: Path | None = None, timeout_s: flo
                 result.update(text=text, content_kind="full_text", full_text_url=final_url,
                               pdf_sha256=pdf_hash, content_sha256=content_hash,
                               full_text_retrieval={"status": "completed", "attempts": attempts,
-                                                   "method": "official_pdf_pdftotext", "bytes": len(raw)}, **paths)
+                                                   "method": "official_pdf_pdftotext", "text_order": "reading_order",
+                                                   "bytes": len(raw)}, **paths)
                 result.pop("full_text_error", None)
                 return result
             except FullTextError as exc:

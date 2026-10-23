@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import json
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -295,6 +296,42 @@ class FullTextTests(unittest.TestCase):
             result = fulltext._extract_pdf(pdf, txt, 3)
         self.assertEqual(result, extracted)
         self.assertEqual(converter.call_count, 1)
+
+    @unittest.skipUnless(shutil.which("pdftotext"), "Poppler is needed for the two-column regression")
+    def test_two_column_paragraphs_remain_contiguous_for_quote_verification(self):
+        from research_idea.controller import locate_quote
+        from research_idea.literature import read_source
+        stream = b'''BT /F1 11 Tf
+1 0 0 1 40 720 Tm (A rule requires signal A.) Tj
+1 0 0 1 40 704 Tm (Feedback identifies this rule.) Tj
+1 0 0 1 340 720 Tm (Unrelated appendix sentence.) Tj
+1 0 0 1 340 704 Tm (Extra text from another column.) Tj ET'''
+        objects = [
+            b'<< /Type /Catalog /Pages 2 0 R >>',
+            b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
+            b'/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+            b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+            b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'\nendstream',
+        ]
+        data = bytearray(b'%PDF-1.4\n')
+        offsets = [0]
+        for index, obj in enumerate(objects, 1):
+            offsets.append(len(data))
+            data += f'{index} 0 obj\n'.encode() + obj + b'\nendobj\n'
+        xref = len(data)
+        data += b'xref\n0 6\n0000000000 65535 f \n'
+        for offset in offsets[1:]:
+            data += f'{offset:010d} 00000 n \n'.encode()
+        data += f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode()
+        pdf, txt = self.root / 'two-columns.pdf', self.root / 'two-columns.txt'
+        pdf.write_bytes(data)
+        quote = 'A rule requires signal A. Feedback identifies this rule.'
+        for text in [read_source(pdf)["text"], fulltext._extract_pdf(pdf, txt, 5)]:
+            with self.subTest(text=text):
+                start, end = locate_quote(text, quote)
+                self.assertNotIn('appendix', text[start:end])
+                self.assertIn('\f', text)
 
     def test_converter_failure_cannot_return_a_partial_text_file(self):
         from research_idea.backend_types import BackendError

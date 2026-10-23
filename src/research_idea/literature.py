@@ -668,7 +668,7 @@ def read_source(path: Path, title: str | None = None) -> dict[str, Any]:
         with tempfile.TemporaryDirectory(prefix="research-pdf-") as temporary:
             output = Path(temporary) / "paper.txt"
             try:
-                result = subprocess.run([executable, "-layout", "-enc", "UTF-8", str(path), str(output)],
+                result = subprocess.run([executable, "-enc", "UTF-8", str(path), str(output)],
                                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=45, check=False)
             except subprocess.TimeoutExpired:
                 raise LiteratureError("PDF extraction exceeded 45 seconds") from None
@@ -691,4 +691,5 @@ def read_source(path: Path, title: str | None = None) -> dict[str, Any]:
     digest = hashlib.sha256(raw).hexdigest()[:20]
     return normalize_paper({"id": "local:" + digest, "title": title or path.stem,
                             "text": text, "content_kind": kind, "path": str(path),
-                            "source": "local", "content_sha256": hashlib.sha256(raw).hexdigest()})
+                            "source": "local", "content_sha256": hashlib.sha256(raw).hexdigest(),
+                            **({"text_order": "reading_order"} if path.suffix.lower() == ".pdf" else {})})

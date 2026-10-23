@@ -113,6 +113,26 @@ class CLIIntegrationTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_explicit_shorter_full_text_revision_replaces_source_without_abstract_downgrade(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp))
+            try:
+                original = {"id": "p", "title": "Synthetic source", "content_kind": "full_text",
+                            "text": "Longer extraction with interleaved unrelated column text."}
+                import_papers(store, [original])
+                store.replace_evidence("p", [{"id": "old-evidence", "paper_id": "p"}])
+                store.set("cohort", {"old_source": True})
+                revised = dict(original, text="Clean reading order.", text_order="reading_order")
+                self.assertEqual(import_papers(store, [revised]), 0)
+                self.assertEqual(store.rows("papers")[0]["text"], revised["text"])
+                self.assertEqual(store.rows("evidence"), [])
+                self.assertIsNone(store.get("cohort"))
+                import_papers(store, [{"id": "p", "title": "Synthetic source", "abstract": "New metadata"}])
+                self.assertEqual(store.rows("papers")[0]["text"], revised["text"])
+                self.assertEqual(store.rows("papers")[0]["content_kind"], "full_text")
+            finally:
+                store.close()
+
     def test_budget_resume_keeps_cohort_when_internal_evidence_grows(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp))

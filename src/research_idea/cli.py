@@ -59,6 +59,18 @@ def import_papers(store, records, kind=None):
         normalized.append(p)
     previous = store.rows("papers")
     merged = deduplicate(previous + normalized)
+    # An explicitly re-imported full text is a source revision, even when a
+    # cleaner extraction is shorter. Discovery still prefers fuller content.
+    for incoming in normalized:
+        if incoming["content_kind"] != "full_text" or not incoming.get("text", "").strip():
+            continue
+        aliases = set(incoming["aliases"])
+        current = next(p for p in merged if aliases.intersection(p["aliases"]))
+        for key, value in incoming.items():
+            if key not in {"id", "aliases", "sources", "versions"} and value not in (None, "", []):
+                current[key] = value
+        if not incoming.get("full_text_error"):
+            current.pop("full_text_error", None)
     if merged == previous:
         return 0
     with store.db:
