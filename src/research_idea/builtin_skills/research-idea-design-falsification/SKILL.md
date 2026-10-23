@@ -22,8 +22,10 @@ Return only the current task JSON. In develop/refine, populate `validation.weake
 
 ## Failure behavior
 
-Route implementation errors to debugging, resource obstacles to an explicit blocked requirement, and inadequate measurements to redesign. Only relevant evidence can weaken the core hypothesis; related titles cannot. Preserve informative negative outcomes without retroactively changing predictions. Resource estimates and reviewer agreement never demonstrate effectiveness.
+Route implementation errors to debugging, resource obstacles to an available substitute or a smaller pilot, and inadequate measurements to redesign. Only relevant evidence can weaken the core hypothesis; related titles cannot. Preserve informative negative outcomes without retroactively changing predictions. Resource estimates and reviewer agreement never demonstrate effectiveness.
 
 ## Synthetic decision contrast
 
 If adaptive retrieval outperforms one fixed retrieval call, extra calls may explain the gain. Compare against fixed or random retrieval at the same budget and record overhead. A disappearing advantage challenges the adaptive-selection claim, not necessarily retrieval's usefulness. These are hypothetical outcomes, not experimental results.
+
+In `validation.summary`, briefly explain the first test, simplest comparator, measured outcome, and decision. Keep detailed branches, controls and cost accounting in the other validation fields.

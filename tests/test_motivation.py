@@ -12,6 +12,7 @@ EVIDENCE = [{"id": "ev-observation", "verification": "quote_matched_only"}]
 
 def proposal():
     return {"motivation": {
+        "basis": "source_observation",
         "problem_observation": "The supplied source reports an unresolved failure under a specified condition.",
         "evidence_ids": ["ev-observation"],
         "importance": "This failure prevents the target task from meeting its stated requirement.",
@@ -82,7 +83,7 @@ class MotivationTests(unittest.TestCase):
                 self.assertEqual(assess_motivation(idea, review(progress="incremental"), EVIDENCE)["status"], "needs_revision")
 
     def test_missing_or_empty_motivation_fields_require_repair(self):
-        fields = set(proposal()["motivation"]) - {"evidence_ids"}
+        fields = set(proposal()["motivation"]) - {"evidence_ids", "basis"}
         for field in fields:
             for mode in ("missing", "blank", "wrong_type"):
                 with self.subTest(field=field, mode=mode):

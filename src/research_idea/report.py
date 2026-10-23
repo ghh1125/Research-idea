@@ -1,6 +1,8 @@
 """Human-readable reports alongside machine-readable evidence and versions."""
 from __future__ import annotations
 
+from .presentation import idea_markdown
+
 import json
 from pathlib import Path
 from .store import Store, now, digest
@@ -40,130 +42,61 @@ def comparison_table(overlap):
         matching = [item for item in comparisons if item.get("dimension") == dimension]
         for item in matching or [{}]:
             rows.append((label, item.get("prior_detail", "尚未提供"),
-                         item.get("proposed_detail", "尚未提供"), item.get("relation", "pending"),
+                         item.get("proposed_detail", "尚未提供"), {"same": "相同", "different": "不同", "unknown": "需进一步对照"}.get(item.get("relation"), "需进一步对照"),
                          ", ".join(item.get("evidence_ids", [])) or "无"))
     return table(["维度", "现有工作", "候选方案", "关系", "原文证据"], rows)
 
 
 def feasibility_markdown(candidate, spec):
-    feasibility = spec.get("feasibility", {})
-    assessment = candidate.get("feasibility_assessment", {})
-    lines = ["### 七维可行性检查", "",
-             f"**当前状态：** {candidate.get('feasibility_status', assessment.get('status', 'pending'))}", "",
-             "`pending` / `prerequisites_unverified` 表示前提待核查；`blocked` 表示存在阻塞。"
-             "`source_supported` 只表示来源支持，`specified_not_executed` 只表示前提已描述，均不代表实际运行通过。", ""]
-    checks = feasibility.get("checks", [])
-    rows = []
-    for dimension, label in FEASIBILITY_DIMENSIONS.items():
-        matching = [item for item in checks if item.get("dimension") == dimension]
-        for item in matching or [{}]:
-            rows.append((label, item.get("status", "pending"), item.get("requirement", "尚未提供"),
-                         ", ".join(item.get("evidence_ids", [])) or "无",
-                         item.get("verification_plan", "尚未提供"), item.get("failure_action", "尚未提供")))
-    lines.extend([table(["维度", "状态", "具体前提", "原文证据", "执行前核查", "前提失败后的动作"], rows), "",
-                  "### 所需信号与可得阶段", ""])
-    signals = feasibility.get("required_signals", [])
+    feasibility = spec.get('feasibility', {})
+    rows = [(FEASIBILITY_DIMENSIONS.get(c['dimension'], c['dimension']), c['requirement'],
+             c['verification_plan'], c['failure_action']) for c in feasibility.get('checks', [])]
+    lines = ['### 实施安排', '', table(['方面', '需要什么', '第一步怎么检查', '替代安排'], rows), '']
+    signals = feasibility.get('required_signals', [])
     if signals:
-        lines.extend([table(["信号", "需要阶段", "可得性", "原文证据", "获取与核查计划", "不可得时的替代方案"],
-                            [(item.get("name", "尚未提供"), SIGNAL_STAGES.get(item.get("needed_at"), item.get("needed_at", "pending")),
-                              item.get("availability", "pending"), ", ".join(item.get("evidence_ids", [])) or "无",
-                              item.get("acquisition_plan", "尚未提供"), item.get("substitute", "尚未提供"))
-                             for item in signals]), ""])
-    else:
-        lines.extend(["尚未列出所需信号；不能据此认定训练、推理或评测输入可得。", ""])
-    for key, label in [("blocking_checks", "阻塞前提"), ("unverified_checks", "待核查前提")]:
-        items = assessment.get(key, [])
-        if items:
-            lines.extend([f"**{label}：**", ""])
-            for item in items:
-                name = FEASIBILITY_DIMENSIONS.get(item.get("dimension"), item.get("name", "未知前提"))
-                stage = item.get("needed_at")
-                if stage:
-                    name += "（" + SIGNAL_STAGES.get(stage, stage) + "）"
-                lines.append(f"- {name}：{item.get('reason', item.get('requirement', '待核查'))}")
-            lines.append("")
-    if assessment.get("warnings"):
-        lines.extend(["**可行性判断边界：**", "", bullets(assessment["warnings"]), ""])
-    return "\n".join(lines)
+        lines.extend(['### 输入与信号', '', table(['信号', '使用阶段', '获取方式', '替代方案'], [
+            (i['name'], SIGNAL_STAGES.get(i['needed_at'], i['needed_at']),
+             ('当前不可用；' if i['availability'] == 'unavailable' else '') + i['acquisition_plan'], i['substitute'])
+            for i in signals]), ''])
+    return '\n'.join(lines)
 
 
 def candidate_markdown(candidate):
-    p = candidate["proposal"]
-    lines = [f"## {p['title']}", "", f"ID: `{candidate['id']}`", "",
-        f"- 新颖性状态：{candidate.get('novelty_status', 'unchecked')}",
-        f"- 动机审阅状态：{candidate.get('motivation_status', 'pending')}",
-        f"- 可行性状态：{candidate.get('feasibility_status', 'pending')}",
-        f"- 研究进度：{candidate['research_status']}", f"- 流程执行状态：{candidate['execution_status']}",
-        f"- 实验证据：{candidate['empirical_status']}", "",
-        "### 问题与机制", "", f"**问题：** {p['problem']}", "", f"**假设：** {p['hypothesis']}", "",
-        f"**机制：** {p['mechanism']}", "", f"**干预：** {p['intervention']}", "",
-        f"**预测：** {p['prediction']}", "", f"**反例/证伪条件：** {p['falsifier']}", "",
-        f"**价值：** {p['why_it_matters']}", "", "支持证据：" + ", ".join(p["evidence_ids"]), ""]
-    motivation = candidate.get("spec", {}).get("motivation", p.get("motivation", {}))
-    lines.extend(["### 问题—动机—方法", ""])
-    for key, label in [("problem_observation", "实际问题与现象"), ("importance", "问题的重要性"),
-                       ("existing_approach_limit", "现有方法为什么不足"), ("causal_explanation", "导致问题的机制解释"),
-                       ("why_this_method", "为何这个方法对应上述原因"), ("expected_progress", "预期实质进展"),
-                       ("simplest_alternative", "最简单的替代方案"), ("necessity_test", "新方法必要性的验证")]:
-        lines.extend([f"**{label}：** {motivation.get(key, '尚未提供；保持 pending')}", ""])
-    lines.extend(["动机依据：" + (", ".join(motivation.get("evidence_ids", [])) or "无；待补原文证据"), ""])
-    if not candidate.get("spec"):
-        lines.extend(["尚未完成实施规格；不能标记为可实施或已经验证。", ""])
-        return "\n".join(lines)
-    s = candidate["spec"]
-    method = s["method"]
-    novelty = s.get("novelty_claim", {})
-    lines.extend(["### 待检验的贡献主张", ""])
-    for key, label in [("type", "贡献类型"), ("claim", "具体贡献"), ("changed_variable", "改变的变量"),
-                       ("observable_consequence", "可观测后果"), ("falsifier", "证伪条件"), ("nontriviality", "非平凡性依据")]:
-        lines.extend([f"**{label}：** {novelty.get(key, '尚未提供；保持 pending')}", ""])
-    lines.extend(["### 实施规格", ""])
-    for key, label in [("base_implementation", "基础实现"), ("inputs", "输入"), ("outputs", "输出"), ("trainable_parameters", "训练参数"), ("frozen_parameters", "冻结参数"), ("objective", "训练目标"), ("supervision", "监督来源"), ("resource_requirements", "资源前提")]:
-        lines.extend([f"**{label}：** {method[key]}", ""])
-    lines.extend(["**修改：**", "", bullets(method["changes"]), "", "**推理步骤：**", "", bullets(method["inference_steps"]), "", "**关键假设：**", ""])
-    for a in method["assumptions"]:
-        lines.append(f"- [{a['status']}] {a['statement']}；检查方法：{a['check']}；证据：{', '.join(a['evidence_ids']) or '无'}")
-    lines.extend(["", "### 最近工作与差异", "", s["prior_art"]["justification"], ""])
-    lines.extend(["以下按研究问题、机制、可用信息、目标、评测和贡献主张逐项对照。"
-                  "`unknown` / `pending` 表示未核清；发现局部差异不等于已经确认创新。", ""])
-    for overlap in s["prior_art"]["overlaps"]:
-        lines.extend([f"#### {overlap['paper_id']}", "",
-                      f"重叠层级：{overlap['level']}。已涉及主张：{overlap['covered_claim']}。剩余问题：{overlap['remaining_gap']}。证据：{', '.join(overlap['evidence_ids']) or '无'}", "",
-                      comparison_table(overlap), ""])
-    if not s["prior_art"]["overlaps"]:
-        lines.extend(["尚无逐篇方法对照；新颖性保持待核查。", ""])
-    if candidate.get("comparison_gaps"):
-        lines.extend(["**对照仍缺的信息：**", "", bullets(candidate["comparison_gaps"]), ""])
-    lines.extend(["建议的后续检索（不等于已执行）：", "", bullets(s["prior_art"]["search_queries"]), "",
-                  feasibility_markdown(candidate, s), "", "### 最小验证计划", ""])
-    v = s["validation"]
-    for key, label in [("weakest_assumption", "最脆弱前提"), ("first_test", "第一步"), ("positive", "正结果解释"), ("negative", "负结果解释"), ("inconclusive", "不明确结果解释"), ("budget_estimate", "预算")]:
-        lines.extend([f"**{label}：** {v[key]}", ""])
-    lines.extend(["**基线：**", "", bullets(v["baselines"]), "", "**控制变量：**", "", bullets(v["controls"]), "", "### 待解决问题", ""])
-    review = candidate.get("review", {})
-    motivation_review = review.get("motivation_assessment", {})
-    lines.extend(["**问题与方法的审阅：**", ""])
-    for key, label in [("problem_significance", "问题价值"), ("causal_link", "动机与方法的因果联系"),
-                       ("progress", "实质进展或增量修改"), ("reason", "判断依据"), ("decisive_test", "决定性检验")]:
-        lines.extend([f"**{label}：** {motivation_review.get(key, '尚未审阅；保持 pending')}", ""])
-    lines.extend([bullets(review.get("unresolved_questions", [])), ""])
-    for issue in review.get("issues", []):
-        lines.append(f"- [{issue['severity']}] {issue['issue']} → {issue['action']}")
-    action = candidate.get("recommended_action") or review.get("next_action", s["next_action"])
-    lines.extend(["", f"**下一步：** [{action['kind']}] {action['description']}", "", f"**将解决：** {action['decision_impact']}", ""])
-    if candidate.get("warnings"):
-        lines.extend(["**证据边界：**", "", bullets(candidate["warnings"]), ""])
-    if candidate.get("versions"):
-        lines.extend(["### 修订轨迹", "", "下表记录文本和证据变化；变化不等于质疑已被解决。问题、假设和预测的原始锚点保存在 JSON 中。", ""])
-        rows = []
-        for version in candidate["versions"]:
-            record = version.get("revision_record", {})
-            rows.append((version["round"], record.get("previous_revision_instructions", ""),
-                ", ".join(change["field"] for change in record.get("changed_fields", [])) or "初始版本或无字段变化",
-                ", ".join(record.get("new_evidence_ids", [])) or "无",
-                record.get("progress_check", {}).get("outcome", "未记录")))
-        lines.extend([table(["轮次", "上轮修订要求", "变化字段", "新增证据", "进展检查"], rows), ""])
-    return "\n".join(lines)
+    lines = [idea_markdown(candidate), '']
+    spec = candidate.get('spec') or {}
+    if not spec:
+        return '\n'.join(lines)
+    method = spec['method']
+    lines.extend(['### 实现细节', ''])
+    lines.extend(['**具体改动：**', '', bullets(method['changes']), '', '**执行步骤：**', '',
+                  '\n'.join(f'{i}. {step}' for i, step in enumerate(method['inference_steps'], 1)), ''])
+    for key, label in [('base_implementation', '基础实现'), ('trainable_parameters', '训练部分'),
+                       ('frozen_parameters', '保持不变的部分'), ('objective', '目标'),
+                       ('supervision', '学习信号'), ('resource_requirements', '资源条件')]:
+        lines.extend([f'**{label}：** {method[key]}', ''])
+    for assumption in method['assumptions']:
+        lines.extend(['**设计假设：** ' + assumption['statement'], '', '检验方式：' + assumption['check'], ''])
+    lines.extend(['### 最近工作对照', ''])
+    for overlap in spec['prior_art']['overlaps']:
+        lines.extend(['#### ' + overlap['paper_id'], '',
+                      '**已有工作涉及：** ' + overlap['covered_claim'], '',
+                      '**本方案继续研究：** ' + overlap['remaining_gap'], '', comparison_table(overlap), ''])
+    lines.extend([feasibility_markdown(candidate, spec), '', '### 完整首测协议', ''])
+    validation = spec['validation']
+    lines.extend(['**完整首测协议：** ' + validation['first_test'], '', '**比较对象：**', '', bullets(validation['baselines']), '',
+                  '**控制条件：**', '', bullets(validation['controls']), ''])
+    lines.extend(['### 设计讨论与改进', ''])
+    for version in candidate.get('versions', []):
+        responses = version['spec'].get('review_responses', [])
+        if responses:
+            lines.extend([f"第 {version['round']} 轮：", '', table(['讨论点', '设计选择', '理由'],
+                [(r['issue'], r['change'], r['reason']) for r in responses]), ''])
+    for item in (candidate.get('review') or {}).get('issues', []):
+        lines.extend(['**讨论点：** ' + item['issue'], '', '**具体处理：** ' + item['action'], ''])
+    refs = spec['motivation']['evidence_ids']
+    if refs:
+        lines.extend(['### 主要原文依据', '', ', '.join(refs), ''])
+    return '\n'.join(lines)
 
 
 def claim_audits_markdown(audits):
@@ -184,8 +117,6 @@ def claim_audits_markdown(audits):
             for field, label in (("limitations", "限制"), ("confounds", "混杂因素"), ("missing_controls", "待核查的对照"), ("audit_gaps", "证据缺口"), ("next_reading", "下一步阅读")):
                 if claim.get(field):
                     lines.extend([f"**{label}：**", "", bullets(claim[field]), ""])
-        if audit.get("warnings"):
-            lines.extend([bullets(audit["warnings"]), ""])
     return "\n".join(lines)
 
 
@@ -271,25 +202,17 @@ def export_report(store: Store, output_dir: Path | None = None):
     if candidates:
         lines.extend(["## Idea 与第一步验证", ""])
         for candidate in candidates:
-            proposal = candidate['proposal']
-            spec = candidate.get('spec') or {}
-            validation = spec.get('validation', {})
-            motivation = spec.get('motivation', proposal.get('motivation', {}))
-            review = candidate.get('review') or {}
-            lines.extend([f"### {proposal['title']}", ""])
-            lines.extend([
-                "**问题：** " + motivation.get('problem_observation', proposal['problem']), "",
-                "**动机：** " + motivation.get('importance', proposal['why_it_matters']), "",
-                "**现有方法为什么不足：** " + motivation.get('existing_approach_limit', ''), "",
-                "**关键解释：** " + motivation.get('causal_explanation', proposal['hypothesis']), "",
-                "**方法为何可能奏效：** " + proposal['mechanism'] + " " + motivation.get('why_this_method', ''), "",
-                "**与已有工作的差异：** " + spec.get('prior_art', {}).get('justification', '尚未完成细节对照。'), "",
-                "**第一步验证：** " + validation.get('first_test', '尚未完成验证方案。'), "",
-                "**最脆弱的假设：** " + validation.get('weakest_assumption', '尚未明确。'), "",
-                "**如何判断结果：** " + validation.get('positive', '') + " " + validation.get('negative', ''), "",
-                f"[完整方案]({candidate['id']}.md)", ""])
+            lines.extend([idea_markdown(candidate), ''])
+            compared = [o['paper_id'] for o in (candidate.get('spec') or {}).get('prior_art', {}).get('overlaps', [])]
+            references = compared or candidate['proposal'].get('closest_work_ids', [])
+            linked = [p for ref in dict.fromkeys(references) for p in papers if p['id'] == ref][:3]
+            if linked:
+                lines.extend(['**相关论文：**', ''])
+                lines.extend('- ' + (f"[{p['title']}]({p['url']})" if p.get('url') else p['title']) for p in linked)
+                lines.append('')
+            lines.extend([f"[展开方法与论文对照]({candidate['id']}.md)", ""])
     else:
-        lines.extend([data['no_candidate_reason'] or "尚未形成有依据的候选；请查看项目状态和未解决的证据缺口。", ""])
+        lines.extend([data['no_candidate_reason'] or "方案正在形成中，可从已保存的进度继续运行。", ""])
     lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "方案是实验前的研究设计；原文引文、审阅与执行记录如下。", ""])
     if data['quote_gaps']:
         lines.extend(['## 未采用的引用', '', '下列引用未通过来源定位，未进入证据库；对应结论保持未知。', ''])

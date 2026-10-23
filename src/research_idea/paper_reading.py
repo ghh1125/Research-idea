@@ -251,7 +251,13 @@ def read_paper(controller, paper):
         payload = {"paper_id": paper["id"], "title": paper["title"], "topic": controller.store.get("topic"),
                    "quote_gaps": [g for g in current_quote_gaps(controller.store).values() if g['paper_id'] == paper['id']],
                    "inventory": coverage, "evidence": list(collected.values()), "followup_attempts": attempts}
-        result = controller.task("paper_card", payload, lambda value: validate_card(value, paper, list(collected.values()), coverage))
+        from .controller import OutputValidationError
+        try:
+            result = controller.task("paper_card", payload, lambda value: validate_card(value, paper, list(collected.values()), coverage))
+        except OutputValidationError as exc:
+            controller.store.event('paper_card_skipped', {'paper_id': paper['id'], 'reason': str(exc)})
+            controller.progress('[read] 继续使用这篇论文已定位的原文进行构思，其他论文照常分析。')
+            return None
         cards[paper["id"]] = {**result, "source_hash": source_inventory["source_hash"], "inventory": coverage,
             "status": "analyzed", "followup_attempts": list(attempts), "evidence_ids": sorted(collected),
             "assessment_boundary": "Source-grounded model interpretation; no independent reproduction or global novelty verification."}

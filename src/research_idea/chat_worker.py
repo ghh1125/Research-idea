@@ -15,21 +15,9 @@ from .locking import project_lock
 from .report import export_report
 from .schema import obj, STR, validate
 from .store import Store, now
+from .presentation import STAGE_LABELS, activity_summary, skill_label, error_summary
 
 CHAT_SCHEMA = obj(answer=STR)
-STAGES = {
-    'plan_search': ('search', '制定检索计划'),
-    'extract': ('read', '提取可核查证据'),
-    'read_section': ('read', '正文分块分析'),
-    'paper_card': ('analysis', '整理论文分析卡'),
-    'inspect_source': ('read', '定向补读'),
-    'audit_claims': ('analysis', '主张与实验支持审计'),
-    'map': ('analysis', '问题与竞争解释'),
-    'propose': ('idea', '生成候选（尚待审阅）'),
-    'develop': ('analysis', '方法、差异与可行性'),
-    'refine': ('review', '修订方案'),
-    'review': ('review', '审阅结论与下一步'),
-}
 LABELS = {
     'research_question': '研究问题', 'scope': '检索范围', 'queries': '检索词',
     'query': '查询', 'rationale': '理由', 'purpose': '目的', 'assumptions': '假设',
@@ -72,9 +60,9 @@ def outline(value, depth=0):
 
 
 def activity(stage, result, cached):
-    tag, label = STAGES.get(stage, ('analysis', stage))
-    event(tag, label + (' · 复用已校验结果' if cached else ' · 已通过结构/引用校验')
-          + '\n' + '\n'.join(outline(result)))
+    tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
+    event(tag, label + (' · 已有分析' if cached else '') + '\n\n' + activity_summary(stage, result))
+    event('detail', label + '\n' + '\n'.join(outline(result)))
 
 
 def progress(message):
@@ -86,8 +74,18 @@ def progress(message):
         tag, text = 'read', message
     else:
         stage = message.split(' ', 1)[0]
-        tag, label = STAGES.get(stage, ('progress', stage))
+        if stage == 'cached':
+            return
+        tag, label = STAGE_LABELS.get(stage, ('progress', stage))
         text = message.replace(stage, label, 1)
+    if tag == 'skill':
+        for name in text.replace(' · ', ', ').split(', '):
+            text = text.replace(name, skill_label(name))
+        for stage, (_, label) in STAGE_LABELS.items():
+            if text.startswith(stage + ' · '):
+                text = text.replace(stage + ' · ', label + ' · ', 1)
+                break
+    text = re.sub(r'\(call (\d+)/(\d+)\)', r'· 模型调用 \1/\2', text)
     event(tag, text)
 
 
@@ -95,7 +93,8 @@ def idea_text(project):
     path = project / 'outputs' / 'report.md'
     if not path.exists():
         return '尚无方案。使用 /run 开始研究。'
-    return path.read_text(encoding='utf-8').split('<details>', 1)[0].strip()
+    text = path.read_text(encoding='utf-8').split('<details>', 1)[0].strip()
+    return '\n'.join(line for line in text.splitlines() if not line.startswith('[展开方法与论文对照]'))
 
 
 def chat_turn(project, message):
@@ -148,22 +147,25 @@ def research(project):
             if store.get('demo'):
                 raise ValueError('演示项目请用 demo/resume；真实对话请新建项目。')
             def findings(stage, result, cached):
+                store.set('last_activity', {'stage': stage, 'result': result})
                 activity(stage, result, cached)
                 ids = set(re.findall(r'ev_[a-zA-Z0-9_]+', json.dumps(result)))
                 papers = {p['id']: p for p in store.rows('papers')}
                 for evidence in store.rows('evidence'):
-                    if evidence['id'] in ids:
+                    if evidence['id'] in ids and evidence['id'] not in shown_evidence:
+                        shown_evidence.add(evidence['id'])
                         paper = papers.get(evidence['paper_id'], {})
                         event('evidence', f"{evidence['id']} ← {paper.get('title', evidence['paper_id'])}\n"
                               f"{paper.get('url', '')}\n原文：{evidence['quote']}\n"
                               f"原文位置：页 {evidence.get('page', '?')} / 行 {evidence.get('line', '?')}\n"
                               f"类型：{evidence.get('kind', '')}；成立条件：{evidence.get('conditions', '')}")
+            shown_evidence = set()
             controller = Controller(store, make_backend(cfg, project), cfg, progress=progress, activity=findings)
-            event('skill', '\n'.join(s['name'] + ' · ' + ', '.join(s['stages']) for s in controller.skills) or '未加载 skill')
+            event('skill', '本轮分析方法：' + ' → '.join(skill_label(s['name']) for s in controller.skills) if controller.skills else '使用任务内的分析方法')
             from .search_scope import config_scope
             for purpose, label in [('strategy', '寻找可借鉴的方法与研究机会'), ('novelty', '候选动机与贡献查重')]:
                 window = config_scope(cfg, purpose)
-                event(purpose, f"{label} · {window['since']} → {window['until']} · {cfg['search_date_mode']}\n已找到的更早近邻仍参与对比；方法相似不等于动机或贡献重叠。")
+                event(purpose, f"{label} · {window['since']} → {window['until']}\n按问题动机和具体主张比较，已有方法也可以用于新的研究问题。")
             for paper in store.rows('papers'):
                 event('paper', f"{paper['title']} · {paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}\n资料类型：{paper.get('content_kind', '')}")
             try:
@@ -190,8 +192,11 @@ def main():
     except KeyboardInterrupt:
         event('stopped', '已停止；研究检查点已保留，可用 /run 继续。')
         return 130
+    except BudgetExhausted:
+        event('budget', '本轮预算已用完，方案和进度已保存。用 /budget 调整后 /run 继续。')
+        return 3
     except (ValueError, RuntimeError, OSError) as exc:
-        event('error', str(exc))
+        event('error', error_summary(exc))
         return 1
 
 

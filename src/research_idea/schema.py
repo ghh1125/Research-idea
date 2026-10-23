@@ -35,12 +35,12 @@ CLAIM_AUDIT = obj(
             "contradicted", "insufficient_evidence"]), next_reading=STRINGS)),
 )
 MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS, opportunity_types=STRINGS, evidence_ids=STRINGS)
-MOTIVATION = obj(problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
+MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
     causal_explanation=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
     prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR, motivation=MOTIVATION)), no_candidate_reason=STR)
 METHOD = obj(
-    base_implementation=STR, changes=STRINGS, inputs=STR, outputs=STR,
+    summary=STR, base_implementation=STR, changes=STRINGS, inputs=STR, outputs=STR,
     trainable_parameters=STR, frozen_parameters=STR, objective=STR,
     supervision=STR, inference_steps=STRINGS, resource_requirements=STR,
     assumptions=array(obj(statement=STR, status=string(["unverified", "source_supported"]), evidence_ids=STRINGS, check=STR)),
@@ -60,10 +60,12 @@ FEASIBILITY = obj(
         availability=string(["source_supported", "unverified", "unavailable"]), evidence_ids=STRINGS,
         acquisition_plan=STR, substitute=STR)),
 )
-VALIDATION = obj(weakest_assumption=STR, first_test=STR, baselines=STRINGS, controls=STRINGS,
+VALIDATION = obj(summary=STR, weakest_assumption=STR, first_test=STR, baselines=STRINGS, controls=STRINGS,
     positive=STR, negative=STR, inconclusive=STR, budget_estimate=STR)
 ACTION = obj(kind=string(["search", "read_source", "inspect_code", "run_experiment", "revise", "stop"]), description=STR, decision_impact=STR)
-DEVELOP = obj(method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION)
+RESPONSE = obj(issue=STR, decision=string(["adopt", "adapt", "decline", "test"]), change=STR, reason=STR, evidence_ids=STRINGS)
+DEVELOP = obj(method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
+              review_responses=array(RESPONSE))
 REVIEW = obj(verdict=string(["continue", "refine", "covered", "blocked"]),
     issues=array(obj(severity=string(["critical", "important", "minor"]), issue=STR, evidence_ids=STRINGS, action=STR)),
     unresolved_questions=STRINGS, revision_instructions=STR, next_action=ACTION,

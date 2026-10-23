@@ -57,6 +57,11 @@ class ScriptedBackend:
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
         self.calls.append((task.stage, payload))
         output = self.method(payload) if task.stage in {"develop", "refine"} else self.review(payload)
+        if task.stage == 'refine':
+            output['review_responses'] = [{'issue': item['issue'], 'decision': 'test',
+                'change': 'Compare the routing signals in the first test.',
+                'reason': 'Separate current error from marginal benefit.', 'evidence_ids': ['ev-1']}
+                for item in payload['review']['issues']]
         return BackendResult(output=copy.deepcopy(output), usage={})
 
 
@@ -87,12 +92,13 @@ class RevisionFlowTests(unittest.TestCase):
     def test_unchanged_revision_stops_without_using_remaining_rounds(self):
         backend = ScriptedBackend(lambda _: method_spec(), lambda _: review_spec())
         self.controller(backend).develop_candidate(self.candidate)
-        self.assertEqual([stage for stage, _ in backend.calls], ["develop", "review", "refine"])
+        self.assertEqual([stage for stage, _ in backend.calls], ["develop", "review", "refine", "review"])
         self.assertEqual(len(self.candidate["versions"]), 2)
         self.assertEqual(self.candidate["research_status"], "no_detectable_progress")
         self.assertEqual(self.candidate["empirical_status"], "untested")
-        self.assertEqual(self.candidate["recommended_action"]["kind"], "read_source")
-        self.assertIn("routing signal", self.candidate["recommended_action"]["description"])
+        self.assertEqual(self.candidate["recommended_action"]["kind"], "run_experiment")
+        self.assertEqual(self.candidate["recommended_action"]["description"], method_spec()['validation']['first_test'])
+        self.assertIn("routing signal", self.candidate["recommended_action"]["decision_impact"])
         saved = self.store.rows("candidates")[0]
         record = saved["versions"][-1]["revision_record"]
         self.assertEqual(record["changed_fields"], [])

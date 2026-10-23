@@ -45,7 +45,7 @@ def assess_motivation(proposal: dict, review: dict, evidence: list[dict]) -> dic
         raise ValueError("Evidence must contain records with string IDs")
     known = {item["id"] for item in evidence}
     refs = motivation.get("evidence_ids")
-    if not isinstance(refs, list) or not refs:
+    if not isinstance(refs, list) or (not refs and motivation.get('basis', 'source_observation') != 'research_hypothesis'):
         raise ValueError("Motivation requires supporting evidence IDs")
     if any(not isinstance(ref, str) or ref not in known for ref in refs):
         raise ValueError("Motivation contains an unknown evidence ID")

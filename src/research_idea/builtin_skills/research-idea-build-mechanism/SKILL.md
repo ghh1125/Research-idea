@@ -18,7 +18,7 @@ Use the supplied candidate, motivation, source evidence, constraints, and any ex
 
 ## Output
 
-Return only the current develop/refine JSON. Fill `method.base_implementation`, `changes`, `inputs`, `outputs`, `trainable_parameters`, `frozen_parameters`, `objective`, `supervision`, `inference_steps`, `resource_requirements`, and `assumptions`. Coordinate these with `motivation.why_this_method`, `novelty_claim`, and `feasibility.required_signals`; retain all other required fields. Attach evidence IDs only to supplied source facts. Label design choices and predictions as proposals.
+Return only the current develop/refine JSON. Give `method.summary` as a short explanation of the actual mechanism and its main actions. Put the complete state/action contracts and protocol in the detailed fields. Fill `method.base_implementation`, `changes`, `inputs`, `outputs`, `trainable_parameters`, `frozen_parameters`, `objective`, `supervision`, `inference_steps`, `resource_requirements`, and `assumptions`. Coordinate these with `motivation.why_this_method`, `novelty_claim`, and `feasibility.required_signals`; retain all other required fields. Attach evidence IDs only to supplied source facts. Label design choices and predictions as proposals.
 
 ## Failure behavior
 

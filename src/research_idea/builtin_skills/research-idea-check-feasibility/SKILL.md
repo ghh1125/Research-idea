@@ -3,7 +3,7 @@ name: research-idea-check-feasibility
 description: Audit whether an LLM/NLP method has an executable path. Use when developing or reviewing a method that may rely on unavailable labels, logits, gradients, model access, data, compute or evaluation assumptions.
 ---
 
-# Expose the first broken dependency
+# Design a workable implementation path
 
 ## Inputs
 Use the method, resource constraints, supplied evidence, and proposed first experiment. Treat an unmeasured resource estimate as unknown. A plausible algorithm is not an executed implementation.
@@ -21,7 +21,7 @@ Use the method, resource constraints, supplied evidence, and proposed first expe
 Populate feasibility and the operational method fields in the active JSON schema. Put the weakest prerequisite and its check in validation. Keep concept value separate from execution status.
 
 ## Failure behavior
-A required unavailable signal blocks the present method even if a reviewer is optimistic. Unknown availability calls for inspection, not automatic abandonment. An oracle can measure headroom, but it cannot be presented as a deployable solution. Failed code execution does not by itself refute the scientific hypothesis.
+An unavailable signal calls for a concrete redesign: remove the dependency, choose an observable substitute, or use an oracle only as a clearly identified diagnostic control. Update the actual method and signal list together. Unknown access or unmeasured cost calls for a small configurable pilot. Keep the research idea and improve its implementation path; do not turn normal pre-experiment uncertainty into an approval gate. A proposed substitute is still a hypothesis to test, and an oracle is not a deployment method.
 
 ## Synthetic example
 A controller chooses the better answer by comparing against the hidden test label. Labels exist for evaluation but not inference. Mark that inference dependency unavailable. An oracle comparison may still diagnose headroom; a deployable estimator requires its own learning signal and validation.

@@ -195,6 +195,24 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.assertEqual(self.store.get("paper_cards"), before)
         self.assertEqual(self.store.get("calls_used"), 4)
 
+    def test_invalid_summary_keeps_exact_evidence_and_does_not_loop_on_resume(self):
+        class InvalidSummary(ReadingBackend):
+            def generate(self, task):
+                result = super().generate(task)
+                if task.stage == 'paper_card':
+                    result.output['framework'][0]['evidence_ids'] = ['made-up-reference']
+                return result
+        backend = InvalidSummary(followup=False)
+        controller, _ = self.run_read(backend)
+        self.assertEqual(sum(stage == 'paper_card' for stage, _ in backend.calls), 2)
+        self.assertEqual(len(self.store.rows('evidence')), 1)
+        evidence = self.store.rows('evidence')[0]
+        self.assertEqual(evidence['quote'], source()['text'][evidence['start']:evidence['end']])
+        self.assertNotIn('p1', self.store.get('paper_cards', {}))
+        _, resumed = self.run_read(InvalidSummary(followup=False))
+        self.assertEqual(resumed.calls, [])
+        self.assertTrue(controller.context()['evidence'])
+
     def test_zero_followup_budget_retains_explicit_unread_request(self):
         _, backend = self.run_read(max_followup_reads=0)
         self.assertEqual(sum(stage == "read_section" for stage, _ in backend.calls), 1)

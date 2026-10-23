@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shlex
 import signal
+import shutil
 import sys
 import time
 
@@ -16,14 +17,16 @@ from .config import load_config, write_config, REASONING_EFFORTS
 from .interactive import read_topic_file
 from .locking import project_lock
 from .store import Store
+from .presentation import STATUS_LABELS
 
 INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认成为正式研究主题。
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
-3. /topic 查看或修改正式主题；讨论中的补充可用 /topic 和 /constraints 明确保存。
+3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
 4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用调用和时间预算。
 6. 跟随彩色 [search] [paper] [read] [analysis] [review] 查看步骤和证据。
 7. 最后 [idea] 显示方案与第一步验证；/report 再看方案，/evidence ID 追溯原文。
+8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
 /account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止/清空'''
@@ -36,6 +39,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /run                    开始/恢复研究  /stop         停止当前任务
 /papers [路径…]          列表/导入论文  /evidence ID  查看原文依据
 /status                 研究状态      /report       显示 idea 方案
+/details [on|off]        展开上一步分析；on/off 切换完整过程输出
 /config                 当前设置      /constraints [文字] 资源限制
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
@@ -50,7 +54,15 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'evidence': 'ansigreen', 'analysis': 'ansiyellow', 'thinking': 'ansiyellow',
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
-COLORS.update(strategy='ansicyan', novelty='ansimagenta')
+COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow')
+TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
+    'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
+    'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
+    'review': '方案讨论', 'idea': '研究方案', 'evidence': '原文依据', 'saved': '已保存',
+    'error': '这一步未完成', 'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
+BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
+    'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',
+    'max_seconds': '累计时间（秒）', 'timeout_s': '单次调用超时（秒）'}
 BUDGET_KEYS = ('search_results_per_query', 'max_papers', 'max_candidates', 'max_rounds', 'max_calls', 'max_seconds', 'timeout_s')
 BRAND = r'''             R E S E A R C H
 
@@ -62,14 +74,16 @@ BRAND = r'''             R E S E A R C H
 
        IDEAS ONLY
        From papers to research proposals'''
-WELCOME_NOTES = '''使用说明 / NOTES
-1. 直接输入方向即可讨论；/model 选模型，/reasoning 调整思考强度。
-2. /topic 确认正式主题；/scope 配置文献范围；/budget 查看调用和时间预算。
-3. /run 开始文献研究，最后得到 idea 方案与第一步验证设计。
-4. [paper] 对应论文，[evidence] 对应原文；/evidence ID 可以追溯依据。
-5. 方案是待验证假设，程序不执行科学实验；[thinking] 表示等待模型答复。
-6. 运行时输入框隐藏，Ctrl+C 停止并保留检查点；/run 继续。
-输入 /intro 看完整使用介绍，/help 看所有命令。'''
+WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea。
+
+1. 输入方向和补充想法，直接与模型讨论。
+2. 输入 /run，开始找论文 → 理解问题 → 设计方法 → 完善方案。
+3. 最后得到问题、动机、具体方法、工作差异和第一步验证。
+
+/model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
+/intro 使用介绍 · /help 全部命令
+
+只提供研究方案与实验设计。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
 
 def safe_text(text):
@@ -77,15 +91,24 @@ def safe_text(text):
     return ''.join(c for c in str(text) if c in '\n\t' or (ord(c) >= 32 and not 127 <= ord(c) < 160))
 
 
+def resource_text(value):
+    return '尚未设置。可用 /constraints 补充设备、时间或 API 预算。' if value.startswith('Resources unspecified;') else value
+
+
 def fragments(tag, text):
     if tag == 'brand':
         return [('ansigreen bold', '\n' + safe_text(text) + '\n')]
     color = COLORS.get(tag, 'ansicyan')
-    result = [(color + ' bold', f'\n── [{safe_text(tag)}] ' + '─' * 34 + '\n')]
+    from prompt_toolkit.utils import get_cwidth
+    width = shutil.get_terminal_size((88, 24)).columns
+    heading = f'── [{safe_text(tag)}] {TAG_LABELS.get(tag, "")} '
+    result = [(color + ' bold', '\n' + heading + '─' * max(0, min(width, 88) - get_cwidth(heading)) + '\n')]
     pattern = r'(ev_[a-zA-Z0-9_]+|https?://[^\s]+|arxiv:[^\s]+|doi:[^\s]+)'
     for line in safe_text(text).splitlines():
-        base = ('ansiyellow' if any(w in line for w in ('未知', '缺口', '未验证', 'insufficient', 'unknown', 'unavailable'))
-                else 'ansigreen' if any(w in line for w in ('原文：', 'quote：', '原文位置：')) else '')
+        title = line.startswith('#')
+        line = re.sub(r'^#{1,6}\s+', '', line).replace('**', '')
+        line = re.sub(r'\[([^\]\n]+)\]\((https?://[^)]+)\)', r'\1 · \2', line)
+        base = 'bold' if title else 'ansigreen' if line.startswith(('原文：', '原文位置：')) else ''
         for part in re.split(pattern, line):
             style = 'ansigreen bold' if part.startswith('ev_') else 'ansiblue underline' if part.startswith(('http', 'arxiv:', 'doi:')) else base
             result.append((style, part))
@@ -104,7 +127,7 @@ def model_catalog():
                    if isinstance(r, dict) and r.get('effort') in REASONING_EFFORTS]}
                   for m in data.get('models', []) if isinstance(m, dict) and isinstance(m.get('slug'), str)
                   and m.get('visibility', 'list') == 'list']
-        return models, f"本地缓存 · {path} · 更新于 {data.get('fetched_at', '未知')}；不是实时账户授权保证"
+        return models, f"来自本地 Codex 模型目录 · 更新于 {data.get('fetched_at', '未知')}"
     except (OSError, ValueError, TypeError, KeyError):
         return [], '未找到可读的本地模型缓存；可手动输入模型 ID'
 
@@ -143,12 +166,15 @@ class Chat:
         self.state = '就绪'
         self.output = output
         self.session = None
+        self.details_full = False
 
     @property
     def busy(self):
         return self.job is not None and not self.job.done()
 
     def show(self, tag, text):
+        if tag == 'detail' and not self.details_full:
+            return
         if self.output:
             self.output(tag, safe_text(text))
         else:
@@ -168,9 +194,19 @@ class Chat:
             pass
         if self.busy:
             elapsed = max(elapsed, self.base_elapsed + time.monotonic() - self.started)
-        footer = ' 运行中 · Ctrl+C 停止并保留检查点 · 完成后恢复输入' if self.busy else ' /intro 使用介绍 · /model 模型 · /reasoning 强度 · /run 开始研究 · /help 命令 '
-        return [('bg:ansiblue ansiwhite', safe_text(f" {self.cfg['model'] or '继承模型'} | {self.cfg['reasoning_effort'] or '继承强度'} | 调用 {calls}/{self.cfg['max_calls']} | 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分 | {self.state}\n")),
-                ('bg:ansiblack ansicyan', footer)]
+        from prompt_toolkit.utils import get_cwidth
+        width = shutil.get_terminal_size((88, 24)).columns
+        def fit(value):
+            value = safe_text(value)
+            if get_cwidth(value) <= width:
+                return value
+            while value and get_cwidth(value + '…') > width:
+                value = value[:-1]
+            return value + '…'
+        footer = ' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else ' /intro 使用介绍 · /run 开始研究 · /help 命令'
+        return [('bg:ansiblue ansiwhite', fit(f" {self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {self.state}") + '\n'),
+                ('bg:ansiblack ansiwhite', fit(f" 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
+                ('bg:ansiblack ansicyan', fit(footer))]
 
     def idle_required(self):
         if self.busy:
@@ -183,7 +219,12 @@ class Chat:
             cfg.update(updates)
             write_config(self.project, cfg)
         self.cfg = load_config(self.project)
-        self.show('system', '已保存：' + json.dumps(updates, ensure_ascii=False) + '\n下一次调用生效；研究缓存按模型和强度重新校验。')
+        labels = {**BUDGET_LABELS, 'model': '模型', 'reasoning_effort': '思考强度', 'constraints': '资源条件',
+                  'search_venues': '会议', 'search_date_mode': '日期模式', 'strategy_months': '方法窗口（月）',
+                  'novelty_months': '动机查重窗口（月）', 'search_source': '文献来源', 'auto_search': '自动检索',
+                  'search_since': '起始日期', 'search_until': '截止日期'}
+        values = lambda value: '、'.join(value) if isinstance(value, list) else {'rolling': '动态', 'fixed': '固定', 'hybrid': '会议 + arXiv'}.get(str(value), str(value))
+        self.show('system', '已保存，下次运行生效。\n' + '\n'.join(f'{labels.get(k, k)}：{values(v) or "沿用后端配置"}' for k, v in updates.items()))
 
     def topic(self, text=''):
         self.idle_required()
@@ -221,6 +262,7 @@ class Chat:
 
     async def work(self, mode, message):
         log = self.project / 'terminal-events.jsonl'
+        reported_error = False
         try:
             self.process = await asyncio.create_subprocess_exec(
                 sys.executable, '-u', '-m', 'research_idea.chat_worker',
@@ -233,12 +275,16 @@ class Chat:
             self.process.stdin.close()
             while line := await self.process.stdout.readline():
                 event = json.loads(line)
+                if event['tag'] in {'error', 'budget'}:
+                    reported_error = True
+                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea'}:
+                    self.state = TAG_LABELS[event['tag']]
                 with log.open('a', encoding='utf-8') as stream:
                     stream.write(json.dumps(event, ensure_ascii=False) + '\n')
                 self.show(event['tag'], event['text'])
             code = await self.process.wait()
-            if code not in {0, 130, -signal.SIGINT}:
-                self.show('error', f'任务退出码 {code}；已返回对话窗口，可调整设置后重试。')
+            if code not in {0, 130, -signal.SIGINT} and not reported_error:
+                self.show('error', f'任务中断（退出码 {code}）。已保存的进度可以用 /run 继续。')
         except (OSError, ValueError, KeyError) as exc:
             self.show('error', str(exc))
         finally:
@@ -317,6 +363,23 @@ class Chat:
             self.show('system', HELP)
         elif command == '/intro':
             self.show('system', INTRO)
+        elif command == '/details':
+            if value in {'on', 'off'}:
+                self.details_full = value == 'on'
+                self.show('system', '过程输出：' + ('完整分析' if self.details_full else '易读视图（每步结论和新引用）'))
+            elif value:
+                raise ValueError('/details 查看上一步；/details on 或 off 切换过程输出。')
+            else:
+                store = Store(self.project, readonly=True)
+                try:
+                    last = store.get('last_activity', {})
+                finally:
+                    store.close()
+                if last:
+                    from .chat_worker import outline
+                    self.show('analysis', '\n'.join(outline(last['result'])))
+                else:
+                    self.show('system', '还没有研究分析。输入 /run 开始。')
         elif command in {'/model', '/reasoning'}:
             self.idle_required()
             models, note = model_catalog()
@@ -354,17 +417,18 @@ class Chat:
             store = Store(self.project, readonly=True)
             try:
                 if command == '/status':
-                    self.show('system', f"主题：{store.get('topic', '未设置')}\n状态：{store.get('status', '待开始')}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（讨论与研究合计）\n论文：{len(store.rows('papers'))}；证据：{len(store.rows('evidence'))}")
+                    status = store.get('status', 'initialized')
+                    self.show('system', f"主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（讨论与研究合计）\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}")
                 elif command == '/papers':
-                    self.show('paper', '\n\n'.join(f"{p['title']} ({p.get('year', '')})\n{p['id']}\n{p.get('url', '')}\n{p.get('content_kind', '')}" for p in store.rows('papers')) or '暂无论文；使用 /papers 路径 导入。')
+                    kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
+                    self.show('paper', '\n\n'.join(f"{i}. {p['title']} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}\n   {p['id']}\n   {p.get('url', '')}" for i, p in enumerate(store.rows('papers'), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
                 elif command == '/evidence':
                     ev = next((e for e in store.rows('evidence') if e['id'] == value), None)
                     if not ev:
                         raise ValueError('未找到证据；用 /evidence ev_… 查询')
                     paper = next((p for p in store.rows('papers') if p['id'] == ev['paper_id']), {})
-                    from .chat_worker import outline
                     self.show('paper', f"{paper.get('title', '')}\n{paper.get('url', '')}")
-                    self.show('evidence', '\n'.join(outline(ev)))
+                    self.show('evidence', f"{ev['id']}\n{ev.get('statement', '')}\n\n原文：{ev['quote']}\n原文位置：页 {ev.get('page', '?')} / 行 {ev.get('line', '?')}\n成立条件：{ev.get('conditions', '')}")
                 else:
                     for m in store.get('chat_messages', [])[-12:]:
                         self.show(m['role'], m['content'])
@@ -385,12 +449,23 @@ class Chat:
             from .chat_worker import idea_text
             self.show('idea', idea_text(self.project))
         elif command == '/config':
-            self.show('system', '项目：' + str(self.project) + '\n' + json.dumps(load_config(self.project), ensure_ascii=False, indent=2))
+            from .search_scope import config_scope
+            cfg = load_config(self.project)
+            strategy, novelty = config_scope(cfg), config_scope(cfg, 'novelty')
+            self.show('system', '\n'.join([
+                '项目：' + str(self.project), f"模型：{cfg['model'] or '继承配置'} · 思考强度 {cfg['reasoning_effort'] or '继承配置'} · 后端 {cfg['backend']}",
+                f"找方法：{strategy['since']} → {strategy['until']}", f"动机查重：{novelty['since']} → {novelty['until']}",
+                '会议：' + ('、'.join(cfg['search_venues']) or '按主题检索'),
+                f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 全流程最多精读 {cfg['max_papers']} 篇",
+                f"产出：最多 {cfg['max_candidates']} 个 idea，讨论 {cfg['max_rounds']} 轮",
+                f"预算：{cfg['max_calls']} 次调用 / {cfg['max_seconds'] / 60:g} 分钟",
+                '资源条件：' + resource_text(cfg['constraints']),
+                '用 /model、/reasoning、/date、/venues、/budget 修改设置。']))
         elif command == '/constraints':
             if value:
                 self.settings(constraints=value)
             else:
-                self.show('system', self.cfg['constraints'])
+                self.show('system', resource_text(self.cfg['constraints']))
         elif command == '/budget':
             if value:
                 key, number = shlex.split(value)
@@ -398,7 +473,8 @@ class Chat:
                     raise ValueError('允许设置：' + ', '.join(BUDGET_KEYS))
                 self.settings(**{key: int(number)})
             else:
-                self.show('system', '\n'.join(f'{k} = {self.cfg[k]}' for k in BUDGET_KEYS) + '\n例如 /budget max_calls 100')
+                self.show('budget', '\n'.join(f'{BUDGET_LABELS[k]}：{self.cfg[k]}  ·  {k}' for k in BUDGET_KEYS)
+                          + '\n\n“调用”是模型请求次数，包含讨论、分析和格式修复；上限不必用满。\n例如 /budget max_calls 100 · /budget max_papers 6')
         elif command == '/venues':
             from .venues import normalize_venues, supported_venues
             if value:
@@ -413,7 +489,8 @@ class Chat:
             self.idle_required()
             from .search_scope import config_scope
             strategy, novelty = config_scope(self.cfg), config_scope(self.cfg, 'novelty')
-            self.show('system', f"日期模式：{self.cfg['search_date_mode']}\n找策略：{self.cfg['strategy_months']} 个月 · {strategy['since']} → {strategy['until']}\n查重：{self.cfg['novelty_months']} 个月 · {novelty['since']} → {novelty['until']}\n动态窗口每次运行按当天计算；已知机制近邻仍保留。")
+            mode = '动态，每次运行按当天计算' if self.cfg['search_date_mode'] == 'rolling' else '固定日期'
+            self.show('system', f"日期模式：{mode}\n找方法：{strategy['since']} → {strategy['until']}\n动机查重：{novelty['since']} → {novelty['until']}\n已知的更早相关论文也会参与对比。")
             if not value:
                 choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期'])
                 if choice == '动态窗口':
@@ -503,7 +580,7 @@ class Chat:
         @keys.add('c-d')
         def stop(event):
             event.app.exit(result='stop')
-        app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=2)),
+        app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=3)),
                           key_bindings=keys, full_screen=False, refresh_interval=1)
         async def finish():
             await asyncio.shield(self.job)

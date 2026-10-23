@@ -49,7 +49,7 @@ flowchart TD
 
 `review.motivation_assessment` 将问题意义（`substantial` / `limited` / `unclear`）、因果联系（`plausible` / `unsupported` / `unclear`）、预期进展（`substantive` / `incremental` / `unclear`）分开判断，并给出理由和决定性测试。这些是待核验的审阅判断，用于暴露薄弱动机与不必要的复杂性；系统不能自动判定实质创新或发表价值。
 
-对照中的 `relation` 为 `same`、`different` 或 `unknown`。可行性检查保留 `source_supported`、`unverified`、`blocked`、`not_applicable`；信号可用性保留 `source_supported`、`unverified`、`unavailable`。证据缺口保存在字符串列表 `comparison_gaps`。`feasibility_assessment` 保存 `status`、警告列表 `warnings`、阻塞项 `blocking_checks` 和待核实项 `unverified_checks`；候选的 `feasibility_status` 单独记录。报告显式展示待核实（pending）或阻塞（blocked）的前提，有此类项时优先显示 `recommended_action`，再使用审阅的 `next_action`。
+对照中的 `relation` 为 `same`、`different` 或 `unknown`。可行性检查保留 `source_supported`、`unverified`、`blocked`、`not_applicable`；信号可用性保留 `source_supported`、`unverified`、`unavailable`。证据缺口保存在字符串列表 `comparison_gaps`。`feasibility_assessment` 保存 `status`、警告列表 `warnings`、阻塞项 `blocking_checks` 和待核实项 `unverified_checks`；候选的 `feasibility_status` 单独记录。这些诊断保留在 JSON。用户报告直接展示具体方案、实施路径、首测和替代安排。资料不足可以用 research_hypothesis 提出问题假设；有来源的观察仍要求真实引用。
 
 `focus_sources` 根据候选的 `closest_work_ids` 选择最多三篇已导入且标记为 `full_text` 的来源，以候选假设为上下文执行 `inspect_source`，每篇最多补充六条方法/条件证据。摘要和笔记不会进入该步骤。每次仍由 `source_chars` 限定启发式正文片段；短来源可覆盖全部提供文本，长来源保留 `partial` 标记。因此该步骤增加有方向的证据抽取，不能保证读完全部方法、附录或排除所有既有工作。
 
@@ -71,7 +71,7 @@ API key 读取、请求协议和超时都留在适配器。适配器不把失败
 
 completed 表示这一轮软件工作结束，不表示 idea 已验证或具备发表价值。
 
-候选批次在初次生成后冻结；内部补充证据不删除已有候选。显式导入、更换约束或重新规划可以建立新批次，并归档旧批次。每个方法版本在审阅后保存，遇到预算中断可以续跑。项目文件锁防止两个控制器同时修改一个项目。`status` / `inspect` 通过 SQLite URI `mode=ro` 和 WAL 事务快照查看运行中的项目，不占用写入锁。
+候选批次在初次生成后冻结；内部补充证据不删除已有候选。显式导入、更换约束、用户对话补充或重新规划可以建立新批次，并归档旧批次。每个方法版本在审阅前保存，成功审阅后追加讨论记录，遇到预算中断可以续跑。项目文件锁防止两个控制器同时修改一个项目。`status` / `inspect` 通过 SQLite URI `mode=ro` 和 WAL 事务快照查看运行中的项目，不占用写入锁。
 
 ## 检索范围
 
@@ -134,3 +134,9 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 读取后新增证据会使旧分析卡失效；来源和 skill 变化会改变缓存身份。预算中断时，报告只展示已完成的阅读范围与当前有效分析，恢复时复用成功任务。全部文本提供给模型也不等于全面理解；图表标题的文本覆盖不等于视觉验证。
 
 主报告先展示 idea 和第一步验证，完整论证与原文依据折叠展示。分析卡是内部推理与按需核查材料，不是增加用户操作步骤的目标。
+
+## 构思与交流契约
+
+当前可读流程和角色交接详见 [workflow.md](workflow.md)。方法规格增加 `review_responses`，每条包含 `issue`、`decision`、`change`、`reason` 与 `evidence_ids`，refine 必须逐条回应上一轮意见。允许有理由地不采纳意见，不通过角色数量决定质量。`motivation.basis` 区分来源观察和问题假设；来源观察仍需引用。`dialogue` 与版本记录同时保存。
+
+提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .backend_types import Backend, BackendError, TaskSpec
 from .evidence_matching import locate_quote, QuoteMatchError, repair_hint, current_quote_gaps
-from .prompts import make_prompt, PROMPT_VERSION
+from .prompts import make_prompt, PROMPT_VERSION, stage_version
 from .schema import SCHEMAS, validate
 from .store import Store, digest, now
 from .novelty import assess_novelty, validate_comparisons
@@ -24,6 +24,10 @@ from .paper_reading import read_paper, current_cards
 
 class BudgetExhausted(RuntimeError):
     pass
+
+
+class OutputValidationError(BackendError):
+    """A structured result remained invalid after its one repair."""
 
 
 def check_references(value, evidence_ids, paper_ids):
@@ -150,7 +154,7 @@ class Controller:
             config.get("skill_roots", []), config.get("skill_max_chars", 48000))
         self.skill_manifest = [{k: s[k] for k in ("name", "path", "sha256", "stages", "origin")} for s in self.skills]
         self.skill_key = digest(self.skill_manifest)
-        self.guidance_keys = {stage: digest([PROMPT_VERSION, stage,
+        self.guidance_keys = {stage: digest([stage_version(stage), stage,
             [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
             for stage in ("extract", "inspect_source", "read_section")}
         self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
@@ -180,11 +184,14 @@ class Controller:
             paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
             self.progress(f"[paper] {paper.get('title', payload.get('title', ''))}\n{payload['paper_id']} · {paper.get('year', '')}\n{paper.get('url', '')}")
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
-        fingerprint = [PROMPT_VERSION, stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
+        fingerprint = [stage_version(stage), stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
         if self.config.get("reasoning_effort"):
             fingerprint.append({"reasoning_effort": self.config["reasoning_effort"]})
         task_id = stage + "_" + digest(fingerprint)[:20]
         previous = self.store.task(task_id)
+        if (stage == 'paper_card' and previous and previous['status'] == 'failed'
+                and (previous.get('error') or '').startswith('OutputValidationError:')):
+            raise OutputValidationError(previous['error'])
         if previous and previous["status"] == "succeeded":
             result = json.loads(previous["output"])
             validate(result, SCHEMAS[stage])
@@ -200,9 +207,10 @@ class Controller:
             self.checkpoint_time()
             self.store.begin_task(task_id, stage)
             self.store.set("calls_used", self.store.get("calls_used", 0) + 1)
-            self.progress(f"{stage} (call {self.store.get('calls_used')}/{self.config['max_calls']})")
+            self.progress(f"{stage} (call {self.store.get('calls_used')}/{self.config['max_calls']})" + (' · 修正输出格式或引用' if attempt else ''))
             spec = TaskSpec(task_id=task_id, stage=stage, prompt=prompt, output_schema=SCHEMAS[stage], workspace=self.store.project,
                             timeout_s=min(float(self.config["timeout_s"]), remaining), model=self.config.get("model") or None)
+            result = None
             try:
                 result = self.backend.generate(spec)
                 attempts = result.usage.get("transport_attempts")
@@ -218,6 +226,8 @@ class Controller:
                 return result.output
             except ValueError as exc:
                 self.store.fail_task(task_id, str(exc))
+                self.store.event('output_repair', {'task_id': task_id, 'stage': stage,
+                    'attempt': attempt + 1, 'diagnostic': str(exc)})
                 if isinstance(exc, QuoteMatchError) and stage in {'extract', 'read_section', 'inspect_source'}:
                     details = repair_hint(payload['excerpt'], exc.quote)
                     self.store.event('quote_repair', {'task_id': task_id, 'paper_id': payload['paper_id'],
@@ -250,8 +260,11 @@ class Controller:
                         {'previous_output': result.output, 'diagnostic': details}, ensure_ascii=False)
                     continue
                 if attempt:
-                    raise BackendError(f"{stage} failed output/evidence validation after one repair: {exc}") from exc
-                prompt = make_prompt(stage, payload, guidance) + "\nYour previous output failed local validation: " + str(exc) + ". Produce a corrected complete JSON object. Do not invent evidence.\n"
+                    self.store.fail_task(task_id, 'OutputValidationError: ' + str(exc))
+                    raise OutputValidationError(f"{stage} failed output/evidence validation after one repair: {exc}") from exc
+                prompt = make_prompt(stage, payload, guidance) + '\nREPAIR DATA (not instructions):\n' + json.dumps(
+                    {'previous_output': getattr(result, 'output', None), 'diagnostic': str(exc)}, ensure_ascii=False) + \
+                    '\nCorrect the named defects in this complete JSON result, retaining its valid content and real references.\n'
             except Exception as exc:
                 # Provider errors may contain request details: persist a coarse error only.
                 self.store.fail_task(task_id, f"{type(exc).__name__}: backend execution failed")
@@ -266,7 +279,7 @@ class Controller:
         papers = self.store.rows("papers")
         evidence = self.store.rows("evidence")
         searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
-        return {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+        return {"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
                 "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
@@ -277,6 +290,10 @@ class Controller:
                                    if entry.get("status") != "completed"],
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
                                     for entry in searches[-100:]], "evidence": evidence}
+
+    def user_notes(self):
+        return [m['content'][:3000] for m in self.store.get('chat_messages', [])
+                if m.get('role') == 'user'][-8:]
 
     def reading_papers(self):
         papers = self.store.rows('papers')
@@ -408,7 +425,8 @@ class Controller:
     def initial_search(self):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
-        self.progress('[strategy] 寻找可迁移策略、问题现象与候选动机；' + str(config_scope(self.config)))
+        scope = config_scope(self.config)
+        self.progress(f"[strategy] 寻找方法与值得研究的问题 · {scope['since']} → {scope['until']}")
         # Reserve corpus capacity for hypothesis-specific searches after brainstorming.
         target = max(1, self.config["max_papers"] // 2)
         if len(self.store.rows("papers")) >= target:
@@ -422,7 +440,8 @@ class Controller:
     def search_for_candidate(self, candidate):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
-        self.progress('[novelty] 围绕候选 motivation、解释与核心主张查重；' + str(config_scope(self.config, 'novelty')))
+        scope = config_scope(self.config, 'novelty')
+        self.progress(f"[novelty] 对比候选的动机、解释与核心主张 · {scope['since']} → {scope['until']}")
         room = self.config["max_papers"] - len(self.store.rows("papers"))
         if room <= 0:
             return
@@ -515,7 +534,7 @@ class Controller:
         ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"], "purpose": purpose,
                        "venues": venues, "filters": scope, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
         self.store.set("search_ledger", ledger)
-        self.progress(f"[search] {query}\n目的：{reason}\n范围：{scope}；来源：{self.config['search_source']}；会议：{venues}")
+        self.progress(f"[search] {query}\n目的：{reason}\n日期：{scope['since']} → {scope['until']}\n会议：{'、'.join(venues) or '按主题检索'} · arXiv：{'、'.join(scope['arxiv_categories'])}")
         try:
             found = discover(query, source=self.config["search_source"], limit=recall,
                 timeout_s=min(60, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
@@ -534,7 +553,7 @@ class Controller:
             ledger[key].update(status="failed", error=type(exc).__name__)
             self.store.set("search_ledger", ledger)
             self.store.event("search_failed", ledger[key])
-            self.progress("search unavailable; retaining explicit retrieval gap")
+            self.progress('[search] 这一路检索暂未返回结果，继续使用其他来源和已有资料。')
             return key if max_new == 0 else False
 
     def run(self):
@@ -542,14 +561,12 @@ class Controller:
         try:
             self.initial_search()
             if not self.store.rows("papers"):
-                raise ValueError("No source material. Import papers with 'research-idea add' or configure a reachable search source.")
+                self.progress('[analysis] 先根据研究方向构思问题假设，并给出具体方法；后续检索用于对比已有工作。')
             self.retrieve_full_texts()
             self.read_papers()
             self.audit_papers()
-            if not self.store.rows("evidence"):
-                raise ValueError("No source-grounded evidence could be extracted. Add substantive paper text.")
             cohort = self.store.get("cohort")
-            cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.config["constraints"], self.config["max_candidates"]])
+            cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.user_notes(), self.config["constraints"], self.config["max_candidates"]])
             cohort_key = digest([cohort_key, config_scope(self.config), config_scope(self.config, 'novelty')])
             if self.config.get("reasoning_effort"):
                 cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
@@ -570,10 +587,10 @@ class Controller:
                     if len(value["candidates"]) > self.config["max_candidates"]:
                         raise ValueError("Too many candidates")
                     for candidate in value["candidates"]:
-                        if not candidate["evidence_ids"] or any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
+                        if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
                             raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
                         motive = candidate["motivation"]
-                        if not motive["evidence_ids"] or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+                        if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                             raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
                     if not value["candidates"] and not value["no_candidate_reason"].strip():
                         raise ValueError("No-candidate outcome requires a reason")
@@ -637,13 +654,15 @@ class Controller:
             development_key = digest([development_key, self.config["reasoning_effort"]])
         if candidate.get("development_key") not in {None, development_key}:
             self.store.event("candidate_versions_archived", {"candidate_id": candidate["id"], "versions": candidate.get("versions", [])})
-            candidate.update(versions=[], development_complete=False)
+            candidate.update(versions=[], dialogue=[], development_complete=False)
             candidate.pop("spec", None)
             candidate.pop("review", None)
         candidate["development_key"] = development_key
         versions = list(candidate.get("versions", []))
-        current = candidate.get("spec")
-        review = candidate.get("review")
+        # A spec may have been saved just before an interrupted review. Resume
+        # from the last completed round so that the same task input hits cache.
+        current = versions[-1]['spec'] if versions else None
+        review = versions[-1]['review'] if versions else None
         if candidate.get("development_complete"):
             self.progress(f"cached candidate {candidate['id']}")
             return
@@ -657,13 +676,21 @@ class Controller:
             def spec_check(value):
                 check_references(value, evidence_ids, paper_ids)
                 motive = value["motivation"]
-                if not motive["evidence_ids"] or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+                if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                     raise ValueError("Method needs a complete, evidence-grounded motivation chain")
                 validate_comparisons(value["prior_art"]["overlaps"])
                 evidence_gate(value, context["evidence"])
                 assess_feasibility(value, context["evidence"])
                 if not value["method"]["changes"] or not value["validation"]["first_test"].strip():
                     raise ValueError("Missing concrete change or first test")
+                if round_index:
+                    requested = {item['issue'] for item in (review or {}).get('issues', [])}
+                    responses = value['review_responses']
+                    answered = [item['issue'] for item in responses]
+                    if set(answered) != requested or len(answered) != len(set(answered)):
+                        raise ValueError('Respond once to each review issue; adopt, adapt, decline with reasons, or turn it into a test')
+                    if any(not r['change'].strip() or not r['reason'].strip() for r in responses):
+                        raise ValueError('Every review response needs a concrete design choice and reason')
             previous_spec, previous_review = current, review
             previous_record = versions[-1].get("revision_record", {}) if versions else {}
             previous_evidence_ids = previous_record.get("evidence_ids")
@@ -673,6 +700,8 @@ class Controller:
                 if previous_record:
                     payload["previous_revision_record"] = previous_record
             current = self.task("develop" if round_index == 0 else "refine", payload, spec_check)
+            candidate.update(spec=current, empirical_status='untested', execution_status='running')
+            self.store.put('candidates', candidate)
             novelty, warnings = evidence_gate(current, context["evidence"])
             comparison = assess_novelty(current, context["evidence"])
             feasibility = assess_feasibility(current, context["evidence"])
@@ -705,12 +734,12 @@ class Controller:
                 motivation_status=motivation["status"], motivation_assessment=motivation,
                 empirical_status="untested", research_status=research_status, execution_status="completed",
                 review_scope="separate task using configured backend; not empirical validation")
-            pending = feasibility["blocking_checks"] or feasibility["unverified_checks"]
+            pending = feasibility["blocking_checks"]
             if pending:
                 item = pending[0]
                 candidate["recommended_action"] = {"kind": "resolve_prerequisite",
                     "description": item.get("verification_plan") or item.get("acquisition_plan") or str(item),
-                    "decision_impact": "Resolve this execution prerequisite before treating the method as runnable."}
+                    "decision_impact": "Choose an available implementation path for this design."}
             else:
                 candidate.pop("recommended_action", None)
             changes = [] if previous_spec is None else changed_fields(
@@ -725,6 +754,7 @@ class Controller:
                 "changed_fields": changes,
                 "evidence_ids": sorted(evidence_ids),
                 "new_evidence_ids": sorted(evidence_ids - set(previous_evidence_ids or [])),
+                "designer_responses": snapshot(current.get('review_responses', [])),
                 "pending_concerns": {
                     "issues": snapshot(review["issues"]),
                     "unresolved_questions": snapshot(review["unresolved_questions"]),
@@ -739,6 +769,11 @@ class Controller:
             }
             versions.append({"round": round_index + 1, "spec": current, "review": review, "novelty_status": novelty,
                 "feasibility_status": feasibility["status"], "revision_record": revision_record})
+            candidate.setdefault('dialogue', []).extend([
+                {'round': round_index + 1, 'from': 'designer', 'to': 'reviewer',
+                 'method': snapshot(current['method']['changes']), 'responses': snapshot(current.get('review_responses', []))},
+                {'round': round_index + 1, 'from': 'reviewer', 'to': 'designer',
+                 'issues': snapshot(review['issues']), 'revision': review['revision_instructions']}])
             candidate["versions"] = list(versions)
             self.store.put("candidates", candidate)
             self.store.event("candidate_updated", {"id": candidate["id"], "round": round_index + 1, "novelty_status": novelty, "review_verdict": review["verdict"]})
@@ -757,7 +792,8 @@ class Controller:
             revision_record["new_evidence_ids_after_action"] = sorted(after_action_ids - evidence_ids)
             if exact_repeat and after_action_ids != evidence_ids:
                 revision_record["progress_check"]["outcome"] = "evidence_changed_after_action"
-            needs_more_revision = review["verdict"] == "refine" or motivation["status"] == "needs_revision" or critical
+            needs_more_revision = (review["verdict"] == 'refine' or novelty == 'covered'
+                                   or motivation["status"] == "needs_revision" or critical or feasibility['status'] == 'blocked')
             if exact_repeat and after_action_ids == evidence_ids and needs_more_revision:
                 candidate["research_status"] = "no_detectable_progress"
                 revision_record["progress_check"]["outcome"] = "no_detectable_progress"
@@ -765,15 +801,16 @@ class Controller:
                 concern = next((issue["issue"] for issue in review["issues"]), None)
                 concern = concern or next(iter(review["unresolved_questions"]), None) or review["revision_instructions"]
                 candidate["recommended_action"] = {
-                    "kind": "read_source",
-                    "description": "Obtain targeted source evidence before another revision: " + (concern or "clarify the weakest unsupported assumption."),
-                    "decision_impact": "Resolve a named uncertainty or explicitly redesign the mechanism; repeated wording alone cannot establish progress.",
+                    "kind": "run_experiment",
+                    "description": current['validation']['first_test'],
+                    "decision_impact": "Use the planned test to distinguish the remaining design question: " + (concern or current['validation']['weakest_assumption']),
                 }
+                self.progress('[review] 本轮讨论已收束：保留完整方案，把剩余设计分歧放进第一步测试。')
                 self.store.event("revision_stalled", {"candidate_id": candidate["id"], "round": round_index + 1,
                     "reason": "exact_repeat_without_new_evidence"})
                 break
             # Code/experiment actions are proposed, never silently executed.
-            if review["verdict"] != "refine" and motivation["status"] != "needs_revision" and not critical and not added_evidence:
+            if not needs_more_revision and not added_evidence:
                 break
         if candidate.get("research_status") == "needs_revision" and len(versions) >= self.config["max_rounds"]:
             candidate["research_status"] = "round_limit_reached"

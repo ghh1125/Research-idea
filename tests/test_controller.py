@@ -203,6 +203,8 @@ class ControllerExecutionTests(unittest.TestCase):
         row = self.store.task(backend.calls[-1].task_id)
         self.assertEqual(row["status"], "failed")
         self.assertEqual(row["attempts"], 2)
+        self.assertIn('previous_output', backend.calls[1].prompt)
+        self.assertTrue(any(e['kind'] == 'output_repair' for e in self.store.recent_events()))
 
     def test_repair_is_counted_against_call_budget(self):
         backend = FakeBackend([{}, valid_shape(SCHEMAS["map"])])
@@ -248,6 +250,13 @@ class ControllerExecutionTests(unittest.TestCase):
         self.assertEqual(len(backend.calls), 1)
         self.assertEqual(self.store.task_summary(), {"failed": 1})
 
+    def test_parse_value_error_repairs_without_a_previous_result_object(self):
+        backend = FakeBackend([ValueError('malformed structured output'), valid_shape(SCHEMAS['map'])])
+        self.controller(backend).task('map', {})
+        self.assertEqual(len(backend.calls), 2)
+        self.assertIn('malformed structured output', backend.calls[1].prompt)
+        self.assertIn('"previous_output": null', backend.calls[1].prompt)
+
     def test_covered_review_on_abstract_retains_candidate_untested(self):
         paper = {"id": "paper-1", "title": "Budget study", "abstract": QUOTE,
                  "content_kind": "abstract"}
@@ -279,7 +288,7 @@ class ControllerExecutionTests(unittest.TestCase):
         proposal = valid_shape(SCHEMAS["propose"]["properties"]["candidates"]["items"])
         proposal["motivation"]["evidence_ids"] = ["ev-1"]
         candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
-        self.controller(FakeBackend([method, review])).develop_candidate(candidate)
+        self.controller(FakeBackend([method, review]), max_rounds=1).develop_candidate(candidate)
         self.assertEqual(candidate["feasibility_status"], "blocked")
         self.assertEqual(candidate["research_status"], "implementation_blocked")
         self.assertEqual(candidate["recommended_action"]["kind"], "resolve_prerequisite")

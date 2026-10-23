@@ -29,7 +29,7 @@ class DemoBackend:
             candidates = []
             for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
                 candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
-                candidates[-1]["motivation"] = {"problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
+                candidates[-1]["motivation"] = {"basis": "research_hypothesis", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",
                     "causal_explanation": "候选解释：证据关系或顺序影响模型使用已有信息。", "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
@@ -37,7 +37,7 @@ class DemoBackend:
                     "simplest_alternative": "随机交换顺序而不使用候选机制。", "necessity_test": "如果随机对照解释全部差异，则该机制没有额外解释力。"}
             output = {"candidates": candidates, "no_candidate_reason": ""}
         elif task.stage in {"develop", "refine"}:
-            overlap_evidence = payload["evidence"][0]
+            overlap_evidence = payload["evidence"][0] if payload["evidence"] else None
             comparisons = [{"dimension": dim, "prior_detail": "只有合成笔记，尚无真实论文方法细节。",
                 "proposed_detail": "固定模型与检索条件，诊断证据冲突及顺序影响。", "relation": "unknown", "evidence_ids": []}
                 for dim in ("problem", "mechanism", "information", "objective", "evaluation", "claim")]
@@ -56,14 +56,17 @@ class DemoBackend:
             if task.stage == "refine":
                 changes.append("增加随机信号对照")
             output = {
+                "review_responses": [{"issue": item['issue'], "decision": "adopt", "change": "增加随机信号对照", "reason": "区分机制收益与随机变化", "evidence_ids": []} for item in payload.get('review', {}).get('issues', [])],
                 "motivation": payload["candidate"]["motivation"],
-                "method": {"base_implementation": "尚未选择；需要检查实际模型推理接口。", "changes": changes, "inputs": "问题、完整证据、条件标签；答案只供评测。", "outputs": "答案和逐样本诊断结果", "trainable_parameters": "不训练：首先诊断现象", "frozen_parameters": "模型参数保持不变", "objective": "不适用：无训练阶段", "supervision": "需要人工核对的评测答案；当前尚未获取", "inference_steps": ["构造匹配输入", "固定预算调用模型", "保存预测"], "resource_requirements": "未知，先测少量样本延迟与调用成本", "assumptions": [{"statement": "数据中存在可控制的证据冲突", "status": "unverified", "evidence_ids": [], "check": "人工检查样本并验证变换保留任务语义"}]},
-                "prior_art": {"verdict": "uncertain", "justification": "合成资料不能支持查新结论。", "overlaps": [{"paper_id": overlap_evidence["paper_id"], "level": "topic", "covered_claim": "合成资料讨论相似主题", "evidence_ids": [overlap_evidence["id"]], "remaining_gap": "所有真实文献与机制仍待核查", "comparisons": comparisons}], "search_queries": ["long context conflicting evidence controlled evaluation"]},
+                "method": {"summary": "固定模型与检索结果，只改变证据冲突程度或段落顺序；保存配对答案，比较错误与稳定性。先用随机变换作为简单对照，再判断专门干预是否有额外作用。", "base_implementation": "尚未选择；需要检查实际模型推理接口。", "changes": changes, "inputs": "问题、完整证据、条件标签；答案只供评测。", "outputs": "答案和逐样本诊断结果", "trainable_parameters": "不训练：首先诊断现象", "frozen_parameters": "模型参数保持不变", "objective": "不适用：无训练阶段", "supervision": "需要人工核对的评测答案；当前尚未获取", "inference_steps": ["构造匹配输入", "固定预算调用模型", "保存预测"], "resource_requirements": "未知，先测少量样本延迟与调用成本", "assumptions": [{"statement": "数据中存在可控制的证据冲突", "status": "unverified", "evidence_ids": [], "check": "人工检查样本并验证变换保留任务语义"}]},
+                "prior_art": {"verdict": "uncertain", "justification": "合成资料不能支持查新结论。", "overlaps": [{"paper_id": (overlap_evidence or {}).get("paper_id", ""), "level": "topic", "covered_claim": "合成资料讨论相似主题", "evidence_ids": ([overlap_evidence["id"]] if overlap_evidence else []), "remaining_gap": "所有真实文献与机制仍待核查", "comparisons": comparisons}], "search_queries": ["long context conflicting evidence controlled evaluation"]},
                 "novelty_claim": {"type": "explanation", "claim": "演示待检验解释：输入证据关系可能影响回答稳定性。", "changed_variable": "冲突程度或段落顺序", "observable_consequence": "内容固定时，配对条件之间的答案稳定性差异", "falsifier": "检查充分后没有差异，或简单控制解释全部差异", "nontriviality": "拟区分错误来源而非增加模块；真实贡献尚需文献与实验验证。"},
                 "feasibility": {"checks": checks, "required_signals": [{"name": "问题与检索证据", "needed_at": "inference", "availability": "unverified", "evidence_ids": [], "acquisition_plan": "先取得并检查真实数据样本", "substitute": "没有合适样本则暂缓实验"}, {"name": "真实答案", "needed_at": "evaluation", "availability": "unverified", "evidence_ids": [], "acquisition_plan": "人工核对评测标签，禁止传入模型推理", "substitute": "缺少标签时只做人工诊断"}]},
-                "validation": {"weakest_assumption": "输入变换真实操纵了待研究因素", "first_test": "人工检查成对样本，再运行固定预算的配对诊断。", "baselines": ["原始输入", "简单顺序随机化"], "controls": ["相同模型和预算", "真实答案不进入推理输入"], "positive": "只支持该设置下存在值得进一步验证的诊断信号。", "negative": "检查实现和测量能力，再判断是否削弱假设。", "inconclusive": "记录不确定性，不能直接否定方向。", "budget_estimate": "未测量；执行前确定样本量、模型和费用上限。"},
+                "validation": {"summary": "先人工检查少量成对样本，再用固定模型和预算比较原始输入、候选干预与随机对照。观察答案变化是否由研究因素解释。", "weakest_assumption": "输入变换真实操纵了待研究因素", "first_test": "人工检查成对样本，再运行固定预算的配对诊断。", "baselines": ["原始输入", "简单顺序随机化"], "controls": ["相同模型和预算", "真实答案不进入推理输入"], "positive": "只支持该设置下存在值得进一步验证的诊断信号。", "negative": "检查实现和测量能力，再判断是否削弱假设。", "inconclusive": "记录不确定性，不能直接否定方向。", "budget_estimate": "未测量；执行前确定样本量、模型和费用上限。"},
                 "next_action": {"kind": "inspect_code", "description": "检查模型接口和数据条件变换器", "decision_impact": "确定关键输入与测量是否可获得。"},
             }
+            if not overlap_evidence:
+                output['prior_art']['overlaps'] = []
         elif task.stage == "review":
             needs_revision = "增加随机信号对照" not in payload["method_spec"]["method"]["changes"]
             output = {"verdict": "refine" if needs_revision else "continue", "issues": [{"severity": "important", "issue": "需要区分策略收益与随机选择带来的变化。", "evidence_ids": [], "action": "增加简单随机对照。"}] if needs_revision else [], "unresolved_questions": ["真实文献、数据和实测结果尚缺。"], "revision_instructions": "增加随机信号对照，保持原始问题。" if needs_revision else "", "next_action": {"kind": "revise" if needs_revision else "run_experiment", "description": "补充对照" if needs_revision else "在显式配置的实验环境运行诊断", "decision_impact": "区分方法机制与简单解释。"}}
