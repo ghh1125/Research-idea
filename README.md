@@ -4,7 +4,9 @@
 
 **定位：只辅助构思和筛选有意义、具备明确实施路径的 LLM/NLP 研究 idea。** 最小实验只输出验证计划；系统不执行训练、实验或论文写作。
 
-**当前版本：可运行的早期 MVP。** 支持 Codex CLI、Claude Code CLI、OpenAI-compatible API 和原生 Anthropic API。研究流程和证据存储独立于模型会话。流程围绕完整的研究方案和第一步验证设计展开。
+**当前版本：v0.3.0，可用的研究 Idea CLI。** 支持对话式输入与配置、文献检索和正文分析、方案生成与修订、原文引用追溯、预算管理和中断恢复。已使用 Codex CLI（`gpt-6.1-sol`、`high`）完成真实研究主题的端到端运行，并通过 Python 3.11、3.12、3.13 自动化测试。
+
+提供 Codex CLI、Claude Code CLI、OpenAI-compatible API 和原生 Anthropic API 适配器；目前真实账户实跑验证覆盖 Codex。研究流程和证据存储独立于模型会话。交付完整研究方案与第一步验证设计，idea 的实际效果通过后续研究实验评估。
 
 ## 三个核心要求
 
@@ -65,7 +67,8 @@ research-idea chat --project ./research-projects/my-idea
 | `/reasoning`、`/reasoning high` | 选择思考强度；`inherit` 沿用 Codex 配置 |
 | `/models` | 显示 Codex 本地模型缓存的 ID、强度和更新时间；不是实时授权保证 |
 | `/account` | 查看后端、模型、配置档和登录方式；不读取或显示认证文件、密钥 |
-| `/topic`、`/topic 新方向` | 查看或设置正式研究主题；已有研究任务的项目请用 `/open 新目录` |
+| `/topic`、`/topic 新方向` | 查看或设置正式研究主题；已有研究任务的项目请用 `/new 新方向` |
+| `/new`、`/new 新方向` | 开始空白研究，沿用模型、思考强度、检索和预算设置，调用与时间从 0 开始；旧项目保留 |
 | `/input /path/to/brief.txt` | 读取 UTF-8 多行文字并发送讨论 |
 | `/run`、`/stop` | 开始/恢复研究，或停止并保留检查点 |
 | `/papers`、`/papers "带空格的论文.pdf"` | 列出或导入论文 |
@@ -85,6 +88,8 @@ research-idea chat --project ./research-projects/my-idea
 | `/help`、`/exit` | 帮助和退出 |
 
 Enter 发送，先按 Esc 再按 Enter 换行，Tab 补全命令，↑↓ 浏览本次输入历史。多行粘贴作为一个输入框处理。Ctrl+C 停止正在运行的任务；空闲时清空输入。再次打开相同 `--project` 可继续对话或研究。
+
+底部预算标为“本项目累计”，重新打开、清空输入和恢复研究都会保留计数；方案完成后显示“方案已生成”。要开始新的研究，在窗口输入 `/new`，也可以 `/new 你的新方向`。新项目会在当前项目的同级目录生成，沿用设置，论文、对话和用量从空白开始；用 `/status` 查看当前路径，`/open 旧项目路径` 返回原研究。
 
 输出用彩色标签分区：紫色 `[skill]` / `[review]`，青色 `[search]`，蓝色 `[paper]` / `[read]`，黄色 `[analysis]` / `[thinking]`，绿色 `[evidence]` / `[idea]`。证据 ID、来源链接、原文引文和缺口各有强调；文字标签使无颜色终端也可理解。`[thinking]` 仅表示等待模型回复，不展示模型隐藏思维链。每一步先显示主要发现与新引用，完整结构化分析通过 `/details` 展开。当前回复以完整答复显示，研究步骤逐项实时输出，不提供模型 token 流。
 
@@ -343,7 +348,7 @@ backend = "claude"
 model = ""
 ```
 
-使用 `claude --safe-mode -p`、JSON Schema、禁用内置工具与 MCP 的设置。需要支持这些参数的版本；保留现有认证。CLI 的工具循环不负责当前 MVP 的文献检索，检索与读取由研究控制器执行。
+使用 `claude --safe-mode -p`、JSON Schema、禁用内置工具与 MCP 的设置。需要支持这些参数的版本；保留现有认证。文献检索与正文读取由 Research-idea 控制器执行，Claude CLI 接收当前任务的材料进行分析。
 
 ### OpenAI-compatible API
 

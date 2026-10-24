@@ -59,8 +59,9 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
     async def test_busy_blocks_mutation_but_status_remains_available(self):
         self.chat.job = asyncio.create_task(asyncio.sleep(100))
         try:
-            with self.assertRaises(ValueError):
-                await self.chat.handle('/model changed')
+            for command in ('/model changed', '/new another topic'):
+                with self.assertRaises(ValueError):
+                    await self.chat.handle(command)
             await self.chat.handle('/status')
             self.assertIn('调用', self.events[-1][1])
         finally:
@@ -220,6 +221,80 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         await self.chat.handle('/intro')
         self.assertIn('第一步验证', self.events[-1][1])
         self.assertFalse(self.chat.busy)
+
+    async def test_new_project_starts_empty_with_same_settings_and_old_project_can_reopen(self):
+        self.chat.settings(reasoning_effort='high', max_seconds=7800, max_papers=4)
+        settings = load_config(self.project)
+        store = Store(self.project)
+        store.set('topic', '旧方向')
+        store.set('calls_used', 61)
+        store.set('elapsed_s', 6892)
+        store.set('status', 'completed')
+        store.set('chat_messages', [{'role': 'user', 'content': '旧讨论'}])
+        store.put('papers', {'id': 'old-paper'})
+        store.replace_evidence('old-paper', [{'id': 'ev_old', 'paper_id': 'old-paper'}])
+        store.put('candidates', {'id': 'old-idea'})
+        store.begin_task('old-task', 'develop')
+        store.finish_task('old-task', {'saved': True}, {})
+        store.close()
+        (self.project / 'outputs').mkdir()
+        (self.project / 'outputs/report.md').write_text('旧方案')
+
+        with patch.object(self.chat, 'start', new_callable=AsyncMock) as start:
+            await self.chat.handle('/new')
+        start.assert_not_awaited()
+        fresh = self.chat.project
+        self.assertNotEqual(fresh, self.project)
+        self.assertEqual(fresh.parent, self.project.parent)
+        self.assertEqual(load_config(fresh), settings)
+        store = Store(fresh, readonly=True)
+        try:
+            self.assertEqual(store.get('calls_used', 0), 0)
+            self.assertEqual(store.get('elapsed_s', 0), 0)
+            self.assertIsNone(store.get('topic'))
+            self.assertEqual(store.get('chat_messages', []), [])
+            self.assertEqual(store.get('status'), 'initialized')
+            for table in ('papers', 'evidence', 'candidates'):
+                self.assertEqual(store.rows(table), [])
+            self.assertEqual(store.task_summary(), {})
+        finally:
+            store.close()
+        self.assertIn('调用 0/80', ''.join(text for _, text in self.chat.toolbar()))
+        await self.chat.handle('/report')
+        self.assertIn('尚无方案', self.events[-1][1])
+
+        await self.chat.handle('/open ' + str(self.project))
+        store = Store(self.project, readonly=True)
+        try:
+            self.assertEqual(store.get('calls_used'), 61)
+            self.assertEqual(store.get('elapsed_s'), 6892)
+            self.assertEqual(store.get('chat_messages')[0]['content'], '旧讨论')
+            self.assertEqual(store.task('old-task')['status'], 'succeeded')
+            self.assertEqual(len(store.rows('papers')), 1)
+        finally:
+            store.close()
+        await self.chat.handle('/report')
+        self.assertEqual(self.events[-1][1], '旧方案')
+        toolbar = ''.join(text for _, text in self.chat.toolbar())
+        self.assertIn('方案已生成', toolbar)
+        self.assertIn('本项目累计', toolbar)
+        self.assertIn('调用 61/80', toolbar)
+        self.assertIn('/new 新研究', toolbar)
+
+    async def test_new_topic_is_literal_and_prompt_history_is_cleared(self):
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.input import create_pipe_input
+        from prompt_toolkit.output import DummyOutput
+        with create_pipe_input() as pipe:
+            self.chat.session = PromptSession(input=pipe, output=DummyOutput())
+            self.chat.session.history.append_string('old discussion')
+            with patch.object(self.chat, 'start', new_callable=AsyncMock) as start:
+                await self.chat.handle('/new /model is a research topic')
+            start.assert_not_awaited()
+            self.assertEqual(self.chat.topic(), '/model is a research topic')
+            self.assertEqual(self.chat.cfg['model'], 'gpt-6.1-sol')
+            self.assertEqual(self.chat.session.history.get_strings(), [])
+            self.assertIs(self.chat.session.default_buffer.history, self.chat.session.history)
 
     async def test_budget_is_live_in_status_bar(self):
         store = Store(self.project)

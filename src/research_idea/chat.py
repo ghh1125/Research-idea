@@ -23,13 +23,14 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
 3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
 4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
-5. /budget 查看预算，准备好后输入 /run。讨论与研究共用调用和时间预算。
+5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
 6. 跟随彩色 [search] [paper] [read] [analysis] [review] 查看步骤和证据。
 7. 最后 [idea] 显示方案与第一步验证；/report 再看方案，/evidence ID 追溯原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
+9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
 /account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
-Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止/清空'''
+Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 
 HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 直接输入：与模型讨论研究方向（会调用模型）；/run 才启动文献研究。
@@ -44,9 +45,10 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
 /date                   时间窗口：动态策略/查重窗口，或固定日期
+/new [研究方向]          新建空白研究，沿用设置，预算计数从 0 开始
 /open 项目目录           切换项目      /history      最近对话
 /help                   命令说明      /exit         退出
-Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止/清空'''
+Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 COMMANDS = [line.split()[0] for line in HELP.splitlines() if line.startswith('/')]
 COMMANDS += ['/models', '/account', '/input', '/stop', '/evidence', '/report', '/constraints', '/scope', '/history', '/exit']
 COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta',
@@ -81,7 +83,7 @@ WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea�
 3. 最后得到问题、动机、具体方法、工作差异和第一步验证。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
-/intro 使用介绍 · /help 全部命令
+/intro 使用介绍 · /new 新研究 · /help 全部命令
 
 只提供研究方案与实验设计。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
@@ -183,11 +185,12 @@ class Chat:
             print_formatted_text(FormattedText(fragments(tag, text)))
 
     def toolbar(self):
-        calls, elapsed = '?', 0
+        calls, elapsed, status = '?', 0, 'initialized'
         try:
             store = Store(self.project, readonly=True)
             try:
                 calls, elapsed = store.get('calls_used', 0), store.get('elapsed_s', 0)
+                status = store.get('status', 'initialized')
             finally:
                 store.close()
         except (OSError, RuntimeError):
@@ -203,9 +206,13 @@ class Chat:
             while value and get_cwidth(value + '…') > width:
                 value = value[:-1]
             return value + '…'
-        footer = ' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else ' /intro 使用介绍 · /run 开始研究 · /help 命令'
-        return [('bg:ansiblue ansiwhite', fit(f" {self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {self.state}") + '\n'),
-                ('bg:ansiblack ansiwhite', fit(f" 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
+        state = self.state if self.busy else STATUS_LABELS.get(status, '就绪')
+        if not self.busy and status == 'running':
+            state = '已有进度'
+        footer = (' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else
+                  ' /intro 使用介绍 · /new 新研究 · ' + ('/report 看方案' if status == 'completed' else '/run 开始研究'))
+        return [('bg:ansiblue ansiwhite', fit(f" {self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state} · {self.project.name}") + '\n'),
+                ('bg:ansiblack ansiwhite', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
                 ('bg:ansiblack ansicyan', fit(footer))]
 
     def idle_required(self):
@@ -233,12 +240,40 @@ class Chat:
             try:
                 if text:
                     if store.get('cohort') or store.db.execute('SELECT COUNT(*) FROM tasks').fetchone()[0]:
-                        raise ValueError('已有研究任务的主题不能替换；使用 /open 新目录。')
+                        raise ValueError('已有研究任务的主题不能替换；使用 /new 新方向 开始新研究。')
                     store.set('topic', text)
                     store.set('status', 'initialized')
                 return store.get('topic', '')
             finally:
                 store.close()
+
+    def new_project(self, topic=''):
+        self.idle_required()
+        if len(topic) > 128 * 1024 or '\x00' in topic:
+            raise ValueError('输入过长或包含空字符')
+        previous = self.project
+        cfg = load_config(previous)
+        project = previous.parent / ('chat-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+        project.mkdir(exist_ok=False)
+        with project_lock(project):
+            write_config(project, cfg)
+            store = Store(project)
+            try:
+                store.set('status', 'initialized')
+                if topic:
+                    store.set('topic', topic)
+            finally:
+                store.close()
+        self.project, self.cfg = project, cfg
+        self.started, self.base_elapsed, self.state = 0, 0, '就绪'
+        if self.session:
+            from prompt_toolkit.history import InMemoryHistory
+            self.session.history = InMemoryHistory()
+            self.session.default_buffer.history = self.session.history
+            self.session.default_buffer.reset()
+            self.session.app.invalidate()
+        self.show('system', f'已开始空白研究 · 调用 0 · 时间 0 分\n沿用模型、思考强度、检索和预算设置。\n项目：{project}\n上次研究：{previous}\n' +
+                  (f'主题：{topic}\n输入 /run 开始研究。' if topic else '直接输入新方向，或 /topic 设置主题。'))
 
     async def pick(self, title, choices):
         self.show('system', title + '\n' + '\n'.join(f'{i}. {v}' for i, v in enumerate(choices, 1)) + '\n输入编号或值；空行取消。')
@@ -418,7 +453,7 @@ class Chat:
             try:
                 if command == '/status':
                     status = store.get('status', 'initialized')
-                    self.show('system', f"主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（讨论与研究合计）\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}")
+                    self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}")
                 elif command == '/papers':
                     kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
                     self.show('paper', '\n\n'.join(f"{i}. {p['title']} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}\n   {p['id']}\n   {p.get('url', '')}" for i, p in enumerate(store.rows('papers'), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
@@ -521,6 +556,8 @@ class Chat:
                 self.settings(search_since=since, search_until=until, search_date_mode='fixed')
             else:
                 self.show('search', f"{config_scope(self.cfg)['since']} → {config_scope(self.cfg)['until']} · {self.cfg['search_source']} · 自动检索 {self.cfg['auto_search']}\n/scope ai-recent | local | YYYY-MM-DD YYYY-MM-DD")
+        elif command == '/new':
+            self.new_project(value)
         elif command == '/open':
             self.idle_required()
             if not value:
@@ -560,7 +597,7 @@ class Chat:
                         if self.busy:
                             await self.stop()
                         else:
-                            self.show('system', '输入已清空；/exit 或 Ctrl+D 退出。')
+                            self.show('system', '已清空输入框；底部是本项目累计用量。\n/new 开始空白研究（计数从 0 开始）；/exit 或 Ctrl+D 退出。')
                     except EOFError:
                         break
                     except (ValueError, RuntimeError, OSError) as exc:
