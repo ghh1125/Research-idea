@@ -75,16 +75,44 @@ research-idea doctor
 
 PDF 正文提取需要 Poppler 的 `pdftotext`。macOS 可运行 `brew install poppler`；Ubuntu/Debian 可运行 `sudo apt-get install poppler-utils`。`doctor` 会检查本地命令是否可用。
 
+### 安装一次，以后直接输入 `research-idea`
+
+完成上面的安装后，在仓库目录执行一次，把命令加入用户命令目录：
+
+```bash
+mkdir -p "$HOME/.local/bin"
+ln -s "$PWD/.venv/bin/research-idea" "$HOME/.local/bin/research-idea"
+```
+
+macOS 默认使用 zsh。执行下面两行，让当前窗口和以后新开的终端都能找到命令：
+
+```bash
+printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+使用 bash 时，将上面的 `.zshrc` 改为 `.bashrc`。命令连接到仓库里的虚拟环境，因此保留仓库目录和 `.venv` 即可；以后启动无需激活虚拟环境，也无需进入仓库目录。
+
 ### 打开对话窗口
+
+以后在终端输入：
+
+```bash
+research-idea
+```
+
+这会直接打开对话窗口，并在当前目录的 `research-projects/` 下新建一个项目。窗口内用 `/model` 选模型、`/reasoning` 调整思考强度、`/intro` 看介绍；输入研究方向讨论，准备好后输入 **`/run`** 开始研究。
+
+需要打开指定项目或在启动时指定模型，可以使用：
 
 ```bash
 research-idea chat --project ./research-projects/my-idea \
   --backend codex --model gpt-6.1-sol --reasoning-effort high
 ```
 
-打开后输入研究方向，与模型讨论；准备好后输入 **`/run`** 开始研究。再次运行相同命令会打开原项目，保留对话、设置和进度。
+再次运行相同的 `--project` 命令会打开原项目，保留对话、设置和进度；也可以在窗口内用 `/open 项目目录` 恢复已有研究。
 
-安装环境已激活时，也可以直接运行 `research-idea`，新建一个对话项目。希望逐项选择主题、模型、论文和预算时，运行 `research-idea launch`。
+希望逐项选择主题、模型、论文和预算时，运行 `research-idea launch`。
 
 ### 一条命令直接开始研究
 
