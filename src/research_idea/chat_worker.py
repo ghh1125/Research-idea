@@ -36,7 +36,7 @@ LABELS = {
     'description': '说明', 'warranted_conclusion': '可支持结论', 'confounds': '竞争解释',
     'limitations': '局限', 'missing_controls': '缺少的控制', 'first_test': '第一步测试',
     'weakest_assumption': '最脆弱假设', 'no_candidate_reason': '没有形成候选的原因',
-    'existing_work': '已有工作的进展', 'research_need': '由局限推导的研究动机',
+    'existing_work': '已有工作的进展', 'research_need': '由问题推导的研究动机',
     'design_axes': '技术角度', 'axis_ids': '对应技术角度', 'why_needed': '为什么需要',
     'required_function': '需要解决的技术问题', 'search_directions': '方法检索方向',
     'background': '背景与需要', 'positioning': '动机与贡献对照',
@@ -52,6 +52,7 @@ LABELS = {
     'choice': '采用的设计', 'alternative': '简单替代方案',
     'opportunities': '研究切口', 'opportunity_id': '来源切口', 'selection_reason': '选择理由',
     'derivation': '文献怎样导出问题', 'insight': '核心洞见', 'prior_art_delta': '已有工作留下什么',
+    'bottleneck_hypothesis': '可能的根本原因', 'problem_origin': '问题来源',
     'feasibility_basis': '可行路径', 'basis': '问题依据',
 }
 

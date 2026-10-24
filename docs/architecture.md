@@ -44,7 +44,7 @@ flowchart TD
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 8`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 9`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -64,13 +64,15 @@ flowchart TD
 
 第一阶段的 `map.research_frame` 保存用户的大问题、跨论文归纳的研究主线、由此提出的科学问题，以及具体论文证据与这一问题的联系。它直接传给 `propose`，用于组织通俗的 Background → Problem → Motivation → Idea。研究主线在原有综合步骤内形成，不增加模型调用；来源的具体实验条件仍保留在论文卡、引用和逐项对照中。
 
-`opportunities[].problem_origin` 只有 `unresolved_need`（未充分满足的重要需要）和 `emerging_problem`（方法使用或发展产生的新困难）。两类均允许根据已有机制、合理条件和后果推演尚未实测的问题，`basis` 单独记录其依据性质。`opportunity_types` 汇总来源；`opportunity_id` 关联所选问题。`idea_instructions.py` 集中定义构思程序：`map` 先理解已有机制，推演困难和最强已有回应，再提炼研究需要与洞见；`propose` 才展开具体操作及作用原理。程序检查结构和引用，研究判断仍由模型结合原文进行。
+`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要的新问题，说明现有主要思路难以跨过的障碍；`emerging_problem` 从已有方法解决原问题的过程、使用或发展中，推导新产生的重要困难。两类均允许合理猜想，`basis` 记录依据性质。`map` 只形成问题、`bottleneck_hypothesis`、研究意义、已有回应及 `research_need`，替代旧的 `insight/feasibility_basis`；`propose` 才选择问题并构思具体操作、作用原理和基本可行路径。程序检查结构和引用，研究价值仍由模型结合原文判断，不要求固定论文数或全领域无解。
 
-共享 `MOTIVATION` 中的 `problem_origin` 使用同一组两值枚举，`problem_derivation` 保存从背景到具体选题的连续解释。构思时校验来源与 `opportunity_id` 指向的切口一致，控制器将其 `id/question/problem_origin/basis/derivation/prior_art_delta` 保存为 `candidate.selected_opportunity`，交给后续技术探索、设计和审阅。`basis` 和 `prior_art_delta` 保留推断性质及已有回应，旧四字段快照不补造历史。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。检查和输出修复仍沿用现有机制，不通过关键词判定研究价值或增加审批任务。
+共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。控制器校验来源与 `opportunity_id` 一致，并将 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need` 保存为 `candidate.selected_opportunity`，交给后续技术探索、设计和审阅。旧四字段或六字段快照不补造历史。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。报告 JSON 版本为 9，旧机会中的 `insight` 仍按原含义展示。检查与输出修复沿用现有机制，不增加审批任务。
 
 `propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 
 推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
+
+第一阶段的 `Controller.ideation_context()` 在完整上下文的副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns.discriminating_test`。方法、原论文实验、结果、条件、疑点和全部原文证据保留；原卡存储不变。`map/propose` 使用同一视图，避免单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
 
 `TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
 
@@ -168,6 +170,6 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 当前可读流程和角色交接详见 [workflow.md](workflow.md)。方法规格增加 `review_responses`，每条包含 `issue`、`decision`、`change`、`reason` 与 `evidence_ids`，refine 必须逐条回应上一轮意见。允许有理由地不采纳意见，不通过角色数量决定质量。`motivation.basis` 区分来源观察和问题假设；来源观察仍需引用。`dialogue` 与版本记录同时保存。
 
-`map.opportunities` 保存不同研究问题及其文献推导、洞见、意义、已有工作差异和可行依据。`propose` 接收完整问题分析，用 `opportunity_id` 指向主切口，用 `selection_reason` 说明科学选择。切口 ID 必须存在且唯一，来源观察必须带有效引用；问题假设可以没有引用。报告 JSON 保留这些记录，CLI 默认显示可读摘要，旧项目没有新字段时仍能导出。没有按词项相似度或自评分自动淘汰的逻辑。
+`map.opportunities` 保存研究问题、文献推导、原因猜想、意义、已有回应与研究需要。`propose` 用 `opportunity_id` 选择主切口，在 `selection_reason` 说明问题的重要性，再构思方法。切口 ID 必须存在且唯一，来源观察必须带有效引用；问题假设可以没有引用。报告保留记录，CLI 展示问题推导、已有回应和研究需要。旧机会仍可导出；没有按词项相似度或自评分自动淘汰的逻辑。
 
 提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。

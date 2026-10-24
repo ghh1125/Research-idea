@@ -144,10 +144,15 @@ def activity_summary(stage, result, citations=None):
         if result.get('opportunities'):
             for opportunity in result['opportunities']:
                 section('研究切口 · ' + opportunity['question'])
-                add('问题来源', {'unresolved_need': '已有的重要问题，现有方法仍未解决',
-                    'emerging_problem': '现有方法在使用或发展中暴露出的新问题'}.get(opportunity.get('problem_origin')))
+                add('问题来源', {'unresolved_need': '从背景需求提出新问题，现有主要方法难以解决',
+                    'emerging_problem': '已有方法解决问题的过程又暴露新问题'}.get(opportunity.get('problem_origin')))
                 add('文献怎样导出这个问题', opportunity['derivation'])
-                add('核心洞见', opportunity['insight'])
+                if opportunity.get('bottleneck_hypothesis'):
+                    add('可能的根本原因', opportunity['bottleneck_hypothesis'])
+                else:
+                    add('核心洞见', opportunity.get('insight'))
+                add('已有思路怎样回应这个问题', opportunity.get('prior_art_delta'))
+                add('由此产生的研究需要', opportunity.get('research_need'))
                 add('研究价值', opportunity['why_it_matters'])
                 add('原文依据', opportunity['evidence_ids'])
         else:

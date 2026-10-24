@@ -21,7 +21,7 @@ from .search_scope import config_scope
 from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
 from .retries import with_retries
-from .research_context import compact_research_context
+from .research_context import compact_research_context, problem_discovery_context
 from .paper_metadata import enrich_screening_pool, paper_heading
 
 
@@ -340,6 +340,10 @@ class Controller:
     def user_notes(self):
         return [m['content'][:3000] for m in self.store.get('chat_messages', [])
                 if m.get('role') == 'user'][-8:]
+
+    def ideation_context(self):
+        """Start both first-phase tasks from the agenda and source analyses."""
+        return problem_discovery_context(self.context())
 
     def reading_papers(self):
         papers = self.store.rows('papers')
@@ -816,7 +820,7 @@ class Controller:
                     cohort = None
             cohort_created = False
             if not cohort or cohort.get("key") != cohort_key:
-                context = self.context()
+                context = self.ideation_context()
                 refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
                 def validate_problem(value):
                     refs(value)
@@ -893,7 +897,9 @@ class Controller:
                 selected = directions.get(item['opportunity_id'])
                 if selected and 'selected_opportunity' not in candidate:
                     candidate['selected_opportunity'] = {key: selected[key]
-                        for key in ('id', 'question', 'problem_origin', 'basis', 'derivation', 'prior_art_delta')}
+                        for key in ('id', 'question', 'problem_origin', 'basis', 'derivation',
+                                    'prior_art_delta', 'why_it_matters', 'bottleneck_hypothesis', 'research_need')
+                        if key in selected}
                 candidates.append(candidate)
             self.store.replace_candidates(candidates)
             for candidate in candidates:

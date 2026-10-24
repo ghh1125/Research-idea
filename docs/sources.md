@@ -123,7 +123,9 @@
 | IdeaScientist [gap_finder](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py#L139) 按机制组织已有进展，解释最接近的方法为何仍留下困难，随后才交给 innovator；[rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py#L180) 追问谁受到阻碍、解决后能获得什么能力或认识 | 在同一条件下考虑已有方法的正常回应，避免用“没采用我们的操作”替代剩余问题；动机说明跨过障碍为什么推进背景目标 |
 | Supervisor-Skills [paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 追问隐藏前提、发展变化与问题意义；[idea-evaluator](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 接受尚无实测结果但有机制论证的 idea | 允许基于文献线索提出合理猜想，用成立条件和推导说明问题为何可能出现；研究意义由它对原目标的影响解释，不要求先完成实验 |
 
-综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`map` 先梳理已有工作的机制，再推演有意义的条件、可能困难及影响，考虑同条件下已有方法的回应，由此提出动机；`propose` 再展开回应这个动机的 idea。问题仍只来自已有重要需要或发展中出现的新困难。论文支持的前提与我们的推断分别表达；假设不成立时可以相应调整问题，不要求一个由假设推出的问题在该假设错误后仍然成立。
+综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`map` 先从大背景综合已有进展，形成重要问题、原因猜想和研究需要；`propose` 才选择问题并构思 idea 与基本可行路径。问题来自现有办法解决原问题时产生的新困难，或背景中提出、现有主要思路难以解决的新问题。允许大胆猜想与单篇启发，不要求共同缺陷或先证明全领域无解。
+
+为使这种分工落实到模型实际收到的材料，[research_context.py](../src/research_idea/research_context.py) 为第一阶段建立副本，暂不带入论文卡里预制的改进候选、idea 建议和建议实验；源论文的方法、实际实验、结果、条件、疑点和全部原文证据仍保留。原卡与第二阶段材料保持完整。`map` 的输出结构也改为原因猜想与研究需要，后续通过 `selected_opportunity` 保留问题为何重要，避免把通用选题变成逐篇修补。这是本项目根据实际产出调整的实现，并非上述框架的统一规定。
 
 这是面向本项目的综合设计，不固定示例中的领域、困难数量或方法模块，也不引入上述框架的评分、额外审查或实验执行。第二阶段继续由 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个技术问题，借助 `design_axes` 连接检索、迁移与方法选择；一种技术可以服务两个问题。测试检查阶段衔接和材料传递，实际论证是否更好仍应通过产出判断。
 

@@ -40,7 +40,7 @@ CLAIM_AUDIT = obj(
 )
 PROBLEM_ORIGINS = ('unresolved_need', 'emerging_problem')
 OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), basis=string(["source_observation", "research_hypothesis"]),
-    derivation=STR, insight=STR, why_it_matters=STR, prior_art_delta=STR, feasibility_basis=STR,
+    derivation=STR, bottleneck_hypothesis=STR, why_it_matters=STR, prior_art_delta=STR, research_need=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS)
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,

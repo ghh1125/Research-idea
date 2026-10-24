@@ -9,13 +9,13 @@ from unittest.mock import patch
 from research_idea.backend_types import BackendError, BackendResult
 from research_idea.chat import Chat, fragments
 from research_idea.config import DEFAULTS, write_config
-from research_idea.controller import Controller, BudgetExhausted
+from research_idea.controller import Controller, BudgetExhausted, make_evidence
 from research_idea.demo import DemoBackend, DEMO_PAPERS
 from research_idea.motivation import assess_motivation
 from research_idea.presentation import activity_summary, idea_markdown, error_summary
 from research_idea.prompts import stage_version
 from research_idea.report import export_report
-from research_idea.store import Store
+from research_idea.store import Store, digest
 
 
 class RecordingBackend(DemoBackend):
@@ -48,6 +48,104 @@ class IdeaWorkflowTests(unittest.TestCase):
         backend = backend or RecordingBackend()
         Controller(self.store, backend, self.config).run()
         return self.store.rows('candidates')[0], backend
+
+    def seed_reading_context(self):
+        statements = [
+            ('author_claim', 'The described method retrieves passages and retains their source identifiers.'),
+            ('reported_result', 'The synthetic table reports different answers when passage order changes.'),
+            ('limitation', 'The synthetic report explicitly limits its result to one fixed setting.'),
+        ]
+        paper = {'id': 'context-source', 'title': 'Synthetic context isolation source',
+                 'content_kind': 'full_text', 'source': 'synthetic_demo',
+                 'text': '\n'.join(quote for _, quote in statements)}
+        evidence = make_evidence(paper, [dict(statement=quote, quote=quote, kind=kind,
+            conditions='Synthetic fixture only.', source_section='Fixture text')
+            for kind, quote in statements], paper['text'])
+        refs = [item['id'] for item in evidence]
+        dimensions = ('problem', 'motivation', 'insight', 'method', 'prior_work_delta',
+                      'experiment_design', 'results', 'conclusion_boundary', 'idea_relevance')
+        card = {'paper_id': paper['id'], 'status': 'analyzed', 'source_hash': digest(paper['text']),
+            'framework': [{'dimension': dim, 'summary': 'Source analysis: ' + dim,
+                           'evidence_ids': refs} for dim in dimensions],
+            'components': [{'name': 'retrieval', 'function': 'Keep source identities', 'evidence_ids': refs[:1]}],
+            'experiments': [{'reported_result': statements[1][1], 'evidence_ids': refs[1:2]}],
+            'author_limitations': [{'statement': statements[2][1], 'evidence_ids': refs[2:]}],
+            'analyst_concerns': [{'concern': 'Order may expose a separate information-use issue.',
+                'alternative_explanation': 'Differences may come from passage wording.',
+                'discriminating_test': 'Distinguish order from wording.', 'evidence_ids': refs}],
+            'opportunities': [{'hypothesis': 'A preselected source-specific idea.',
+                'first_test': 'A preselected experiment.', 'falsifier': 'A preselected failure condition.',
+                'why_meaningful': 'Synthetic source suggestion.', 'evidence_ids': refs}],
+            'reading_gaps': ['No visual inspection.']}
+        self.store.put('papers', paper)
+        self.store.replace_evidence(paper['id'], evidence)
+        self.store.set('paper_cards', {paper['id']: card})
+        return card
+
+    def test_ideation_context_removes_source_ideas_but_preserves_science_and_storage(self):
+        card = self.seed_reading_context()
+        controller = Controller(self.store, RecordingBackend(), self.config)
+        complete = controller.context()
+        view = controller.ideation_context()
+        retained = view['paper_cards'][0]
+        self.assertNotIn('opportunities', retained)
+        self.assertEqual(retained['framework'],
+                         [item for item in card['framework'] if item['dimension'] != 'idea_relevance'])
+        self.assertEqual(len(retained['framework']), 8)
+        for field in ('components', 'experiments', 'author_limitations', 'reading_gaps'):
+            self.assertEqual(retained[field], card[field])
+        self.assertEqual(retained['analyst_concerns'], [
+            {key: value for key, value in concern.items() if key != 'discriminating_test'}
+            for concern in card['analyst_concerns']])
+        self.assertEqual(view['evidence'], complete['evidence'])
+        self.assertEqual(view['papers'], complete['papers'])
+        retained['components'][0]['function'] = 'Changed only in this returned view.'
+        view['evidence'][0]['quote'] = 'Changed only in this returned view.'
+        self.assertEqual(self.store.get('paper_cards'), {card['paper_id']: card})
+        self.assertEqual(self.store.rows('evidence'), complete['evidence'])
+        self.assertEqual(controller.context(), complete)
+
+    def test_map_and_propose_receive_isolated_sources_while_design_receives_full_cards(self):
+        card = self.seed_reading_context()
+        class ContextBackend(RecordingBackend):
+            def generate(self, task):
+                if task.stage == 'design_transfer':
+                    self.calls.append(task)
+                    payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+                    return BackendResult({'paper_id': payload['paper_id'], 'options': [], 'reading_gaps': []})
+                return super().generate(task)
+        backend = ContextBackend()
+        controller = Controller(self.store, backend, self.config)
+        original = controller.context()
+        # The fixture represents a completed reading checkpoint; exercise the
+        # handoff itself without rereading and replacing the stored card.
+        with patch.object(controller, 'read_papers'), patch.object(controller, 'audit_papers'):
+            controller.run()
+        seen = set()
+        for task in backend.calls:
+            if task.stage not in {'map', 'propose', 'develop', 'refine', 'review'}:
+                continue
+            payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+            self.assertEqual(payload['evidence'], original['evidence'])
+            if task.stage in {'map', 'propose'}:
+                source = payload['paper_cards'][0]
+                self.assertNotIn('opportunities', source)
+                self.assertEqual(source['framework'],
+                    [item for item in card['framework'] if item['dimension'] != 'idea_relevance'])
+                self.assertEqual(source['analyst_concerns'], [
+                    {key: value for key, value in concern.items() if key != 'discriminating_test'}
+                    for concern in card['analyst_concerns']])
+                if task.stage == 'propose':
+                    self.assertTrue(payload['problem_model']['opportunities'])
+            else:
+                self.assertEqual(payload['paper_cards'], original['paper_cards'])
+            seen.add(task.stage)
+        self.assertEqual(seen, {'map', 'propose', 'develop', 'refine', 'review'})
+        stages = [task.stage for task in backend.calls]
+        self.assertEqual({stage: stages.count(stage) for stage in set(stages)},
+                         {'map': 1, 'propose': 1, 'plan_search': 1, 'design_transfer': 1,
+                          'develop': 1, 'refine': 1, 'review': 2})
+        self.assertEqual(self.store.get('paper_cards'), {card['paper_id']: card})
 
     def test_sparse_literature_still_delivers_a_hypothesis_and_real_method_plan(self):
         candidate, backend = self.run_flow()
@@ -109,6 +207,12 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('问题来源', summary)
         self.assertTrue(chosen['derivation'])
         self.assertTrue(chosen['prior_art_delta'])
+        self.assertTrue(chosen['bottleneck_hypothesis'])
+        self.assertTrue(chosen['research_need'])
+        self.assertNotIn('insight', chosen)
+        self.assertNotIn('feasibility_basis', chosen)
+        self.assertIn(chosen['bottleneck_hypothesis'], summary)
+        self.assertIn(chosen['research_need'], summary)
         self.assertTrue(candidate['proposal']['selection_reason'])
         export_report(self.store, self.store.project)
         saved = json.loads((self.project / self.store.get('output_folder') / 'report.json').read_text())
@@ -133,7 +237,8 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertTrue(motive['problem_derivation'].strip())
                 self.assertEqual(candidate['selected_opportunity'],
                     {field: chosen[field] for field in
-                     ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta')})
+                     ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta',
+                      'why_it_matters', 'bottleneck_hypothesis', 'research_need')})
                 summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
                 self.assertIn(motive['problem_derivation'], summary)
                 self.assertLess(summary.index(motive['problem_derivation']),
@@ -186,7 +291,8 @@ class IdeaWorkflowTests(unittest.TestCase):
                 selected = payload['selected_opportunity']
                 original = directions[selected['id']]
                 self.assertEqual(selected, {key: original[key] for key in
-                    ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta')})
+                    ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta',
+                     'why_it_matters', 'bottleneck_hypothesis', 'research_need')})
                 current = payload.get('method_spec') or payload.get('previous_spec') or payload['candidate']
                 self.assertEqual(current['motivation']['basis'], 'research_hypothesis')
                 self.assertTrue(current['motivation']['evidence_ids'])
@@ -323,6 +429,24 @@ class IdeaWorkflowTests(unittest.TestCase):
         for record in (saved['proposal'], saved['spec']):
             self.assertNotIn('problem_origin', record['motivation'])
             self.assertNotIn('problem_derivation', record['motivation'])
+
+    def test_legacy_opportunity_insight_and_feasibility_fields_still_render_and_export(self):
+        self.run_flow()
+        legacy = self.store.get('problem_model')
+        for direction in legacy['opportunities']:
+            direction['insight'] = direction.pop('bottleneck_hypothesis')
+            direction['feasibility_basis'] = direction.pop('research_need')
+        self.store.set('problem_model', legacy)
+        summary = activity_summary('map', legacy)
+        for direction in legacy['opportunities']:
+            self.assertIn(direction['insight'], summary)
+            self.assertIn(direction['derivation'], summary)
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        saved = json.loads((target / 'report.json').read_text())
+        self.assertEqual(saved['problem_model']['opportunities'], legacy['opportunities'])
+        for direction in legacy['opportunities']:
+            self.assertIn(direction['insight'], (target / 'report.md').read_text())
 
     def test_problem_source_is_limited_to_two_origins_and_repaired_in_existing_step(self):
         attempts = []

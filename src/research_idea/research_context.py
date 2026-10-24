@@ -54,3 +54,26 @@ def compact_research_context(context):
         'source_records': 'Full search history and reading inventories remain in SQLite and the detailed report.',
     }
     return result
+
+
+def problem_discovery_context(context):
+    """Give ideation source analysis without the reader's ready-made proposals.
+
+    Paper-local suggestions remain in the stored cards and technical-design
+    context. Removing them here changes the starting point of map/propose, not
+    the underlying evidence or the user's explicitly chosen research scope.
+    """
+    result = deepcopy(context)
+    for card in result.get('paper_cards', []):
+        card.pop('opportunities', None)
+        if 'framework' in card:
+            card['framework'] = [item for item in card['framework']
+                                 if item.get('dimension') != 'idea_relevance']
+        for concern in card.get('analyst_concerns', []):
+            concern.pop('discriminating_test', None)
+    result.setdefault('context_summary', {})['ideation_view'] = (
+        'Source methods, results, conditions, concerns and original evidence are retained. '
+        'Reader-generated paper-local proposals, idea-relevance suggestions and proposed '
+        'tests are left in the stored cards for later reference. Derive research problems '
+        'from the user goal and these source analyses before proposing an intervention.')
+    return result

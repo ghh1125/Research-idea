@@ -64,13 +64,17 @@ class DemoBackend:
                  'problem_origin': 'unresolved_need' if key == 'conflict' else 'emerging_problem',
                  'derivation': ('合成场景希望回答可靠；检索已经能提供相关信息，但冲突材料仍可能使模型选错依据，继续增加信息不能解决如何使用它的问题。'
                      if key == 'conflict' else '合成场景为扩大信息覆盖而拼接更多来源，但拼接顺序可能改变回答，使完整资料仍无法稳定使用；单纯扩大覆盖没有消除这种顺序影响。'),
-                 'insight': insight, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',
+                 'bottleneck_hypothesis': bottleneck, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',
                  'prior_art_delta': '演示把错误来源区分为可讨论的问题；合成材料不能证明科学创新。',
-                 'feasibility_basis': '问题和文本证据可通过普通生成接口输入，无需模型内部信号。',
+                 'research_need': need,
                  'evidence_ids': refs, 'closest_work_ids': papers}
-                for key, question, insight in [
-                    ('conflict', '完整证据存在时，冲突关系如何影响回答？', '区分证据缺失与使用已有证据的困难。'),
-                    ('order', '相同证据的顺序为何影响回答？', '研究顺序与内容之间的影响区别。')]]
+                for key, question, bottleneck, need in [
+                    ('conflict', '完整证据存在时，冲突关系如何影响回答？',
+                     '我们怀疑相关性排序不足以说明冲突陈述中哪一条适用于当前问题，增加相关材料仍可能留下选择困难。',
+                     '需要理解已有证据的适用条件怎样影响回答，才能分清何时应补充信息、何时应改善信息使用。'),
+                    ('order', '相同证据的顺序为何影响回答？',
+                     '我们怀疑更多来源拼接后，模型对信息位置的不同关注会改变实际使用的依据，即使完整内容没有变化。',
+                     '需要弄清扩大信息覆盖时，怎样维持对关键内容的稳定使用，避免新增信息使回答更加依赖排列。')]]
         elif task.stage == "propose":
             candidates = []
             for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
@@ -83,8 +87,8 @@ class DemoBackend:
                     "existing_work": "合成场景中的现有做法通过检索向回答模型提供相关文本，以缓解信息缺失。",
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",
-                    "causal_explanation": "候选解释：证据关系或顺序影响模型使用已有信息。", "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
-                    "research_need": "因此需要在证据已经提供的条件下，弄清关系与顺序怎样影响使用过程，才能确定问题应从检索还是推理环节解决。",
+                    "causal_explanation": selected.get('bottleneck_hypothesis', '候选解释：证据关系或顺序影响模型使用已有信息。'), "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
+                    "research_need": selected.get('research_need', '因此需要在证据已经提供的条件下，弄清关系与顺序怎样影响使用过程，才能确定问题应从检索还是推理环节解决。'),
                     "expected_progress": "在限定条件下区分错误来源，形成可证伪解释；不是声称提升指标。",
                     "simplest_alternative": "随机交换顺序而不使用候选机制。", "necessity_test": "如果随机对照解释全部差异，则该机制没有额外解释力。"}
                 candidates[-1]['positioning'] = [{'paper_id': p, 'addressed_problem': '合成材料提出证据冲突诊断。',
