@@ -56,7 +56,7 @@ def argument_markdown(motivation, proposal, *, include_intervention=True, idea_c
     core = proposal.get('idea_core', {}) if idea_core is None else idea_core
     concrete_idea = ['**' + label + '：** ' + core[key] for key, label in (
         ('concrete_target', '具体利用什么'), ('construction_path', '这些信息怎样得到'),
-        ('capability_bridge', '为什么能带来新能力'), ('essential_difference', '与已有方法的本质区别'))
+        ('capability_bridge', '为什么能解决这个问题'), ('essential_difference', '与已有方法的本质区别'))
         if core.get(key)]
     parts = [
         ('Background · 背景与已有工作', [motivation.get('background'), existing]),
