@@ -108,6 +108,57 @@ class RevisionFlowTests(unittest.TestCase):
         self.assertEqual(record["previous_objections"], review_spec()["issues"])
         self.assertEqual(record["pending_concerns"]["issues"], review_spec()["issues"])
         self.assertEqual(record["previous_revision_instructions"], review_spec()["revision_instructions"])
+        before = len(backend.calls)
+        self.controller(backend).develop_candidate(self.candidate)
+        self.assertEqual(len(backend.calls), before)
+
+    def test_positive_review_still_delivers_its_specific_revision_to_designer(self):
+        reviews = []
+        def review(payload):
+            reviews.append(payload)
+            result = review_spec()
+            result['verdict'] = 'continue'
+            result['issues'][0]['severity'] = 'minor'
+            if len(reviews) > 1:
+                result.update(issues=[], revision_instructions='')
+                result['next_action']['kind'] = 'stop'
+            return result
+        def method(payload):
+            spec = method_spec()
+            spec['method']['changes'] = [f"Explain marginal benefit in revision {payload['round']}."]
+            return spec
+        backend = ScriptedBackend(method, review)
+        self.controller(backend).develop_candidate(self.candidate)
+        self.assertEqual([stage for stage, _ in backend.calls], ['develop', 'review', 'refine', 'review'])
+        refine_payload = next(payload for stage, payload in backend.calls if stage == 'refine')
+        self.assertEqual(refine_payload['review']['verdict'], 'continue')
+        self.assertEqual(refine_payload['review']['issues'][0]['severity'], 'minor')
+        self.assertTrue(self.candidate['spec']['review_responses'])
+
+    def test_completed_older_run_resumes_pending_revision_within_existing_limit(self):
+        def approved_review(_):
+            result = review_spec('stop')
+            result.update(verdict='continue', issues=[], revision_instructions='')
+            return result
+        backend = ScriptedBackend(lambda _: method_spec(), approved_review)
+        controller = self.controller(backend, max_rounds=2)
+        controller.develop_candidate(self.candidate)
+        self.assertEqual(len(self.candidate['versions']), 1)
+        # Reproduce a saved result from the old controller, which ignored this action.
+        pending = review_spec()
+        pending['verdict'] = 'continue'
+        self.candidate['versions'][0]['review'] = pending
+        self.candidate['review'] = pending
+        self.store.put('candidates', self.candidate)
+        before = len(backend.calls)
+        controller.develop_candidate(self.candidate)
+        self.assertEqual([stage for stage, _ in backend.calls[before:]], ['refine', 'review'])
+        self.assertEqual(len(self.candidate['versions']), 2)
+        # A leftover request at the configured limit cannot restart the run.
+        self.candidate['versions'][-1]['review'] = pending
+        before = len(backend.calls)
+        controller.develop_candidate(self.candidate)
+        self.assertEqual(len(backend.calls), before)
 
     def test_changed_action_alone_does_not_count_as_substantive_progress(self):
         def output(payload):

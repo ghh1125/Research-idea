@@ -820,6 +820,12 @@ class Controller:
             self.store.set("elapsed_s", self.previous_elapsed + time.monotonic() - self.started)
 
     def develop_candidate(self, candidate):
+        def revision_requested(review):
+            # A positive assessment can still contain a concrete revision.
+            # An empty review with a leftover action label should not loop.
+            return (review.get('next_action', {}).get('kind') == 'revise'
+                    and bool(review.get('issues') or review.get('revision_instructions', '').strip()))
+
         # Keep an immutable reference for the bounded revision task. This is a
         # record of the original proposal, not an automated semantic drift test.
         snapshot = lambda value: json.loads(json.dumps(value, ensure_ascii=False))
@@ -864,9 +870,17 @@ class Controller:
         # from the last completed round so that the same task input hits cache.
         current = versions[-1]['spec'] if versions else None
         review = versions[-1]['review'] if versions else None
-        if candidate.get("development_complete"):
+        pending_revision = (review is not None and revision_requested(review)
+                            and len(versions) < self.config['max_rounds']
+                            and versions[-1].get('revision_record', {}).get('progress_check', {}).get('outcome')
+                            != 'no_detectable_progress')
+        if candidate.get("development_complete") and not pending_revision:
             self.progress(f"cached candidate {candidate['id']}")
             return
+        if candidate.get('development_complete'):
+            candidate['development_complete'] = False
+            self.progress('[review] 继续已保存的具体修订意见，复用已有文献与技术参考。')
+            self.store.put('candidates', candidate)
         self.prepare_design(candidate)
         for round_index in range(len(versions), self.config["max_rounds"]):
             context = self.context()
@@ -936,7 +950,7 @@ class Controller:
             research_status = "prerequisites_unverified" if feasibility["status"] == "prerequisites_unverified" else "specified_for_test"
             if review["verdict"] == "blocked":
                 research_status = "implementation_blocked"
-            elif review["verdict"] == "refine" or critical:
+            elif review["verdict"] == "refine" or critical or revision_requested(review):
                 research_status = "needs_revision"
             if motivation["status"] == "needs_revision":
                 research_status = "needs_revision"
@@ -1015,7 +1029,7 @@ class Controller:
             revision_record["new_evidence_ids_after_action"] = sorted(after_action_ids - evidence_ids)
             if exact_repeat and after_action_ids != evidence_ids:
                 revision_record["progress_check"]["outcome"] = "evidence_changed_after_action"
-            needs_more_revision = (review["verdict"] == 'refine' or novelty == 'covered'
+            needs_more_revision = (review["verdict"] == 'refine' or revision_requested(review) or novelty == 'covered'
                                    or motivation["status"] == "needs_revision" or critical or feasibility['status'] == 'blocked')
             if exact_repeat and after_action_ids == evidence_ids and needs_more_revision:
                 candidate["research_status"] = "no_detectable_progress"
