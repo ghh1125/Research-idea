@@ -68,6 +68,15 @@ class FullTextTests(unittest.TestCase):
                             parse_qs(urlparse(url).query).get("id") == ["AbC_123-xyz"]
                             for url in candidates))
 
+    def test_database_and_acm_public_pdf_locations_are_retrievable(self):
+        for url in ['https://www.vldb.org/pvldb/vol19/p1-example.pdf',
+                    'https://dl.acm.org/doi/pdf/10.1145/1234567.1234568',
+                    'https://ieeexplore.ieee.org/iel7/123/456/example.pdf']:
+            with self.subTest(url=url):
+                self.assertEqual(fulltext.candidate_pdf_urls({'pdf_url': url}), [url])
+        self.assertEqual(fulltext.candidate_pdf_urls({'pdf_url': 'https://dl.acm.org/doi/epdf/10.1145/1234567.1234568'}),
+                         ['https://dl.acm.org/doi/pdf/10.1145/1234567.1234568'])
+
     def test_arxiv_identifiers_preserve_version(self):
         for record in [{"url": "https://arxiv.org/abs/2401.01234v2"},
                        {"url": "https://arxiv.org/pdf/2401.01234v2.pdf"},

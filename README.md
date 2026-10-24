@@ -72,7 +72,7 @@ research-idea chat --project ./research-projects/my-idea
 | `/input /path/to/brief.txt` | 读取 UTF-8 多行文字并发送讨论 |
 | `/run`、`/stop` | 开始/恢复研究，或停止并保留检查点 |
 | `/papers`、`/papers "带空格的论文.pdf"` | 列出或导入论文 |
-| `/evidence ev_…` | 查看证据所属论文、链接、原文与位置 |
+| `/evidence`、`/evidence 1` | 列出论文依据，按序号查看论文链接、原文与位置 |
 | `/status`、`/report`、`/history` | 查看状态、idea 方案和最近对话 |
 | `/details`、`/details on`、`/details off` | 展开上一步分析，或切换完整过程与易读视图 |
 | `/constraints 单卡24GB，两周` | 保存资源限制 |
@@ -91,7 +91,9 @@ Enter 发送，先按 Esc 再按 Enter 换行，Tab 补全命令，↑↓ 浏览
 
 底部预算标为“本项目累计”，重新打开、清空输入和恢复研究都会保留计数；方案完成后显示“方案已生成”。要开始新的研究，在窗口输入 `/new`，也可以 `/new 你的新方向`。新项目会在当前项目的同级目录生成，沿用设置，论文、对话和用量从空白开始；用 `/status` 查看当前路径，`/open 旧项目路径` 返回原研究。
 
-输出用彩色标签分区：紫色 `[skill]` / `[review]`，青色 `[search]`，蓝色 `[paper]` / `[read]`，黄色 `[analysis]` / `[thinking]`，绿色 `[evidence]` / `[idea]`。证据 ID、来源链接、原文引文和缺口各有强调；文字标签使无颜色终端也可理解。`[thinking]` 仅表示等待模型回复，不展示模型隐藏思维链。每一步先显示主要发现与新引用，完整结构化分析通过 `/details` 展开。当前回复以完整答复显示，研究步骤逐项实时输出，不提供模型 token 流。
+输出用彩色标签分区：紫色 `[skill]` / `[review]`，青色 `[search]`，蓝色 `[paper]` / `[read]`，黄色 `[analysis]` / `[thinking]`，绿色 `[evidence]` / `[idea]`。引用直接显示论文标题、文章链接、页码或行号；原文卡还显示摘录和支持的判断。有已读取 PDF 时可以直接打开对应页，预印本保留实际版本。内部证据编号保留在 JSON 中，读报告和使用 CLI 无需查后台。每一步先显示主要发现与新引用，完整分析通过 `/details` 展开。
+
+运行中的底部状态栏每 0.2 秒刷新旋转指示，显示当前步骤与本步用时；模型没有输出时也会继续转动，完成或停止后自动消失。`[thinking]` 表示等待模型回复；步骤说明和等待时间均来自实际运行状态，当前不提供模型 token 流。
 
 所有步骤事件保存在 `terminal-events.jsonl`，聊天保存在 `research.sqlite3`，方案及论文分析卡保存在 `outputs/`。最终屏幕优先显示 idea；完整原文证据可用 `/evidence` 查询。
 
@@ -266,7 +268,7 @@ research-idea start "如何设计持续演化的 LLM agent 交互环境" \
   --literature-preset ai-recent
 ```
 
-`ai-recent` 先检索 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI 的已核实主会来源，再以 arXiv CS 预印本补充；预印本不会冒认为录用论文。每次混合检索先为会议分配约三分之二的名额，其余留给预印本；会议索引失败或结果不足时可以补充更多 CS 预印本，报告明确记录实际构成和缺口。
+`ai-recent` 先检索下方列出的 20 个会议及对应出版系列，再以 arXiv CS 预印本补充。范围覆盖 AI/NLP/Agent、数据挖掘与数据库、检索与 Web、视觉与多模态；选文仍依据当前研究主题。每次混合检索先为会议来源分配约三分之二的名额，其余留给预印本；会议索引失败或结果不足时可以补充更多 CS 预印本。结果名额有限时，按相关性和时间确定优先顺序，并兼顾不同会议，避免名单后面的会议固定被截掉。
 
 新项目默认限制 CS，采用动态日期：找方法看近 12 个月，候选动机与贡献对照看近 6 个月，每次运行按当天重新计算。已有固定日期项目保持原设置；可用 `/date` 切换，也可以精确覆盖：
 
@@ -301,7 +303,9 @@ research-idea start "conflicting evidence in language models" \
 ```
 
 - `--venues` 自动选择 OpenAlex 路由；会议身份来自出版来源元数据，不从论文标题推测。COLM 按 OpenReview 的已录用 `venueid` 读取，最近最多三届、每届有限分页，再用标题和摘要的英文关键词匹配排序。这不是完整语义检索。
-- `ai-recent` / `ai-recommended` 默认限定为 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI、AAMAS。ICAPS、KR、UAI 不在默认范围。其他会议可显式选择，不自动把整个评级目录加入任务。
+- `ai-recent` / `ai-recommended` 默认包含 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI、AAMAS、KDD、ICDM、ICDE、SIGMOD、VLDB、ACM MM、CVPR、ICCV、SIGIR、WWW。ICAPS、KR、UAI 不在默认范围。会议增加后仍按主题、相关度和时间筛选，全文阅读上限由 `/budget max_papers` 控制。
+- `ACM MM`、`ACMMM`、`MM` 为同一会议；WWW 同时识别 The Web Conference 与 ACM Web Conference，VLDB 检索覆盖 PVLDB。SIGMOD 检索纳入 PACMMOD 系列，结果保留 PACMMOD 的真实出版名称，因为该系列也承载 PODS。评级目录的分级字段与此研究范围分开保存。
+- 已有项目保留保存的会议设置；输入 `/scope ai-recent` 或 `/venues ai-recommended` 即可启用扩展范围。
 - 分别记录 CCF 2026、ICORE2026、TH-CPL 2019 评级来源。CCF 2026 的 ICLR 为 A、IJCAI 为 B；COLM 为单独关注会议。清华版本对应已核实的校内公开文件，不声称是 2026 修订。`ccf-a-ai-2026`、`tsinghua-a-ai-2019`、`core-astar-ai-2026` 是有版本的范围预设；`core-astar-2026` 提供完整 62 个 A* 会议供显式选择。`ccf-a-ai-2022` 只为旧配置兼容保留。
 - 显式会议筛选针对主会议；Findings、workshop、demo、industry 等不被冒认为主会。解析不到会议来源、分页截断或服务失败会记录在 `coverage.gaps`，不会退回无过滤搜索并冒称命中指定会议。
 - `search --full-text` 尝试下载允许的公开学术来源 PDF 并提取正文；未加此参数的手动搜索只导入元数据和摘要。需要 Poppler `pdftotext`。OpenReview 等来源可能要求浏览器校验；无法直接读取时记录缺口，可自行取得 PDF 后用 `add` 导入。

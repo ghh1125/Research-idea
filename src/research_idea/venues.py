@@ -1,7 +1,7 @@
 """A small explicit venue registry, not a complete/current ranking catalog.
 
-The default versioned preset follows the AI conference section of CCF's 2026 catalog.
-Other entries have no CCF grade implied. Matching uses publication-source
+Versioned ranking presets and the user's research scope are separate.
+Entries outside a dated ranking subset have no grade implied. Matching uses publication-source
 metadata only; paper titles are never used to infer a venue.
 """
 from __future__ import annotations
@@ -25,7 +25,19 @@ VENUES = {
     "NAACL": ("Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies", "Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies", "North American Chapter of the Association for Computational Linguistics", "Nations of the Americas Chapter of the Association for Computational Linguistics", "NAACL-HLT"),
     "COLM": ("Conference on Language Modeling",),
     "ICLR": ("International Conference on Learning Representations",),
+    "KDD": ("ACM SIGKDD International Conference on Knowledge Discovery and Data Mining", "ACM SIGKDD Conference on Knowledge Discovery and Data Mining", "ACM International Conference on Knowledge Discovery and Data Mining"),
+    "ICDM": ("IEEE International Conference on Data Mining", "International Conference on Data Mining"),
+    "ICDE": ("IEEE International Conference on Data Engineering", "International Conference on Data Engineering"),
+    "SIGMOD": ("ACM SIGMOD International Conference on Management of Data", "International Conference on Management of Data", "ACM Special Interest Group on Management of Data Conference"),
+    "VLDB": ("Proceedings of the VLDB Endowment", "PVLDB", "International Conference on Very Large Data Bases", "International Conference on Very Large Databases"),
+    "ACMMM": ("ACM International Conference on Multimedia", "ACM Multimedia", "ACM MM", "MM"),
+    "SIGIR": ("International ACM SIGIR Conference on Research and Development in Information Retrieval", "ACM SIGIR Conference on Research and Development in Information Retrieval", "ACM International Conference on Research and Development in Information Retrieval"),
+    "WWW": ("ACM Web Conference", "The Web Conference", "International World Wide Web Conference", "International Conference on World Wide Web"),
 }
+# PACMMOD also publishes PODS: retain its actual series name in results rather
+# than labelling every article as a verified SIGMOD conference paper.
+PUBLICATION_SERIES = {"PACMMOD": ("Proceedings of the ACM on Management of Data",)}
+RELATED_SOURCE_VENUES = {"SIGMOD": ("PACMMOD",)}
 # Verified 2026-10-23 from the official ICORE2026 portal (rank-sorted pages 1–2).
 CORE_2026_URL = "https://portal.core.edu.au/conf-ranks/?search=&by=all&source=ICORE2026&sort=arank&page=1"
 CORE_2026_RECORDS = [
@@ -102,13 +114,22 @@ for _row in CORE_2026_RECORDS:
 VENUES['RSS'] = ('Robotics: Science and Systems', 'Robotics Science and Systems')
 VENUES['AAMAS'] = ('International Joint Conference on Autonomous Agents and Multiagent Systems', 'International Joint Conference on Autonomous Agents and Multi-agent Systems')
 # User-facing LLM/NLP/Agent default; ranking catalogs are metadata, not automatic scope expansion.
-DEFAULT_AI_VENUES = ('NeurIPS', 'ICML', 'ICLR', 'ACL', 'EMNLP', 'NAACL', 'COLM', 'AAAI', 'IJCAI', 'AAMAS')
+DEFAULT_AI_VENUES = ('NeurIPS', 'ICML', 'ICLR', 'ACL', 'EMNLP', 'NAACL', 'COLM', 'AAAI', 'IJCAI', 'AAMAS',
+                     'KDD', 'ICDM', 'ICDE', 'SIGMOD', 'VLDB', 'ACMMM', 'CVPR', 'ICCV', 'SIGIR', 'WWW')
 PRESETS = {"ai-recommended": DEFAULT_AI_VENUES, "tsinghua-a-ai-2019": TH_CPL_2019_AI, "core-astar-ai-2026": CORE_2026_AI, "core-astar-2026": CORE_2026_ASTAR, "ccf-a-ai": CCF_2026_AI, "ccf-a-ai-2026": CCF_2026_AI, "ccf-a-ai-2022": CCF_2022_AI}
 # Source lookup must accommodate renamed series as well as name matching.
 # These are metadata searches; the returned names still require exact matching.
 SOURCE_QUERIES = {
     "NeurIPS": ("Neural Information Processing Systems",),
     "NAACL": (VENUES["NAACL"][1], VENUES["NAACL"][0]),
+    "KDD": ("Knowledge Discovery and Data Mining",),
+    "ICDM": ("International Conference on Data Mining",),
+    "ICDE": ("International Conference on Data Engineering",),
+    "SIGMOD": ("Proceedings of the ACM on Management of Data", "International Conference on Management of Data"),
+    "VLDB": ("Proceedings of the VLDB Endowment", "Very Large Data Bases"),
+    "ACMMM": ("ACM International Conference on Multimedia",),
+    "SIGIR": ("Research and Development in Information Retrieval",),
+    "WWW": ("Web Conference", "World Wide Web"),
 }
 
 
@@ -148,7 +169,7 @@ def supported_venues() -> list[dict]:
              "ccf_catalog_year": 2026, "core_2026_grade": "A*" if name in CORE_2026_ASTAR else None,
              "tsinghua_2019_ai_grade": "A" if name in TH_CPL_2019_AI else None, "ccf_2022_ai_grade": "A" if name in CCF_2022_AI else None}
             for name, aliases in VENUES.items()] + [
-        {"code": "ai-recommended", "name": "ai-recommended", "description": "Selected LLM/NLP/Agent venues; CCF2026/TH-CPL2019/ICORE2026 provenance; includes COLM/AAMAS", "expands_to": list(DEFAULT_AI_VENUES)},
+        {"code": "ai-recommended", "name": "ai-recommended", "description": "Selected LLM/NLP/Agent, data mining, data management, retrieval, Web, vision and multimedia venues; papers are screened for topic relevance", "expands_to": list(DEFAULT_AI_VENUES)},
         {"code": "tsinghua-a-ai-2019", "name": "tsinghua-a-ai-2019", "description": "TH-CPL 2019 AI/Pattern Recognition A conferences; verified public university document, not asserted to be a 2026 revision", "expands_to": list(TH_CPL_2019_AI), "catalog_url": TH_CPL_URL},
         {"code": "core-astar-ai-2026", "name": "core-astar-ai-2026", "description": "ICORE2026 A* in FoR 4602, 4603 and 4611", "expands_to": list(CORE_2026_AI), "catalog_url": CORE_2026_URL},
         {"code": "core-astar-2026", "name": "core-astar-2026", "description": "All 62 ICORE2026 A* conferences, across CS fields", "expands_to": list(CORE_2026_ASTAR), "catalog_url": CORE_2026_URL},
@@ -179,7 +200,7 @@ def canonical_venue(source_name: str) -> str | None:
     text = re.sub(r"\b(?:first|second|third|fourth|fifth|annual)\b", " ", text)
     text = re.sub(r"^\s*proceedings\s+of\s+(?:the\s+)?", "", text)
     key = _key(text)
-    for name, aliases in VENUES.items():
+    for name, aliases in {**VENUES, **PUBLICATION_SERIES}.items():
         for alias in (name, *aliases):
             normalized = re.sub(r"\bannual\b", " ", alias.casefold())
             normalized = re.sub(r"^proceedings\s+of\s+(?:the\s+)?", "", normalized)

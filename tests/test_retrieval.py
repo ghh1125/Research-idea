@@ -50,6 +50,55 @@ class VenueRetrievalTests(unittest.TestCase):
                      "Transactions of the Association for Computational Linguistics"]:
             self.assertIsNone(canonical_venue(name))
 
+    def test_extended_venues_accept_real_series_and_user_aliases(self):
+        self.assertEqual(lit.normalize_venues(['kdd', 'icdm', 'icde', 'sigmod', 'vldb', 'acm mm', 'cvpr', 'iccv', 'sigir', 'www']),
+                         ['KDD', 'ICDM', 'ICDE', 'SIGMOD', 'VLDB', 'ACMMM', 'CVPR', 'ICCV', 'SIGIR', 'WWW'])
+        for name, expected in [
+            ('Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining', 'KDD'),
+            ('2026 IEEE International Conference on Data Mining', 'ICDM'),
+            ('2026 IEEE 42nd International Conference on Data Engineering', 'ICDE'),
+            ('Proceedings of the 2026 International Conference on Management of Data', 'SIGMOD'),
+            ('Proceedings of the VLDB Endowment', 'VLDB'),
+            ('Proceedings of the 34th ACM International Conference on Multimedia', 'ACMMM'),
+            ('Proceedings of the 49th International ACM SIGIR Conference on Research and Development in Information Retrieval', 'SIGIR'),
+            ('Proceedings of the ACM Web Conference 2026', 'WWW'),
+        ]:
+            with self.subTest(name=name):
+                self.assertEqual(canonical_venue(name), expected)
+        self.assertIsNone(canonical_venue('Companion Proceedings of the ACM Web Conference 2026'))
+        self.assertIsNone(canonical_venue('The VLDB Journal'))
+
+    def test_sigmod_lookup_includes_pacmmod_but_retains_its_series_identity(self):
+        queries = []
+        name = 'Proceedings of the ACM on Management of Data'
+        def request(url, *_args):
+            params = parse_qs(urlparse(url).query)
+            if urlparse(url).path == '/sources':
+                queries.append(params['search'][0])
+                return encoded({'results': [{'id': 'S42', 'display_name': name}] if params['search'][0] == name else []})
+            return encoded({'results': [work('W42', 'S42', name)]})
+        with patch.object(lit, '_request_bytes', side_effect=request):
+            results = lit.discover('retrieval', 'openalex', venues=['SIGMOD'])
+        self.assertIn(name, queries)
+        self.assertEqual(results[0]['venue'], 'PACMMOD')
+        self.assertEqual(results[0]['requested_venue'], 'SIGMOD')
+        self.assertEqual(results.coverage['selected_counts']['SIGMOD'], 1)
+        self.assertEqual(results[0]['venue_name'], name)
+
+    def test_last_requested_venue_can_win_a_small_result_limit_by_relevance(self):
+        def request(url, *_args):
+            params = parse_qs(urlparse(url).query)
+            if urlparse(url).path == '/sources':
+                return encoded({'results': [{'id': 'S1', 'display_name': 'EMNLP'}, {'id': 'S2', 'display_name': 'ACM Web Conference'}]})
+            sid = params['filter'][0].split(':')[1]
+            record = work('W' + sid, sid, 'EMNLP' if sid == 'S1' else 'ACM Web Conference')
+            record['display_name'] = 'Grammatical parsing' if sid == 'S1' else 'Retrieval for language agents'
+            record['abstract_inverted_index'] = {}
+            return encoded({'results': [record]})
+        with patch.object(lit, '_request_bytes', side_effect=request):
+            results = lit.discover('retrieval language agents', 'openalex', limit=1, venues=['EMNLP', 'WWW'])
+        self.assertEqual(results[0]['venue'], 'WWW')
+
     def test_arxiv_cannot_claim_accepted_venue_filtering(self):
         with patch.object(lit, "_request_bytes") as request, self.assertRaisesRegex(lit.LiteratureError, "choose openalex"):
             lit.discover("retrieval", venues=["EMNLP"])
@@ -177,7 +226,7 @@ class VenueRetrievalTests(unittest.TestCase):
             return encoded({"results": [work("W" + sid + str(i), sid, "EMNLP" if sid == "S1" else "NAACL") for i in range(3)]})
         with patch.object(lit, "_request_bytes", side_effect=request):
             results = lit.discover("retrieval", "openalex", limit=3, venues=["EMNLP", "NAACL", "COLM"])
-        self.assertEqual([p["venue"] for p in results], ["EMNLP", "NAACL", "COLM"])
+        self.assertCountEqual([p["venue"] for p in results], ["EMNLP", "NAACL", "COLM"])
         self.assertEqual(set(filters), {"primary_location.source.id:S1", "primary_location.source.id:S2"})
 
     def test_invalid_provider_record_does_not_drop_valid_records(self):

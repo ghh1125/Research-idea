@@ -74,8 +74,37 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         store.replace_evidence('p1', [{'id': 'ev_123', 'paper_id': 'p1', 'quote': 'exact words', 'page': 4}])
         store.close()
         await self.chat.handle('/evidence ev_123')
-        self.assertIn('https://example.org/p1', self.events[-2][1])
+        self.assertIn('https://example.org/p1', self.events[-1][1])
         self.assertIn('exact words', self.events[-1][1])
+        self.assertNotIn('ev_123', self.events[-1][1])
+        await self.chat.handle('/evidence')
+        self.assertIn('1. [A paper]', self.events[-1][1])
+        await self.chat.handle('/evidence 1')
+        self.assertIn('exact words', self.events[-1][1])
+        self.chat.show('analysis', '此判断依据 ev_123。')
+        self.assertIn('[A paper](https://example.org/p1)', self.events[-1][1])
+        self.assertNotIn('ev_123', self.events[-1][1])
+
+    async def test_spinner_advances_while_waiting_and_disappears_when_done(self):
+        self.chat.job = asyncio.create_task(asyncio.sleep(60))
+        self.chat.started = self.chat.step_started = 100
+        self.chat.state = '4/4 · 设计具体方法'
+        try:
+            with patch('research_idea.chat.shutil.get_terminal_size', return_value=os.terminal_size((120, 24))):
+                with patch('research_idea.chat.time.monotonic', return_value=102):
+                    first = ''.join(text for _, text in self.chat.toolbar())
+                with patch('research_idea.chat.time.monotonic', return_value=102.25):
+                    second = ''.join(text for _, text in self.chat.toolbar())
+            self.assertIn('⠋', first)
+            self.assertIn('⠙', second)
+            self.assertIn('设计具体方法 · 本步 0:02', second)
+            self.assertIn('Ctrl+C 停止', second)
+        finally:
+            self.chat.job.cancel()
+            await asyncio.gather(self.chat.job, return_exceptions=True)
+        idle = ''.join(text for _, text in self.chat.toolbar())
+        self.assertNotRegex(idle, '[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]')
+        self.assertNotIn('本步', idle)
 
     async def test_chat_followup_uses_history_selected_model_and_shared_budget(self):
         captured = []

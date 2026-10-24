@@ -10,6 +10,7 @@ import re
 import shlex
 import signal
 import shutil
+import sqlite3
 import sys
 import time
 
@@ -18,6 +19,7 @@ from .interactive import read_topic_file
 from .locking import project_lock
 from .store import Store
 from .presentation import STATUS_LABELS
+from .citations import Citations, EVIDENCE_ID
 
 INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认成为正式研究主题。
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
@@ -25,7 +27,7 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
 6. 跟随彩色 [search] [paper] [read] [analysis] [review] 查看步骤和证据。
-7. 最后 [idea] 显示方案与第一步验证；/report 再看方案，/evidence ID 追溯原文。
+7. 最后 [idea] 显示方案与第一步验证；论文标题旁直接给链接，/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
@@ -38,7 +40,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /reasoning [强度]        选择思考强度   /account      登录方式
 /topic [研究方向]        查看/设置主题  /input 路径   读取多行输入
 /run                    开始/恢复研究  /stop         停止当前任务
-/papers [路径…]          列表/导入论文  /evidence ID  查看原文依据
+/papers [路径…]          列表/导入论文  /evidence [序号] 查看原文依据
 /status                 研究状态      /report       显示 idea 方案
 /details [on|off]        展开上一步分析；on/off 切换完整过程输出
 /config                 当前设置      /constraints [文字] 资源限制
@@ -164,6 +166,7 @@ class Chat:
         self.job = None
         self.process = None
         self.started = 0
+        self.step_started = 0
         self.base_elapsed = 0
         self.state = '就绪'
         self.output = output
@@ -177,6 +180,15 @@ class Chat:
     def show(self, tag, text):
         if tag == 'detail' and not self.details_full:
             return
+        if EVIDENCE_ID.search(str(text)):
+            try:
+                store = Store(self.project, readonly=True)
+                try:
+                    text = Citations.from_store(store).text(text)
+                finally:
+                    store.close()
+            except (OSError, RuntimeError, sqlite3.Error):
+                pass
         if self.output:
             self.output(tag, safe_text(text))
         else:
@@ -207,11 +219,18 @@ class Chat:
                 value = value[:-1]
             return value + '…'
         state = self.state if self.busy else STATUS_LABELS.get(status, '就绪')
+        spinner = ''
+        if self.busy:
+            tick = time.monotonic()
+            spinner = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'[int(tick * 5) % 10] + ' '
+            seconds = max(0, int(tick - (self.step_started or self.started)))
+            state += f' · 本步 {seconds // 60}:{seconds % 60:02d}'
         if not self.busy and status == 'running':
             state = '已有进度'
         footer = (' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else
                   ' /intro 使用介绍 · /new 新研究 · ' + ('/report 看方案' if status == 'completed' else '/run 开始研究'))
-        return [('bg:ansiblue ansiwhite', fit(f" {self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state} · {self.project.name}") + '\n'),
+        context = '' if self.busy else ' · ' + self.project.name
+        return [('bg:ansiblue ansiwhite', fit(f" {spinner}{self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state}{context}") + '\n'),
                 ('bg:ansiblack ansiwhite', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
                 ('bg:ansiblack ansicyan', fit(footer))]
 
@@ -291,6 +310,7 @@ class Chat:
         finally:
             store.close()
         self.started, self.state = time.monotonic(), '研究中' if mode == 'run' else '答复中'
+        self.step_started = self.started
         self.job = asyncio.create_task(self.work(mode, message))
         # Let process creation begin before the next prompt or /stop.
         await asyncio.sleep(0)
@@ -312,8 +332,13 @@ class Chat:
                 event = json.loads(line)
                 if event['tag'] in {'error', 'budget'}:
                     reported_error = True
-                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea'}:
-                    self.state = TAG_LABELS[event['tag']]
+                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking'}:
+                    heading = event['text'].split('\n', 1)[0]
+                    state = (re.sub(r'\s*·\s*模型调用.*$', '', heading) if re.match(r'\d/4 · ', heading)
+                             else TAG_LABELS[event['tag']])
+                    if state != self.state or '模型调用' in heading or event['tag'] == 'thinking':
+                        self.step_started = time.monotonic()
+                    self.state = state
                 with log.open('a', encoding='utf-8') as stream:
                     stream.write(json.dumps(event, ensure_ascii=False) + '\n')
                 self.show(event['tag'], event['text'])
@@ -456,14 +481,20 @@ class Chat:
                     self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}")
                 elif command == '/papers':
                     kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
-                    self.show('paper', '\n\n'.join(f"{i}. {p['title']} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}\n   {p['id']}\n   {p.get('url', '')}" for i, p in enumerate(store.rows('papers'), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
+                    citations = Citations.from_store(store)
+                    self.show('paper', '\n\n'.join(f"{i}. {citations.paper(p['id'])} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}" for i, p in enumerate(store.rows('papers'), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
                 elif command == '/evidence':
-                    ev = next((e for e in store.rows('evidence') if e['id'] == value), None)
-                    if not ev:
-                        raise ValueError('未找到证据；用 /evidence ev_… 查询')
-                    paper = next((p for p in store.rows('papers') if p['id'] == ev['paper_id']), {})
-                    self.show('paper', f"{paper.get('title', '')}\n{paper.get('url', '')}")
-                    self.show('evidence', f"{ev['id']}\n{ev.get('statement', '')}\n\n原文：{ev['quote']}\n原文位置：页 {ev.get('page', '?')} / 行 {ev.get('line', '?')}\n成立条件：{ev.get('conditions', '')}")
+                    citations = Citations.from_store(store)
+                    entries = list(citations.evidence.values())
+                    if not value:
+                        self.show('evidence', '\n\n'.join(f"{i}. {citations.reference(e['id'])}\n   {e.get('statement', '')}" for i, e in enumerate(entries, 1)) +
+                                  '\n\n输入 /evidence 序号 查看对应原文。' if entries else '还没有原文依据；/run 阅读论文后会在这里显示。')
+                    else:
+                        ev = (entries[int(value) - 1] if value.isascii() and value.isdecimal() and 1 <= int(value) <= len(entries)
+                              else citations.evidence.get(value))
+                        if not ev:
+                            raise ValueError('未找到这条原文；输入 /evidence 查看列表，再选择序号。')
+                        self.show('evidence', citations.block(ev))
                 else:
                     for m in store.get('chat_messages', [])[-12:]:
                         self.show(m['role'], m['content'])
@@ -618,7 +649,7 @@ class Chat:
         def stop(event):
             event.app.exit(result='stop')
         app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=3)),
-                          key_bindings=keys, full_screen=False, refresh_interval=1)
+                          key_bindings=keys, full_screen=False, refresh_interval=0.2)
         async def finish():
             await asyncio.shield(self.job)
             if app.is_running:

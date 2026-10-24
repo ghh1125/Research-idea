@@ -16,13 +16,14 @@ from .report import export_report
 from .schema import obj, STR, validate
 from .store import Store, now
 from .presentation import STAGE_LABELS, activity_summary, skill_label, error_summary
+from .citations import Citations
 
 CHAT_SCHEMA = obj(answer=STR)
 LABELS = {
     'research_question': '研究问题', 'scope': '检索范围', 'queries': '检索词',
     'query': '查询', 'rationale': '理由', 'purpose': '目的', 'assumptions': '假设',
     'problem': '问题', 'observations': '观察', 'competing_explanations': '竞争解释',
-    'unresolved_questions': '未知项', 'evidence_ids': '证据 ID', 'candidates': '候选',
+    'unresolved_questions': '未知项', 'evidence_ids': '原文依据', 'candidates': '候选',
     'title': '标题', 'hypothesis': '假设', 'mechanism': '机制', 'intervention': '方法',
     'prediction': '预测', 'falsifier': '证伪条件', 'why_it_matters': '意义',
     'statement': '结论', 'quote': '原文', 'conditions': '成立条件', 'source_section': '原文位置',
@@ -154,15 +155,11 @@ def research(project):
                 store.set('last_activity', {'stage': stage, 'result': result})
                 activity(stage, result, cached)
                 ids = set(re.findall(r'ev_[a-zA-Z0-9_]+', json.dumps(result)))
-                papers = {p['id']: p for p in store.rows('papers')}
+                citations = Citations.from_store(store)
                 for evidence in store.rows('evidence'):
                     if evidence['id'] in ids and evidence['id'] not in shown_evidence:
                         shown_evidence.add(evidence['id'])
-                        paper = papers.get(evidence['paper_id'], {})
-                        event('evidence', f"{evidence['id']} ← {paper.get('title', evidence['paper_id'])}\n"
-                              f"{paper.get('url', '')}\n原文：{evidence['quote']}\n"
-                              f"原文位置：页 {evidence.get('page', '?')} / 行 {evidence.get('line', '?')}\n"
-                              f"类型：{evidence.get('kind', '')}；成立条件：{evidence.get('conditions', '')}")
+                        event('evidence', citations.block(evidence))
             shown_evidence = {e['id'] for e in store.rows('evidence')}
             controller = Controller(store, make_backend(cfg, project), cfg, progress=progress, activity=findings)
             event('skill', '本轮分析方法：' + ' → '.join(skill_label(s['name']) for s in controller.skills) if controller.skills else '使用任务内的分析方法')
@@ -171,7 +168,7 @@ def research(project):
                 window = config_scope(cfg, purpose)
                 event(purpose, f"{label} · {window['since']} → {window['until']}\n按问题动机和具体主张比较，已有方法也可以用于新的研究问题。")
             for paper in store.rows('papers'):
-                event('paper', f"{paper['title']} · {paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}\n资料类型：{paper.get('content_kind', '')}")
+                event('paper', f"{Citations([paper]).paper(paper['id'])} · {paper.get('year', '')}\n资料类型：{paper.get('content_kind', '')}")
             try:
                 controller.run()
             finally:

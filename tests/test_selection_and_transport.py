@@ -60,7 +60,8 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(rows['EMNLP']['tsinghua_2019_ai_grade'], 'A')
         self.assertIsNone(rows['COLM']['ccf_2026_ai_grade'])
         self.assertEqual(len(normalize_venues(['core-astar-2026'])), 62)
-        self.assertEqual(AI_VENUES, ['NeurIPS', 'ICML', 'ICLR', 'ACL', 'EMNLP', 'NAACL', 'COLM', 'AAAI', 'IJCAI', 'AAMAS'])
+        self.assertEqual(AI_VENUES, ['NeurIPS', 'ICML', 'ICLR', 'ACL', 'EMNLP', 'NAACL', 'COLM', 'AAAI', 'IJCAI', 'AAMAS',
+                                    'KDD', 'ICDM', 'ICDE', 'SIGMOD', 'VLDB', 'ACMMM', 'CVPR', 'ICCV', 'SIGIR', 'WWW'])
         self.assertEqual(normalize_venues(['ai-recommended', 'COLM']), AI_VENUES)
 
 

@@ -26,7 +26,7 @@ from .retrieval_transport import retrieval_session, request_with_policy, retry_s
 from .search_scope import AI_VENUES, normalize_scope, exclusion_reason
 import xml.etree.ElementTree as ET
 
-from .venues import SOURCE_QUERIES, VENUES, canonical_venue, normalize_venues, supported_venues
+from .venues import SOURCE_QUERIES, RELATED_SOURCE_VENUES, VENUES, canonical_venue, normalize_venues, supported_venues
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_SOURCE_BYTES = 32 * 1024 * 1024
@@ -292,7 +292,7 @@ def _openalex_sources(venues: list[str], deadline: float, headers: dict,
                 if not isinstance(row, dict):
                     continue
                 sid, name = _source_id(row.get("id")), _clean(row.get("display_name"))
-                if sid and canonical_venue(name) == venue:
+                if sid and canonical_venue(name) in (venue, *RELATED_SOURCE_VENUES.get(venue, ())):
                     matches.append({"id": sid, "display_name": name})
                     seen_names.setdefault(name.casefold(), set()).add(sid)
             ambiguous = {name for name, ids in seen_names.items() if len(ids) > 1}
@@ -478,8 +478,8 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
 
     arXiv accepts native syntax; plain terms/phrases use all: joined with AND.
     OpenAlex uses a bearer token only when api_key_env is explicitly supplied.
-    Venue scopes use one source-resolution page per known name (two for NAACL's
-    rename) and one work page per venue; COLM uses public accepted-note scans.
+    Venue scopes use one source-resolution page per configured series name
+    and one work page per venue; COLM uses public accepted-note scans.
     Coverage metadata reports unresolved venues, errors and pagination limits.
     """
     if not isinstance(query, str) or not query.strip() or len(query) > 4000:
@@ -505,7 +505,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
     if source == "hybrid":
         venues = venues or list(AI_VENUES)
         coverage["requested_venues"] = venues
-        coverage["priority"] = "verified conferences first; up to one third reserved for CS arXiv preprints"
+        coverage["priority"] = "conference proceedings and associated publication series first; up to one third reserved for CS arXiv preprints"
         coverage["providers"] = {}
         primary_limit = limit - limit // 3
         papers = []
@@ -622,7 +622,11 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
                         if not matched or matched != requested_venue:
                             coverage["gaps"].append("OpenAlex returned a work outside the requested source-ID filter; excluded")
                             continue
-                        paper["venue"] = matched
+                        if paper.get('venue') in RELATED_SOURCE_VENUES.get(matched, ()):
+                            paper['requested_venue'] = matched
+                            paper['venue_note'] = 'Associated publication series; the specific conference track is not established by the series name alone.'
+                        else:
+                            paper["venue"] = matched
                         pools[matched].append(paper)
                     else:
                         papers.append(paper)
@@ -645,9 +649,18 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         except LiteratureError as exc:
             coverage['gaps'].append(f'Official proceedings fallback: {exc}')
     if venues:
-        papers = _interleave(list(pools.values()), limit)
+        # A larger preset must not always truncate the venues listed last.
+        # Order venue pools by their best topical/date-ranked result, retaining
+        # round-robin diversity among the relevant venues.
+        from .selection import rank_metadata
+        ranked = rank_metadata([p for pool in pools.values() for p in pool], [query])
+        ordered = {}
+        for paper in ranked:
+            venue = paper.get('requested_venue') or paper.get('venue')
+            ordered.setdefault(venue, []).append(paper)
+        papers = _interleave(list(ordered.values()), limit)
         coverage["matched_counts"] = {venue: len(pool) for venue, pool in pools.items()}
-        coverage["selected_counts"] = {venue: sum(p.get("venue") == venue for p in papers) for venue in venues}
+        coverage["selected_counts"] = {venue: sum((p.get('requested_venue') or p.get('venue')) == venue for p in papers) for venue in venues}
         if limit < sum(bool(pool) for pool in pools.values()):
             coverage["gaps"].append("Result limit is smaller than the number of matched venues; not every venue is represented")
         coverage["gaps"].extend(f"{venue}: no matching papers in the bounded retrieved metadata" for venue, pool in pools.items() if not pool)

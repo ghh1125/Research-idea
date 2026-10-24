@@ -84,3 +84,12 @@
 - [CCFDDL](https://github.com/ccfddl/ccf-deadlines)：提供 CCF/CORE/THCPL 三套筛选和会议主页、时间，作为人工查阅入口；评级采用上述明确版本的原文。
 - [OpenAlex 错误说明](https://help.openalex.org/api/errors/)：429 可能是速率或每日额度；403 不应无限重试。本轮实测 429 的剩余额度为 0，Retry-After 超过十小时。
 - [COLM 2026 官方录用列表](https://colm.cc/Conferences/2026/AcceptedPapers)、[ICLR 2026 论文列表](https://iclr.cc/virtual/2026/papers.html)、[ACL 2026 长文集](https://aclanthology.org/2026.acl-long/)、[PMLR 目录](https://proceedings.mlr.press/)、[NeurIPS 2025 主会](https://papers.nips.cc/paper_files/paper/2025/vol38-main-conference)：索引 API 受限时的公开替代来源。只记录目录实际提供的信息。
+
+### 扩展会议的出版名称（2026-10-24 核对）
+
+- [ACM Multimedia 官方页面](https://2026.acmmm.org/)：ACM MM 的完整名称为 ACM International Conference on Multimedia。
+- [The Web Conference 官方页面](https://www2026.thewebconf.org/)：WWW 同时使用 The Web Conference / ACM Web Conference 名称。
+- [VLDB Endowment](https://www.vldb.org/)：VLDB 的研究论文评审通过 PVLDB 进行；检索包含 Proceedings of the VLDB Endowment，与 The VLDB Journal 分开。
+- [SIGMOD 2026 研究论文说明](https://2026.sigmod.org/calls_papers_sigmod_research.shtml)：研究论文发表在对应 PACMMOD 期次。[DBLP 的 PACMMOD 目录](https://dblp.org/db/journals/pacmmod/index.html)同时列出 SIGMOD 和 PODS 的出版关联，因此检索纳入该系列时保留真实系列名称。
+
+这次扩展更新研究范围、名称匹配与公开正文来源。新增会议使用已匹配的 OpenAlex 出版源检索，不代表为每个会议都增加了独立官方目录适配器。

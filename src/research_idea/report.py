@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from .presentation import idea_markdown
+from .citations import Citations
 
 import json
 from pathlib import Path
@@ -61,11 +62,12 @@ def feasibility_markdown(candidate, spec):
     return '\n'.join(lines)
 
 
-def candidate_markdown(candidate):
+def candidate_markdown(candidate, citations=None):
     lines = [idea_markdown(candidate), '']
     spec = candidate.get('spec') or {}
     if not spec:
-        return '\n'.join(lines)
+        text = '\n'.join(lines)
+        return citations.text(text) if citations else text
     method = spec['method']
     lines.extend(['### 实现细节', ''])
     lines.extend(['**具体改动：**', '', bullets(method['changes']), '', '**执行步骤：**', '',
@@ -78,7 +80,7 @@ def candidate_markdown(candidate):
         lines.extend(['**设计假设：** ' + assumption['statement'], '', '检验方式：' + assumption['check'], ''])
     lines.extend(['### 最近工作对照', ''])
     for overlap in spec['prior_art']['overlaps']:
-        lines.extend(['#### ' + overlap['paper_id'], '',
+        lines.extend(['#### ' + (citations.paper(overlap['paper_id']) if citations else overlap['paper_id']), '',
                       '**已有工作涉及：** ' + overlap['covered_claim'], '',
                       '**本方案继续研究：** ' + overlap['remaining_gap'], '', comparison_table(overlap), ''])
     lines.extend([feasibility_markdown(candidate, spec), '', '### 完整首测协议', ''])
@@ -96,14 +98,15 @@ def candidate_markdown(candidate):
     refs = spec['motivation']['evidence_ids']
     if refs:
         lines.extend(['### 主要原文依据', '', ', '.join(refs), ''])
-    return '\n'.join(lines)
+    text = '\n'.join(lines)
+    return citations.text(text) if citations else text
 
 
-def claim_audits_markdown(audits):
+def claim_audits_markdown(audits, citations=None):
     lines = ["## 论文主张与实验支持", "", "以下是对已读取论文材料的审计，不是独立复现。主张的范围、实验的范围和实际有效性必须分开；未读到不能当作论文没有。", ""]
     for audit in audits.values():
         coverage = audit.get("reading_coverage", {})
-        lines.extend([f"### {audit['paper_id']}", "",
+        lines.extend(["### " + (citations.paper(audit['paper_id']) if citations else audit['paper_id']), "",
             f"审计状态：{audit['status']}；实验阅读：{coverage.get('experiments', 'unavailable')}；附录阅读：{coverage.get('appendix', 'unavailable')}", "",
             coverage.get("notes", ""), ""])
         for claim in audit.get("claims", []):
@@ -117,11 +120,12 @@ def claim_audits_markdown(audits):
             for field, label in (("limitations", "限制"), ("confounds", "混杂因素"), ("missing_controls", "待核查的对照"), ("audit_gaps", "证据缺口"), ("next_reading", "下一步阅读")):
                 if claim.get(field):
                     lines.extend([f"**{label}：**", "", bullets(claim[field]), ""])
-    return "\n".join(lines)
+    text = '\n'.join(lines)
+    return citations.text(text) if citations else text
 
 
-def paper_card_markdown(card):
-    lines = [f"# 论文分析卡：{card['paper_id']}", "", f"状态：{card['status']}", ""]
+def paper_card_markdown(card, citations=None):
+    lines = ["# 论文分析卡：" + (citations.paper(card['paper_id']) if citations else card['paper_id']), "", f"状态：{card['status']}", ""]
     source_inventory = card.get("inventory")
     if source_inventory:
         lines.extend([f"文本覆盖：{source_inventory['text_coverage']}；已提供 {source_inventory['characters_supplied']} / {source_inventory['characters']} 字符。", "",
@@ -133,7 +137,8 @@ def paper_card_markdown(card):
             bullets(source_inventory['inventory_gaps']), ""])
     if card['status'] != 'analyzed':
         lines.extend([card.get('reason', '分析尚未完成。'), ""])
-        return "\n".join(lines)
+        text = '\n'.join(lines)
+        return citations.text(text) if citations else text
     lines.extend([f"论文类型：{card['paper_type']}", "", "## 九维分析框架", ""])
     for item in card['framework']:
         lines.extend([f"### {FACET_LABELS[item['dimension']]}", "", f"[{item['status']}] {item['summary']}", "",
@@ -164,7 +169,8 @@ def paper_card_markdown(card):
                   table(["目标", "问题", "影响", "执行记录"], [(r['target_id'], r['question'], r['decision_impact'], r['status']) for r in card.get('followup_attempts', [])]), "",
                   "**仍建议补读（不代表已执行）：**", "", bullets([r['target_id'] + "：" + r['question'] for r in card['followup_requests']]), "",
                   card['assessment_boundary'], ""])
-    return "\n".join(lines)
+    text = '\n'.join(lines)
+    return citations.text(text) if citations else text
 
 
 def export_report(store: Store, output_dir: Path | None = None):
@@ -174,6 +180,7 @@ def export_report(store: Store, output_dir: Path | None = None):
     candidates = store.rows("candidates")
     papers = store.rows("papers")
     evidence = store.rows("evidence")
+    citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
     data = {"schema_version": 4, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
@@ -202,13 +209,13 @@ def export_report(store: Store, output_dir: Path | None = None):
     if candidates:
         lines.extend(["## Idea 与第一步验证", ""])
         for candidate in candidates:
-            lines.extend([idea_markdown(candidate), ''])
+            lines.extend([citations.text(idea_markdown(candidate)), ''])
             compared = [o['paper_id'] for o in (candidate.get('spec') or {}).get('prior_art', {}).get('overlaps', [])]
             references = compared or candidate['proposal'].get('closest_work_ids', [])
             linked = [p for ref in dict.fromkeys(references) for p in papers if p['id'] == ref][:3]
             if linked:
                 lines.extend(['**相关论文：**', ''])
-                lines.extend('- ' + (f"[{p['title']}]({p['url']})" if p.get('url') else p['title']) for p in linked)
+                lines.extend('- ' + citations.paper(p['id']) for p in linked)
                 lines.append('')
             lines.extend([f"[展开方法与论文对照]({candidate['id']}.md)", ""])
     else:
@@ -228,18 +235,18 @@ def export_report(store: Store, output_dir: Path | None = None):
     if not candidates:
         lines.extend([data["no_candidate_reason"] or "暂无已完成的候选。检查项目状态和任务日志。", ""])
     for c in candidates:
-        lines.append(candidate_markdown(c))
-        (target / (c["id"] + ".md")).write_text(("# 合成演示；非科学结论\n\n" if demo else "") + candidate_markdown(c), encoding="utf-8")
+        lines.append(candidate_markdown(c, citations))
+        (target / (c["id"] + ".md")).write_text(("# 合成演示；非科学结论\n\n" if demo else "") + candidate_markdown(c, citations), encoding="utf-8")
     if data["paper_claim_audits"]:
-        lines.append(claim_audits_markdown(data["paper_claim_audits"]))
+        lines.append(claim_audits_markdown(data["paper_claim_audits"], citations))
     if cards:
         (target / "papers").mkdir(exist_ok=True)
         lines.extend(["## 逐篇结构化分析", ""])
         for key, card in cards.items():
             filename = data['paper_card_files'][key]
-            (target / filename).write_text(paper_card_markdown(card), encoding='utf-8')
+            (target / filename).write_text(paper_card_markdown(card, citations), encoding='utf-8')
             coverage = card.get('inventory') or {}
-            lines.append(f"- `{key}`：{card['status']}；文本覆盖：{coverage.get('text_coverage', 'unavailable')}；[分析卡]({filename})")
+            lines.append(f"- {citations.paper(key)}；文本覆盖：{coverage.get('text_coverage', 'unavailable')}；[分析卡]({filename})")
         lines.append("")
     if data["search_plans"]:
         lines.extend(["## 研究意图与检索计划", "", "计划不等于已执行；实际结果和覆盖缺口见下一节。", ""])
@@ -270,16 +277,16 @@ def export_report(store: Store, output_dir: Path | None = None):
     lines.extend(["## 文献与来源", ""])
     for p in papers:
         venue = p.get('venue') or ('arXiv 预印本' if p.get('source') == 'arxiv' else '会议未核实')
-        lines.append(f"- `{p['id']}` — {p['title']}；{p.get('publication_date') or p.get('year') or '日期未核实'}；{venue}；{', '.join(p.get('categories', [])) or '无 arXiv 分类'}；{p.get('content_kind', 'abstract')}；{p.get('url', '')}")
+        lines.append(f"- {citations.paper(p['id'])}；{p.get('publication_date') or p.get('year') or '日期未核实'}；{venue}；{p.get('content_kind', 'abstract')}")
         if p.get("full_text_error"):
             lines.append("  全文缺口：" + str(p["full_text_error"]))
         if p.get('full_text_origin'):
             origin = p['full_text_origin']
             lines.append(f"  实际阅读版本：arXiv {origin.get('version') or '版本未标明'}；{origin.get('url', '')}；会议元数据与预印本版本分别保留。")
     lines.extend(["", "## 原文证据", ""])
-    for e in evidence:
-        lines.extend([f"### {e['id']}", "", f"来源 `{e['paper_id']}`，第 {e['page']} 页 / 第 {e['line']} 行；{e['source_kind']}；{e['reading_coverage']}", "", e["statement"], "", "> " + e["quote"].replace("\n", "\n> "), "", "条件：" + e["conditions"], ""])
+    for index, e in enumerate(evidence, 1):
+        lines.extend([f"### 原文依据 {index}", "", citations.block(e, markdown=True), ""])
     md_path = target / "report.md"
     lines.extend(["", "</details>"])
-    md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    md_path.write_text(citations.text("\n".join(lines)) + "\n", encoding="utf-8")
     return md_path, json_path

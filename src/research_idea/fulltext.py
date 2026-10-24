@@ -28,6 +28,7 @@ ALLOWED_HOSTS = frozenset({
     "arxiv.org", "www.arxiv.org", "export.arxiv.org",
     "proceedings.mlr.press", "proceedings.neurips.cc", "papers.nips.cc", "papers.neurips.cc",
     "ojs.aaai.org", "ijcai.org", "www.ijcai.org", "openaccess.thecvf.com",
+    "vldb.org", "www.vldb.org", "dl.acm.org", "ieeexplore.ieee.org",
 })
 
 
@@ -77,6 +78,8 @@ def _pdf_candidate(raw) -> str | None:
         identifier = _arxiv(url)
         if identifier:
             return "https://arxiv.org/pdf/" + identifier[0] + (identifier[1] or "")
+    elif host == 'dl.acm.org' and re.fullmatch(r'/doi/(?:e?pdf)/10\.\d+/[^/]+', path):
+        return url.replace('/doi/epdf/', '/doi/pdf/')
     elif path.lower().endswith(".pdf") or (host == "ojs.aaai.org" and "/article/download/" in path):
         return url
     return None
