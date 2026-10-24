@@ -738,7 +738,22 @@ class Controller:
             if not cohort or cohort.get("key") != cohort_key:
                 context = self.context()
                 refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
-                problem = self.task("map", context, refs)
+                def validate_problem(value):
+                    refs(value)
+                    opportunities = value['opportunities']
+                    if len(opportunities) > 4:
+                        raise ValueError('Keep at most four substantive research directions')
+                    ids = set()
+                    for opportunity in opportunities:
+                        if any(not item.strip() for key, item in opportunity.items()
+                               if key not in {'evidence_ids', 'closest_work_ids'}):
+                            raise ValueError('Explain how the literature leads to each research direction, its value and plausible path')
+                        if opportunity['id'] in ids:
+                            raise ValueError('Research direction IDs must be unique')
+                        ids.add(opportunity['id'])
+                        if opportunity['basis'] == 'source_observation' and not opportunity['evidence_ids']:
+                            raise ValueError('An observed research opportunity requires source evidence; hypotheses may have no citations')
+                problem = self.task("map", context, validate_problem)
                 self.store.set("problem_model", problem)
                 proposal_payload = {**context, "problem_model": problem, "max_candidates": self.config["max_candidates"]}
                 def validate_proposal(value):
@@ -746,6 +761,10 @@ class Controller:
                     if len(value["candidates"]) > self.config["max_candidates"]:
                         raise ValueError("Too many candidates")
                     for candidate in value["candidates"]:
+                        if candidate['opportunity_id'] not in {item['id'] for item in problem['opportunities']}:
+                            raise ValueError('Select an existing research direction from problem_model.opportunities')
+                        if not candidate['selection_reason'].strip():
+                            raise ValueError('Explain why this direction offers the strongest meaningful contribution')
                         if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
                             raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
                         motive = candidate["motivation"]

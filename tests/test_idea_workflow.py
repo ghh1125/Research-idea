@@ -91,6 +91,45 @@ class IdeaWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown evidence'):
             assess_motivation(idea, critique, [])
 
+    def test_literature_directions_reach_ideation_and_selection_is_saved(self):
+        candidate, backend = self.run_flow()
+        problem = self.store.get('problem_model')
+        self.assertGreater(len(problem['opportunities']), 1)
+        proposal_task = next(task for task in backend.calls if task.stage == 'propose')
+        payload = json.loads(proposal_task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+        self.assertEqual(payload['problem_model']['opportunities'], problem['opportunities'])
+        chosen = next(o for o in problem['opportunities'] if o['id'] == candidate['proposal']['opportunity_id'])
+        self.assertTrue(chosen['derivation'])
+        self.assertTrue(chosen['prior_art_delta'])
+        self.assertTrue(candidate['proposal']['selection_reason'])
+        export_report(self.store)
+        saved = json.loads((self.project / 'outputs/report.json').read_text())
+        self.assertEqual(saved['problem_model']['opportunities'], problem['opportunities'])
+        self.assertEqual(sum(t.stage == 'map' for t in backend.calls), 1)
+        self.assertEqual(sum(t.stage == 'propose' for t in backend.calls), 1)
+
+    def test_unknown_origin_is_repaired_before_the_idea_is_presented(self):
+        attempts = []
+        def invalid_origin(task, output):
+            if task.stage == 'propose':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['candidates'][0]['opportunity_id'] = 'invented-origin'
+        candidate, _ = self.run_flow(RecordingBackend(invalid_origin))
+        self.assertEqual(len(attempts), 2)
+        self.assertIn(candidate['proposal']['opportunity_id'],
+                      {item['id'] for item in self.store.get('problem_model')['opportunities']})
+
+    def test_direction_evidence_must_exist_but_hypothesis_can_be_uncited(self):
+        def fabricated_reference(task, output):
+            if task.stage == 'map':
+                output['opportunities'][0]['evidence_ids'] = ['invented-evidence']
+        backend = RecordingBackend(fabricated_reference)
+        with self.assertRaisesRegex(BackendError, 'Unknown evidence'):
+            self.run_flow(backend)
+        self.assertEqual([t.stage for t in backend.calls], ['map', 'map'])
+        self.assertEqual(self.store.rows('candidates'), [])
+
     def test_idea_cannot_defer_named_closest_work_comparison_to_technical_design(self):
         from research_idea.literature import normalize_paper
         self.store.put('papers', normalize_paper(DEMO_PAPERS[0]))

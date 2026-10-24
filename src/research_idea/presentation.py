@@ -92,7 +92,7 @@ def activity_summary(stage, result, citations=None):
                 add(labels[item['dimension']], item['summary'])
         for item in result.get('opportunities', []):
             add('可以进一步研究', item['hypothesis'])
-            add('先怎么试', item['first_test'])
+            add('为什么值得研究', item['why_meaningful'])
     elif stage == 'audit_claims':
         for item in result.get('claims', []):
             add('论文主张', item['claim'])
@@ -100,8 +100,16 @@ def activity_summary(stage, result, citations=None):
             add('值得区分的解释', item.get('confounds'))
     elif stage == 'map':
         add('值得研究的问题', result.get('problem'))
-        add('观察', result.get('observations'))
-        add('可能的原因', result.get('competing_explanations'))
+        if result.get('opportunities'):
+            for opportunity in result['opportunities']:
+                section('研究切口 · ' + opportunity['question'])
+                add('文献怎样导出这个问题', opportunity['derivation'])
+                add('核心洞见', opportunity['insight'])
+                add('研究价值', opportunity['why_it_matters'])
+                add('原文依据', opportunity['evidence_ids'])
+        else:
+            add('观察', result.get('observations'))
+            add('可能的原因', result.get('competing_explanations'))
     elif stage == 'propose':
         for item in result.get('candidates', []):
             section('Idea · ' + item['title'])
@@ -115,6 +123,7 @@ def activity_summary(stage, result, citations=None):
             add('可能的原因', item['motivation']['causal_explanation'])
             add('核心想法', item['intervention'])
             add('为什么这个想法有用', item['motivation']['why_this_method'])
+            add('选择这个方向的理由', item.get('selection_reason'))
             section('基本可行性')
             sketch = item.get('feasibility_sketch', {})
             add('可用输入', sketch.get('inputs'))

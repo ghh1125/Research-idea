@@ -143,4 +143,6 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 当前可读流程和角色交接详见 [workflow.md](workflow.md)。方法规格增加 `review_responses`，每条包含 `issue`、`decision`、`change`、`reason` 与 `evidence_ids`，refine 必须逐条回应上一轮意见。允许有理由地不采纳意见，不通过角色数量决定质量。`motivation.basis` 区分来源观察和问题假设；来源观察仍需引用。`dialogue` 与版本记录同时保存。
 
+`map.opportunities` 保存不同研究问题及其文献推导、洞见、意义、已有工作差异和可行依据。`propose` 接收完整问题分析，用 `opportunity_id` 指向主切口，用 `selection_reason` 说明科学选择。切口 ID 必须存在且唯一，来源观察必须带有效引用；问题假设可以没有引用。报告 JSON 保留这些记录，CLI 默认显示可读摘要，旧项目没有新字段时仍能导出。没有按词项相似度或自评分自动淘汰的逻辑。
+
 提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。

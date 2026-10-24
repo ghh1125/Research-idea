@@ -1,7 +1,7 @@
 """Human-readable reports alongside machine-readable evidence and versions."""
 from __future__ import annotations
 
-from .presentation import idea_markdown
+from .presentation import activity_summary, idea_markdown
 from .citations import Citations
 
 import json
@@ -64,6 +64,8 @@ def feasibility_markdown(candidate, spec):
 
 def candidate_markdown(candidate, citations=None):
     lines = [idea_markdown(candidate), '']
+    if candidate['proposal'].get('selection_reason'):
+        lines.extend(['### 构思时的选择理由', '', candidate['proposal']['selection_reason'], ''])
     if candidate['proposal'].get('positioning'):
         lines.extend(['### 构思时的动机与贡献对照', ''])
         for item in candidate['proposal']['positioning']:
@@ -251,6 +253,8 @@ def export_report(store: Store, output_dir: Path | None = None):
     problem = data["problem_model"]
     if problem:
         lines.extend(["## 问题模型", "", problem["problem"], "", "**竞争解释：**", "", bullets(problem["competing_explanations"]), "", "**未知项：**", "", bullets(problem["unresolved_questions"]), ""])
+        if problem.get('opportunities'):
+            lines.extend(['## 文献导出的研究切口', '', activity_summary('map', problem, citations), ''])
     if not candidates:
         lines.extend([data["no_candidate_reason"] or "暂无已完成的候选。检查项目状态和任务日志。", ""])
     for c in candidates:

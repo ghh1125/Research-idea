@@ -30,10 +30,22 @@ class DemoBackend:
             output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
         elif task.stage == "map":
             output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["diagnostic", "untested_assumption"], "evidence_ids": refs}
+            output['opportunities'] = [
+                {'id': key, 'question': question, 'basis': 'research_hypothesis',
+                 'derivation': '合成笔记提供不同错误来源的线索；这些是假设而非已观测的结果。',
+                 'insight': insight, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',
+                 'prior_art_delta': '演示把错误来源区分为可讨论的问题；合成材料不能证明科学创新。',
+                 'feasibility_basis': '问题和文本证据可通过普通生成接口输入，无需模型内部信号。',
+                 'evidence_ids': refs, 'closest_work_ids': papers}
+                for key, question, insight in [
+                    ('conflict', '完整证据存在时，冲突关系如何影响回答？', '区分证据缺失与使用已有证据的困难。'),
+                    ('order', '相同证据的顺序为何影响回答？', '研究顺序与内容之间的影响区别。')]]
         elif task.stage == "propose":
             candidates = []
             for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
                 candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
+                candidates[-1]['opportunity_id'] = payload['problem_model']['opportunities'][len(candidates) - 1]['id']
+                candidates[-1]['selection_reason'] = '合成演示优先区分信息缺失与使用困难，保留研究问题和可用信息之间的联系。'
                 candidates[-1]["motivation"] = {"basis": "research_hypothesis", "background": "多来源问答需要可靠地使用已经取得的证据。", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",

@@ -42,6 +42,9 @@ LABELS = {
     'adaptation': '怎样改造', 'why_it_helps': '为什么有帮助', 'simpler_alternative': '简单替代方案',
     'reading_gaps': '还需读清楚什么', 'design_decisions': '技术选择与理由',
     'choice': '采用的设计', 'alternative': '简单替代方案',
+    'opportunities': '研究切口', 'opportunity_id': '来源切口', 'selection_reason': '选择理由',
+    'derivation': '文献怎样导出问题', 'insight': '核心洞见', 'prior_art_delta': '已有工作留下什么',
+    'feasibility_basis': '可行路径', 'basis': '问题依据',
 }
 
 

@@ -23,7 +23,7 @@ class CaptureBackend:
         self.prompts.append(task.prompt)
         return BackendResult({"problem": "A research question", "observations": [],
             "competing_explanations": [], "unresolved_questions": [],
-            "opportunity_types": [], "evidence_ids": []})
+            "opportunity_types": [], "evidence_ids": [], "opportunities": []})
 
 
 class ExtractionBackend:

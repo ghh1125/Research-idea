@@ -100,6 +100,19 @@
 
 默认仍使用用户配置的同一个后端、模型和总预算，不因参考框架而启动额外模型、自动实验或长期循环。
 
+### 从文献提炼问题与判断贡献重叠
+
+2026-10-24 进一步对照以下原始实现，保留有用的思考方法，在本项目的 `map → propose` 中完成：
+
+| 参考 | 本项目的采用方式 |
+| --- | --- |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 在 `opportunities` 保存实质不同的问题、洞见与文献推导，再由构思环节选择；不照搬固定数量候选、多模型调用或实验执行 |
+| [ARIS novelty-check](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/novelty-check/SKILL.md) 区分相邻研究与具体结果已被覆盖 | 对照需要指出论文实际覆盖的主张；已知组件可以揭示新的相互作用或发现，逐个组件存在不等于整个贡献重复 |
+| [Supervisor-Skills paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 的隐藏假设与问题重要性追问 | 用核心洞见、重要能力或认识的变化解释意义；不照搬固定分数、裁决标签或履历限制 |
+| [research-idea-explorer 的构思结构](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/skills/research-idea-explorer/references/schema.md) 与[生成流程](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/research_idea_explorer/engine.py) | 借鉴从未解释的问题、主张、区分关系和研究意义组织构思，保存来源与选择关系；其词项相似度、检索相近程度和拥挤度启发式不用于本项目的科学查重判断 |
+
+这些参考帮助设计思考流程，不能证明生成的 idea 已经具有科学创新。回归测试检查切口传递、选择关联、来源有效性、恢复和报告；真实产出另行查看问题意义、洞见与贡献论证。
+
 ## 目录与会议来源核对
 
 - [CCF 2026 目录原文副本](https://dengpingfan.github.io/papers/CCF-Recommend-2026.pdf)：第 57–58 页；[CCF 官方目录入口](https://www.ccf.org.cn/Academic_Evaluation/By_category/)。官方页面当前有浏览器验证，本轮以目录原文核对分级。

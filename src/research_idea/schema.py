@@ -36,14 +36,19 @@ CLAIM_AUDIT = obj(
         support_judgment=string(["supported_within_tested_scope", "overstated", "not_established",
             "contradicted", "insufficient_evidence"]), next_reading=STRINGS)),
 )
-MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS, opportunity_types=STRINGS, evidence_ids=STRINGS)
+OPPORTUNITY = obj(id=STR, question=STR, basis=string(["source_observation", "research_hypothesis"]),
+    derivation=STR, insight=STR, why_it_matters=STR, prior_art_delta=STR, feasibility_basis=STR,
+    evidence_ids=STRINGS, closest_work_ids=STRINGS)
+MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
+    opportunity_types=STRINGS, evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
     causal_explanation=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
 FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
 PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
     prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
-    motivation=MOTIVATION, positioning=array(POSITIONING), feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
+    opportunity_id=STR, selection_reason=STR, motivation=MOTIVATION, positioning=array(POSITIONING),
+    feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
 DESIGN_OPTION = obj(question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
     adaptation=STR, why_it_helps=STR, simpler_alternative=STR, first_test=STR, evidence_ids=STRINGS)
 DESIGN_TRANSFER = obj(paper_id=STR, options=array(DESIGN_OPTION), reading_gaps=STRINGS)
