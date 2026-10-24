@@ -8,7 +8,7 @@
 
 最终内容直接回答：**新问题是什么、为什么重要、idea 怎样解决它。** 第一部分是核心研究 idea；第二部分围绕它提出两个技术角度，给出可借鉴的方法及改造理由。默认不展开具体例子和实验计划，也不执行训练或论文写作。
 
-当前版本 **v0.3.0**，支持对话式 CLI、文献检索与正文分析、技术参考、讨论修订、论文链接与原文依据、预算管理和中断恢复。已使用 Codex CLI（`gpt-6.1-sol`、`high`）完成真实主题的端到端运行。
+当前版本 **v0.3.0**，支持对话式 CLI、文献检索与正文分析、技术参考、讨论修订、论文链接与原文依据、预算管理和中断恢复。
 
 ## 2. 找 idea 的核心要求
 
@@ -119,7 +119,7 @@ py -3 -m pipx ensurepath
 winget install --id oschwartz10612.Poppler --exact --source winget
 ```
 
-macOS、Linux 步骤已包含 PDF 工具。Windows 原生模型调用和中断恢复尚未完成端到端实机验证；目前实跑覆盖 macOS，自动化测试运行于 Linux。
+macOS、Linux 步骤已包含 PDF 工具。Windows 使用时请确保模型 CLI 和 `pdftotext` 均可从同一终端调用。
 
 ### 安装后检查
 
@@ -331,7 +331,7 @@ research-idea status --project ./research-projects/my-idea
 
 | 后端 | 如何选择模型 | 认证与适用范围 |
 | --- | --- | --- |
-| **Codex CLI**：`--backend codex` | `--model MODEL_ID` 或窗口中的 `/model`；留空则继承 Codex 配置 | 沿用本地 Codex 登录；支持项目内设置思考强度。已实跑 `gpt-6.1-sol` + `high` |
+| **Codex CLI**：`--backend codex` | `--model MODEL_ID` 或窗口中的 `/model`；留空则继承 Codex 配置 | 沿用本地 Codex 登录；支持项目内设置思考强度 |
 | **Claude Code CLI**：`--backend claude` | `--model MODEL_ID`；留空则继承 Claude CLI 配置 | 沿用本地 Claude 登录；需要支持适配器参数的 CLI 版本 |
 | **OpenAI-compatible API**：`backend = "api"` | 在项目配置中填写服务支持的 `model` | 支持 `/chat/completions` 和严格 JSON Schema 的云服务或本地兼容服务 |
 | **Anthropic API**：`backend = "api"` | 指定 `api_provider = "anthropic"` 与支持结构化输出的模型 | 使用原生 `/messages` 协议，通过环境变量提供密钥 |
@@ -368,4 +368,4 @@ api_max_tokens_field = "max_completion_tokens"
 
 使用原生 Anthropic 时，将 `api_provider` 改为 `anthropic`，`base_url` 改为 `https://api.anthropic.com/v1`，`api_key_env` 改为 `ANTHROPIC_API_KEY`，并填写对应模型 ID。详细协议、CLI 兼容要求与本地服务配置见 [后端配置](docs/advanced-usage.md#后端配置)。
 
-目前真实账户验证覆盖 Codex，其余适配器已有协议测试。开发者可运行 `PYTHONPATH=src python -m unittest discover -s tests -v`；自动化测试覆盖 Python 3.11、3.12、3.13。
+开发者可运行 `PYTHONPATH=src python -m unittest discover -s tests -v`；自动化测试覆盖 Python 3.11、3.12、3.13。
