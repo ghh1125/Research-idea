@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1200" viewBox="0 0 1120 1200" role="img" aria-labelledby="title desc">
+<title id="title">Research-idea CLI 界面示意</title>
+<desc id="desc">上方是包含 IDEA 图标、使用说明和输入框的欢迎页。下方是运行状态：彩色步骤输出、旋转指示、当前模型和累计预算，运行时隐藏输入框。正文与用量为示意。</desc>
+<rect width="1120" height="1200" fill="#f1f5f9"/>
+<style>
+text { font-family: 'SFMono-Regular', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei', monospace; font-size: 16px; fill: #dbe4f0; }
+.caption { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 20px; font-weight: 650; fill: #1e293b; }
+.muted { fill: #94a3b8; } .green { fill: #74e3a4; } .cyan { fill: #6ddde6; } .purple { fill: #c4a1ff; } .yellow { fill: #f3d281; } .blue { fill: #8fbaff; }
+</style>
+<text x="26" y="33" class="caption" xml:space="preserve">等待输入 · 先讨论方向，再用 /run 开始研究</text>
+<rect x="24" y="50" width="1072" height="630" rx="14" fill="#101722"/>
+<path d="M38 50 H1082 Q1096 50 1096 64 V92 H24 V64 Q24 50 38 50" fill="#202b3c"/>
+<circle cx="46" cy="71" r="5" fill="#ff7474"/>
+<circle cx="66" cy="71" r="5" fill="#f2cd6c"/>
+<circle cx="86" cy="71" r="5" fill="#69cf97"/>
+<text x="118" y="77" class="muted" xml:space="preserve" style="font-size:14px">research-idea chat  ·  my-idea</text>
+<text x="52" y="117" class="green" xml:space="preserve" style="font-size:18px">             R E S E A R C H</text>
+<text x="52" y="139" class="green" xml:space="preserve" style="font-size:18px"></text>
+<text x="52" y="161" class="green" xml:space="preserve" style="font-size:18px">       ___ ____  _____    _</text>
+<text x="52" y="183" class="green" xml:space="preserve" style="font-size:18px">      |_ _|  _ \| ____|  / \</text>
+<text x="52" y="205" class="green" xml:space="preserve" style="font-size:18px">       | || | | |  _|   / _ \</text>
+<text x="52" y="227" class="green" xml:space="preserve" style="font-size:18px">       | || |_| | |___ / ___ \</text>
+<text x="52" y="249" class="green" xml:space="preserve" style="font-size:18px">      |___|____/|_____/_/   \_\</text>
+<text x="52" y="271" class="green" xml:space="preserve" style="font-size:18px"></text>
+<text x="52" y="293" class="green" xml:space="preserve" style="font-size:18px">       IDEAS ONLY</text>
+<text x="52" y="315" class="green" xml:space="preserve" style="font-size:18px">       From papers to research proposals</text>
+<text x="52" y="358" class="" xml:space="preserve" style="font-size:16px">从一个研究方向，到一份可以开始验证的 idea。</text>
+<text x="52" y="382" class="" xml:space="preserve" style="font-size:16px"></text>
+<text x="52" y="406" class="" xml:space="preserve" style="font-size:16px">1. 输入方向和补充想法，直接与模型讨论。</text>
+<text x="52" y="430" class="" xml:space="preserve" style="font-size:16px">2. 输入 /run：第一阶段 背景 → 问题 → 动机 → Idea；第二阶段 Idea → Method。</text>
+<text x="52" y="454" class="" xml:space="preserve" style="font-size:16px">3. 最后得到核心想法、研究价值、与已有工作的差异，以及技术参考。</text>
+<text x="52" y="478" class="" xml:space="preserve" style="font-size:16px"></text>
+<text x="52" y="502" class="cyan" xml:space="preserve" style="font-size:16px">/model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算</text>
+<text x="52" y="526" class="cyan" xml:space="preserve" style="font-size:16px">/intro 使用介绍 · /new 新研究 · /help 全部命令</text>
+<text x="52" y="573" class="" xml:space="preserve" style="font-size:18px">› /model</text>
+<rect x="42" y="592" width="1036" height="27" rx="3" fill="#2356a8"/>
+<text x="54" y="611" class="" xml:space="preserve" style="font-size:15px">gpt-6.1-sol · high · 准备开始 · my-idea</text>
+<text x="54" y="638" class="" xml:space="preserve" style="font-size:15px">本项目累计 · 调用 0/80 · 时间 0.0/110 分</text>
+<text x="54" y="665" class="cyan" xml:space="preserve" style="font-size:15px">/intro 使用介绍 · /new 新研究 · /run 开始研究</text>
+<text x="26" y="725" class="caption" xml:space="preserve">运行中 · 步骤持续显示，输入框暂时隐藏</text>
+<rect x="24" y="744" width="1072" height="415" rx="14" fill="#101722"/>
+<path d="M38 744 H1082 Q1096 744 1096 758 V786 H24 V758 Q24 744 38 744" fill="#202b3c"/>
+<circle cx="46" cy="765" r="5" fill="#ff7474"/>
+<circle cx="66" cy="765" r="5" fill="#f2cd6c"/>
+<circle cx="86" cy="765" r="5" fill="#69cf97"/>
+<text x="118" y="771" class="muted" xml:space="preserve" style="font-size:14px">research-idea  ·  研究中</text>
+<text x="52" y="816" class="cyan" xml:space="preserve">── [search] 检索文献 ─────────────────────────────────────────────</text>
+<text x="52" y="841" class="" xml:space="preserve">第一阶段 · 文献构思 · 找论文</text>
+<text x="52" y="879" class="blue" xml:space="preserve">── [paper] 论文 ─────────────────────────────────────────────────</text>
+<text x="52" y="904" class="muted" xml:space="preserve">这里显示选读论文的标题、文章链接，以及选择它的原因。</text>
+<text x="52" y="942" class="purple" xml:space="preserve">── [skill] 分析方法 ─────────────────────────────────────────────</text>
+<text x="52" y="967" class="" xml:space="preserve">建立问题与动机 · 对比动机与贡献 · 安排实施路径</text>
+<text x="52" y="1005" class="yellow" xml:space="preserve">── [analysis] 分析 ──────────────────────────────────────────────</text>
+<text x="52" y="1030" class="" xml:space="preserve">第一阶段 · 文献构思 · 连接背景、问题与动机</text>
+<rect x="42" y="1063" width="1036" height="27" rx="3" fill="#2356a8"/>
+<text x="54" y="1082" class="" xml:space="preserve" style="font-size:15px">⠹ gpt-6.1-sol · high · 连接背景、问题与动机 · 本步 0:24</text>
+<text x="54" y="1109" class="" xml:space="preserve" style="font-size:15px">本项目累计 · 调用 3/80 · 时间 2.4/110 分</text>
+<text x="54" y="1136" class="cyan" xml:space="preserve" style="font-size:15px">/intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入</text>
+<text x="26" y="1185" class="muted" xml:space="preserve" style="font-size:14px">界面示意 · 文字与用量用于说明布局；实际输出随研究内容变化。</text>
+</svg>
