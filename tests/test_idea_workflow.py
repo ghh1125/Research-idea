@@ -117,6 +117,123 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(sum(t.stage == 'map' for t in backend.calls), 1)
         self.assertEqual(sum(t.stage == 'propose' for t in backend.calls), 1)
 
+    def test_both_problem_origins_produce_an_explained_idea_and_preserve_its_source(self):
+        self.config['max_candidates'] = 2
+        self.run_flow()
+        candidates = self.store.rows('candidates')
+        self.assertEqual(len(candidates), 2)
+        self.assertEqual({c['proposal']['motivation']['problem_origin'] for c in candidates},
+                         {'unresolved_need', 'emerging_problem'})
+        opportunities = {item['id']: item for item in self.store.get('problem_model')['opportunities']}
+        for candidate in candidates:
+            with self.subTest(origin=candidate['proposal']['motivation']['problem_origin']):
+                chosen = opportunities[candidate['proposal']['opportunity_id']]
+                motive = candidate['proposal']['motivation']
+                self.assertEqual(motive['problem_origin'], chosen['problem_origin'])
+                self.assertTrue(motive['problem_derivation'].strip())
+                self.assertEqual(candidate['selected_opportunity'],
+                    {field: chosen[field] for field in ('id', 'question', 'problem_origin', 'derivation')})
+                summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
+                self.assertIn(motive['problem_derivation'], summary)
+                self.assertLess(summary.index(motive['problem_derivation']),
+                                summary.index(motive['problem_observation']))
+
+    def test_valid_but_mismatched_proposal_origin_is_repaired_once(self):
+        attempts = []
+        def mismatch_origin(task, output):
+            if task.stage == 'propose':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    motive = output['candidates'][0]['motivation']
+                    motive['problem_origin'] = ('emerging_problem' if motive['problem_origin'] == 'unresolved_need'
+                                                else 'unresolved_need')
+        candidate, backend = self.run_flow(RecordingBackend(mismatch_origin))
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(candidate['proposal']['motivation']['problem_origin'],
+                         candidate['selected_opportunity']['problem_origin'])
+        self.assertEqual(sum(task.stage == 'map' for task in backend.calls), 1)
+        self.assertEqual(sum(task.stage == 'develop' for task in backend.calls), 1)
+
+    def test_empty_problem_derivation_is_repaired_in_each_existing_design_step(self):
+        attempts = {stage: [] for stage in ('propose', 'develop', 'refine')}
+        def omit_first_derivation(task, output):
+            if task.stage in attempts:
+                attempts[task.stage].append(task)
+                if len(attempts[task.stage]) == 1:
+                    result = output['candidates'][0] if task.stage == 'propose' else output
+                    result['motivation']['problem_derivation'] = ''
+        candidate, backend = self.run_flow(RecordingBackend(omit_first_derivation))
+        self.assertEqual({stage: len(calls) for stage, calls in attempts.items()},
+                         {'propose': 2, 'develop': 2, 'refine': 2})
+        self.assertTrue(candidate['proposal']['motivation']['problem_derivation'].strip())
+        self.assertTrue(candidate['spec']['motivation']['problem_derivation'].strip())
+        self.assertEqual(sum(task.stage == 'map' for task in backend.calls), 1)
+        self.assertEqual(sum(task.stage == 'review' for task in backend.calls), 2)
+
+    def test_selected_problem_snapshot_reaches_design_and_review(self):
+        candidate, backend = self.run_flow()
+        selected = candidate['selected_opportunity']
+        stages = {'plan_search', 'develop', 'refine', 'review'}
+        seen = set()
+        for task in backend.calls:
+            if task.stage in stages:
+                payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+                self.assertEqual(payload['selected_opportunity'], selected)
+                seen.add(task.stage)
+        self.assertEqual(seen, stages)
+        export_report(self.store, self.store.project)
+        saved = json.loads((self.project / self.store.get('output_folder') / 'report.json').read_text())
+        self.assertEqual(saved['candidates'][0]['selected_opportunity'], selected)
+
+    def test_reframed_problem_updates_the_report_while_preserving_the_selected_source(self):
+        original = 'Original rationale: the background need motivates the selected unresolved problem.'
+        revised = 'Revised rationale: using the existing approach exposes a new difficulty within that need.'
+        updated_problem = 'Revised problem statement linked to the original research need.'
+        def reframe(task, output):
+            if task.stage == 'propose':
+                output['candidates'][0]['motivation']['problem_derivation'] = original
+            elif task.stage == 'refine':
+                output['motivation'].update(problem_origin='emerging_problem',
+                    problem_derivation=revised, problem_observation=updated_problem)
+                output['review_responses'][0]['reason'] = revised
+        candidate, _ = self.run_flow(RecordingBackend(reframe))
+        self.assertEqual(candidate['selected_opportunity']['problem_origin'], 'unresolved_need')
+        self.assertEqual(candidate['proposal']['motivation']['problem_derivation'], original)
+        self.assertEqual(candidate['spec']['motivation']['problem_origin'], 'emerging_problem')
+        chosen = next(item for item in self.store.get('problem_model')['opportunities']
+                      if item['id'] == candidate['proposal']['opportunity_id'])
+        self.assertEqual(candidate['selected_opportunity']['derivation'], chosen['derivation'])
+        changed = {item['field'] for item in candidate['versions'][-1]['revision_record']['changed_fields']}
+        self.assertTrue({'motivation.problem_origin', 'motivation.problem_derivation',
+                         'motivation.problem_observation'} <= changed)
+        export_report(self.store, self.store.project)
+        front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
+        self.assertIn(revised, front)
+        self.assertNotIn(original, front)
+        self.assertLess(front.index('Problem ·'), front.index(revised))
+        self.assertLess(front.index(revised), front.index(updated_problem))
+        self.assertLess(front.index(updated_problem), front.index('Motivation ·'))
+
+    def test_legacy_saved_problem_without_origin_or_derivation_still_exports(self):
+        candidate, _ = self.run_flow()
+        candidate.pop('selected_opportunity')
+        for record in (candidate['proposal'], candidate['spec'],
+                       *(version['spec'] for version in candidate['versions'])):
+            record['motivation'].pop('problem_origin', None)
+            record['motivation'].pop('problem_derivation', None)
+        self.store.put('candidates', candidate)
+        summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
+        self.assertIn(candidate['proposal']['motivation']['problem_observation'], summary)
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        front = (target / 'report.md').read_text().split('<details>')[0]
+        self.assertIn(candidate['spec']['motivation']['problem_observation'], front)
+        saved = json.loads((target / 'report.json').read_text())['candidates'][0]
+        self.assertNotIn('selected_opportunity', saved)
+        for record in (saved['proposal'], saved['spec']):
+            self.assertNotIn('problem_origin', record['motivation'])
+            self.assertNotIn('problem_derivation', record['motivation'])
+
     def test_problem_source_is_limited_to_two_origins_and_repaired_in_existing_step(self):
         attempts = []
         def missing_comparison_is_not_a_problem_source(task, output):

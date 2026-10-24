@@ -46,6 +46,7 @@ RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR,
 MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
+    problem_origin=string(PROBLEM_ORIGINS), problem_derivation=STR,
     problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
     causal_explanation=STR, research_need=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)

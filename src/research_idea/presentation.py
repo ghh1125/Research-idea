@@ -60,7 +60,8 @@ def argument_markdown(motivation, proposal, *, include_intervention=True, idea_c
         if core.get(key)]
     parts = [
         ('Background · 背景与已有工作', [motivation.get('background'), existing]),
-        ('Problem · 要解决的问题与原因', [motivation.get('problem_observation', proposal.get('problem')),
+        ('Problem · 要解决的问题与原因', [motivation.get('problem_derivation'),
+            motivation.get('problem_observation', proposal.get('problem')),
             motivation.get('importance', proposal.get('why_it_matters')),
             motivation.get('causal_explanation', proposal.get('hypothesis'))]),
         ('Motivation · 为什么需要这项研究', [motivation.get('existing_approach_limit'),

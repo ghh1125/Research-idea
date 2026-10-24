@@ -62,7 +62,8 @@ class DemoBackend:
             output['opportunities'] = [
                 {'id': key, 'question': question, 'basis': 'research_hypothesis',
                  'problem_origin': 'unresolved_need' if key == 'conflict' else 'emerging_problem',
-                 'derivation': '合成笔记提供不同错误来源的线索；这些是假设而非已观测的结果。',
+                 'derivation': ('合成场景希望回答可靠；检索已经能提供相关信息，但冲突材料仍可能使模型选错依据，继续增加信息不能解决如何使用它的问题。'
+                     if key == 'conflict' else '合成场景为扩大信息覆盖而拼接更多来源，但拼接顺序可能改变回答，使完整资料仍无法稳定使用；单纯扩大覆盖没有消除这种顺序影响。'),
                  'insight': insight, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',
                  'prior_art_delta': '演示把错误来源区分为可讨论的问题；合成材料不能证明科学创新。',
                  'feasibility_basis': '问题和文本证据可通过普通生成接口输入，无需模型内部信号。',
@@ -74,9 +75,11 @@ class DemoBackend:
             candidates = []
             for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
                 candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
-                candidates[-1]['opportunity_id'] = payload['problem_model']['opportunities'][len(candidates) - 1]['id']
+                selected = payload['problem_model']['opportunities'][len(candidates) - 1]
+                candidates[-1]['opportunity_id'] = selected['id']
                 candidates[-1]['selection_reason'] = '合成演示优先区分信息缺失与使用困难，保留研究问题和可用信息之间的联系。'
                 candidates[-1]["motivation"] = {"basis": "research_hypothesis", "background": "多来源问答需要可靠地使用已经取得的证据。", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
+                    "problem_origin": selected['problem_origin'], "problem_derivation": selected['derivation'],
                     "existing_work": "合成场景中的现有做法通过检索向回答模型提供相关文本，以缓解信息缺失。",
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",

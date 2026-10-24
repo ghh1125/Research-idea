@@ -473,6 +473,7 @@ class Controller:
                    "purpose": 'technical_design' if candidate else 'strategy_discovery'}
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
+            payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
             context = self.context()
             payload['known_papers'] = context['papers']
             payload['known_techniques'] = [
@@ -547,6 +548,7 @@ class Controller:
             excerpt = select_excerpt(text, self.config["source_chars"])
             payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
                 "candidate": candidate["proposal"], "excerpt": excerpt,
+                "selected_opportunity": candidate.get('selected_opportunity', {}),
                 "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
             if design:
                 payload.update(purpose='technical_design',
@@ -602,6 +604,7 @@ class Controller:
                 own = [e for e in self.store.rows('evidence') if e['paper_id'] == paper_id
                        and e.get('source_hash') == digest(paper.get('text', ''))]
                 payload = {'candidate': candidate['proposal'], 'paper_id': paper_id, 'title': paper['title'],
+                    'selected_opportunity': candidate.get('selected_opportunity', {}),
                     'constraints': self.config['constraints'], 'evidence': own,
                     'design_search_plan': candidate.get('design_search_plan', {}),
                     'reading_question': candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', '')}
@@ -676,6 +679,7 @@ class Controller:
                 payload['method_spec'] = candidate['spec']
             if candidate:
                 payload['design_search_plan'] = candidate.get('design_search_plan', {})
+                payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
             allowed = {paper['id'] for paper in pool}
             def check_selection(value):
                 selected_ids = [item['paper_id'] for item in value['selected']]
@@ -848,6 +852,10 @@ class Controller:
                         if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
                             raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
                         motive = candidate["motivation"]
+                        selected = next(item for item in problem['opportunities']
+                                        if item['id'] == candidate['opportunity_id'])
+                        if motive['problem_origin'] != selected['problem_origin']:
+                            raise ValueError('The proposed problem origin must match the selected research opportunity')
                         if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                             raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
                         for comparison in candidate['positioning']:
@@ -875,12 +883,17 @@ class Controller:
             else:
                 proposed = cohort["proposed"]
             old = {} if cohort_created else {c["id"]: c for c in self.store.rows("candidates")}
+            directions = {item['id']: item for item in self.store.get('problem_model', {}).get('opportunities', [])}
             candidates = []
             for item in proposed["candidates"]:
                 idea_id = "idea_" + digest(item)[:10]
                 candidate = {"id": idea_id, "proposal": item, "versions": [], "execution_status": "pending", "research_status": "proposed", "empirical_status": "untested"}
                 if idea_id in old:
                     candidate = old[idea_id]
+                selected = directions.get(item['opportunity_id'])
+                if selected and 'selected_opportunity' not in candidate:
+                    candidate['selected_opportunity'] = {key: selected[key]
+                        for key in ('id', 'question', 'problem_origin', 'derivation')}
                 candidates.append(candidate)
             self.store.replace_candidates(candidates)
             for candidate in candidates:
@@ -1000,6 +1013,7 @@ class Controller:
             previous_record = versions[-1].get("revision_record", {}) if versions else {}
             previous_evidence_ids = previous_record.get("evidence_ids")
             payload = {**context, "candidate": anchored_proposal, "round": round_index + 1,
+                       'selected_opportunity': candidate.get('selected_opportunity', {}),
                        'design_search_plan': candidate.get('design_search_plan', {}),
                        'design_transfers': candidate.get('design_transfers', [])}
             if current is not None:
@@ -1025,6 +1039,7 @@ class Controller:
                 check_references(value, evidence_ids, paper_ids)
                 assess_motivation({**candidate["proposal"], "motivation": current["motivation"]}, value, context["evidence"])
             review_payload = {**context, "candidate": anchored_proposal, "method_spec": current,
+                              'selected_opportunity': candidate.get('selected_opportunity', {}),
                               'design_transfers': candidate.get('design_transfers', [])}
             if previous_review is not None:
                 review_payload.update(previous_review=previous_review, previous_revision_record=previous_record)

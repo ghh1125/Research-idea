@@ -38,17 +38,17 @@ flowchart TD
 
 候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
 
-`motivation.existing_work` 说明已有方法实际做到了什么；剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Problem、Motivation、Idea 四段连续论证，Idea 正文包含当前 `idea_core` 的四段解释。展示优先读取 `spec.idea_core`，否则读取 `proposal.idea_core`；旧保存内容缺少该对象时沿用原有论证，不补造细节。
+`motivation.existing_work` 说明已有方法实际做到了什么；`problem_derivation` 解释背景怎样导出所选问题，剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Problem、Motivation、Idea 四段连续论证：Problem 开头展示当前选题推导，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
 
 技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 7`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 8`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
-| `proposal.motivation` | 哪个有证据的现象构成问题，为什么重要；现有方法的限制和因果解释是什么；为什么该方法能带来进展；最简单替代方案及方法必要性测试是什么 | 论证完整不代表问题真实重要，也不代表复杂方法优于简单方法 |
+| `proposal.motivation` | 背景怎样导出现有办法未解决的问题或新暴露的问题，为什么选择它；现有方法的限制和因果解释是什么；为什么该想法能带来进展 | 论证完整不代表问题真实重要，也不代表复杂方法优于简单方法 |
 | `novelty_claim` | 贡献类型和具体主张是什么；改变了什么变量；可观测后果与证伪条件是什么；为何不是无关紧要的改动 | 主张有表述不代表创新成立或有效 |
 | `prior_art.overlaps[].comparisons` | 每篇最近工作在问题、机制、可用信息、目标、评测、核心主张六维上，与候选有什么相同或不同；原文证据在哪里 | 标题相似或某一维相同不代表核心贡献已被覆盖；差异也不自动具有价值 |
 | `feasibility.checks` | 数据访问、推理信号、接口、学习信号、计算资源、评测、最小测试七维分别需要什么，如何检查，失败后怎么处理 | 文献支持和可行性审阅不能替代接口检查、数据核验或真实实验 |
@@ -65,6 +65,8 @@ flowchart TD
 第一阶段的 `map.research_frame` 保存用户的大问题、跨论文归纳的研究主线、由此提出的科学问题，以及具体论文证据与这一问题的联系。它直接传给 `propose`，用于组织通俗的 Background → Problem → Motivation → Idea。研究主线在原有综合步骤内形成，不增加模型调用；来源的具体实验条件仍保留在论文卡、引用和逐项对照中。
 
 `opportunities[].problem_origin` 只有 `unresolved_need`（现有主要方法仍不能解决的重要问题）和 `emerging_problem`（现有方法使用或发展时暴露的新问题）。`opportunity_types` 汇总本次实际采用的来源；`opportunity_id` 将选中的问题与候选相连。`idea_instructions.py` 集中定义第一阶段的完整构思程序，先综合已有路线的目标、信息和共同假设，再推导根本问题、动机与 idea，避免层层叠加重复的审查提示。程序检查结构和引用，研究判断仍由模型结合原文进行。
+
+共享 `MOTIVATION` 中的 `problem_origin` 使用同一组两值枚举，`problem_derivation` 保存从背景到具体选题的连续解释。构思时校验来源与 `opportunity_id` 指向的切口一致，控制器将该切口的 `id/question/problem_origin/derivation` 保存为 `candidate.selected_opportunity` 快照，并作为顶层输入传给后续技术探索、设计和审阅。`develop/refine` 可以完善当前推导；有理由改变问题或来源时更新 `motivation` 并在现有回应中解释，原快照保持不变，修改进入 `revision_record`。程序检查来源身份和必填内容，缺失时沿用一次输出修复，不用关键词判定研究价值，也不增加评分、审批或实验任务。
 
 `propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 
