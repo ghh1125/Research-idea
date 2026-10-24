@@ -6,11 +6,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from research_idea.backend_types import BackendError
+from research_idea.backend_types import BackendError, BackendResult
 from research_idea.chat import Chat, fragments
 from research_idea.config import DEFAULTS, write_config
 from research_idea.controller import Controller, BudgetExhausted
-from research_idea.demo import DemoBackend
+from research_idea.demo import DemoBackend, DEMO_PAPERS
 from research_idea.motivation import assess_motivation
 from research_idea.presentation import activity_summary, idea_markdown, error_summary
 from research_idea.prompts import stage_version
@@ -61,6 +61,12 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(response['decision'], 'adopt')
         self.assertIn(response['change'], candidate['spec']['method']['changes'])
         self.assertEqual([m['from'] for m in candidate['dialogue']], ['designer', 'reviewer', 'designer', 'reviewer'])
+        reviews = [t for t in backend.calls if t.stage == 'review']
+        second_review = json.loads(reviews[1].prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+        self.assertEqual(second_review['previous_review'], candidate['versions'][0]['review'])
+        self.assertEqual(second_review['method_spec']['review_responses'][0]['issue'],
+                         second_review['previous_review']['issues'][0]['issue'])
+        self.assertIn('previous_revision_record', second_review)
         export_report(self.store)
         front = (self.project / 'outputs/report.md').read_text().split('<details>')[0]
         for label in ('具体方法', '输入 → 输出', '第一步验证', '最简单的对照'):
@@ -83,6 +89,42 @@ class IdeaWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unknown evidence'):
             assess_motivation(idea, critique, [])
 
+    def test_idea_cannot_defer_named_closest_work_comparison_to_technical_design(self):
+        from research_idea.literature import normalize_paper
+        self.store.put('papers', normalize_paper(DEMO_PAPERS[0]))
+        attempts = []
+        def omit_first_comparison(task, output):
+            if task.stage == 'propose':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['candidates'][0]['positioning'] = []
+        candidate, backend = self.run_flow(RecordingBackend(omit_first_comparison))
+        self.assertEqual(len(attempts), 2)
+        self.assertIn('Compare each named closest work during ideation', attempts[1].prompt)
+        self.assertEqual(set(candidate['proposal']['closest_work_ids']),
+                         {p['paper_id'] for p in candidate['proposal']['positioning']})
+        stages = [task.stage for task in backend.calls]
+        self.assertLess(stages.index('propose'), stages.index('develop'))
+
+    def test_idea_includes_a_working_path_before_detailed_design(self):
+        attempts = []
+        def omit_first_path(task, output):
+            if task.stage == 'propose':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['candidates'][0]['feasibility_sketch']['available_path'] = ''
+        candidate, _ = self.run_flow(RecordingBackend(omit_first_path))
+        self.assertEqual(len(attempts), 2)
+        sketch = candidate['proposal']['feasibility_sketch']
+        self.assertTrue(sketch['inputs'])
+        self.assertTrue(sketch['available_path'])
+        self.assertTrue(sketch['first_check'])
+        summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
+        self.assertNotIn(sketch['available_path'], summary)
+        self.assertIn(sketch['key_assumption'], summary)
+        self.assertIn('Idea → Method', summary)
+        self.assertIn(candidate['proposal']['motivation']['background'], summary)
+
     def test_refinement_must_answer_the_actual_objection_and_repair_is_bounded(self):
         def remove_response(task, output):
             if task.stage == 'refine':
@@ -93,6 +135,21 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(sum(t.stage == 'refine' for t in backend.calls), 2)
         # The previously useful idea survives a malformed revision.
         self.assertTrue(self.store.rows('candidates')[0]['spec']['validation']['first_test'])
+
+    def test_technical_design_repairs_a_route_without_a_reason_before_review(self):
+        attempts = []
+        def omit_first_rationale(task, output):
+            if task.stage == 'develop':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['design_decisions'][0]['rationale'] = ''
+        candidate, backend = self.run_flow(RecordingBackend(omit_first_rationale))
+        self.assertEqual(len(attempts), 2)
+        self.assertIn('design choices with rationale', attempts[1].prompt)
+        self.assertTrue(candidate['spec']['design_decisions'][0]['rationale'])
+        review = next(t for t in backend.calls if t.stage == 'review')
+        payload = json.loads(review.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+        self.assertTrue(payload['method_spec']['design_decisions'][0]['rationale'])
 
     def test_discussion_notes_reach_the_designer_and_invalidate_old_proposals(self):
         first, backend = self.run_flow()
@@ -154,3 +211,35 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('/budget timeout_s', message)
         self.assertIn('/run', message)
         self.assertNotIn('/private/model', message)
+
+    def test_resume_keeps_design_sources_out_of_first_round_full_reading(self):
+        class DesignBackend(RecordingBackend):
+            def generate(self, task):
+                if task.stage in {'inspect_source', 'design_transfer'}:
+                    self.calls.append(task)
+                    return BackendResult({'observations': []} if task.stage == 'inspect_source' else
+                                         {'paper_id': 'new-technique', 'options': [], 'reading_gaps': []})
+                return super().generate(task)
+        backend = DesignBackend()
+        first = Controller(self.store, backend, self.config)
+        def pause_search(candidate):
+            self.store.put('papers', {'id': 'new-technique', 'title': 'A synthetic technical source',
+                                      'content_kind': 'full_text', 'text': 'Method details for a focused design question.'})
+            candidate['retrieved_work_ids'] = ['new-technique']
+            self.store.put('candidates', candidate)
+            raise BudgetExhausted('Paused in technical exploration')
+        first.search_for_candidate = pause_search
+        with self.assertRaises(BudgetExhausted):
+            first.run()
+        self.assertEqual(self.store.get('cohort')['initial_paper_ids'], [])
+        self.assertNotIn('spec', self.store.rows('candidates')[0])
+        resumed = Controller(self.store, backend, self.config)
+        with patch.object(resumed, 'read_papers', wraps=resumed.read_papers) as read:
+            resumed.run()
+        read.assert_called_once_with([])
+        stages = [t.stage for t in backend.calls]
+        self.assertEqual(stages.count('propose'), 1)
+        self.assertNotIn('paper_card', stages)
+        self.assertNotIn('extract', stages)
+        self.assertIn('design_transfer', stages)
+        self.assertEqual(self.store.get('status'), 'completed')

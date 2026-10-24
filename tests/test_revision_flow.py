@@ -24,6 +24,7 @@ def shape(schema):
 
 def method_spec():
     spec = shape(SCHEMAS["develop"])
+    spec['design_decisions'] = [shape(SCHEMAS['develop']['properties']['design_decisions']['items'])]
     spec["method"]["changes"] = ["Compare observable routing signals at a fixed inference budget."]
     spec["motivation"]["evidence_ids"] = ["ev-1"]
     spec["feasibility"]["checks"] = [

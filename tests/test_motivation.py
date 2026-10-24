@@ -13,6 +13,7 @@ EVIDENCE = [{"id": "ev-observation", "verification": "quote_matched_only"}]
 def proposal():
     return {"motivation": {
         "basis": "source_observation",
+        "background": "The target system must act reliably when several causes produce similar observations.",
         "problem_observation": "The supplied source reports an unresolved failure under a specified condition.",
         "evidence_ids": ["ev-observation"],
         "importance": "This failure prevents the target task from meeting its stated requirement.",

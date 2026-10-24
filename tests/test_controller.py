@@ -60,6 +60,7 @@ class EvidenceIntegrityTests(unittest.TestCase):
 
     def spec(self, evidence_id, paper_id="paper-1"):
         value = valid_shape(SCHEMAS["develop"])
+        value['design_decisions'] = [valid_shape(SCHEMAS['develop']['properties']['design_decisions']['items'])]
         value["method"]["changes"] = ["Measure signal quality before training a controller."]
         value["motivation"]["evidence_ids"] = [evidence_id]
         value["prior_art"]["verdict"] = "covered"
@@ -261,9 +262,9 @@ class ControllerExecutionTests(unittest.TestCase):
 
         backend.generate = expire
         controller.initial_search = lambda: None
-        controller.retrieve_full_texts = lambda: None
-        controller.read_papers = lambda: None
-        controller.audit_papers = lambda: None
+        controller.retrieve_full_texts = lambda selected_ids=None: None
+        controller.read_papers = lambda selected_ids=None: None
+        controller.audit_papers = lambda selected_ids=None: None
         with self.assertRaisesRegex(BudgetExhausted, "max_seconds"):
             controller.run()
         self.assertEqual(self.store.get("status"), "budget_exhausted")
@@ -364,8 +365,9 @@ class ControllerExecutionTests(unittest.TestCase):
         candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
         backend = FakeBackend([method, review, method, review])
         self.controller(backend).develop_candidate(candidate)
-        # An unchanged revised spec legitimately reuses the same checked review.
-        self.assertEqual([t.stage for t in backend.calls], ["develop", "review", "refine"])
+        # The reviewer now receives the previous critique and revision record.
+        # Even with that context, an unchanged method must stop the revision loop.
+        self.assertEqual([t.stage for t in backend.calls], ["develop", "review", "refine", "review"])
         self.assertEqual(len(candidate["versions"]), 2)
         self.assertEqual(candidate["motivation_status"], "needs_revision")
         self.assertEqual(candidate["research_status"], "no_detectable_progress")
@@ -387,56 +389,55 @@ class ControllerExecutionTests(unittest.TestCase):
         controller.focus_sources(candidate)
         self.assertEqual(len(backend.calls), 2)
 
-    def test_comparison_interruption_resumes_saved_draft_with_new_papers(self):
+    def test_design_search_interruption_saves_idea_before_detailed_method(self):
         self.store.put('papers', {'id': 'paper-1', 'title': 'Budget study', 'content_kind': 'abstract'})
         self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
         proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
         proposal['motivation']['evidence_ids'] = ['ev-1']
         candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
         method = EvidenceIntegrityTests().spec('ev-1')
-        first_backend = FakeBackend([method])
+        first_backend = FakeBackend([])
         first = self.controller(first_backend, max_rounds=1)
 
         def interrupted_search(item):
-            self.assertEqual(self.store.rows('candidates')[0]['spec'], method)
+            saved = self.store.rows('candidates')[0]
+            self.assertEqual(saved['proposal'], proposal)
+            self.assertNotIn('spec', saved)
             self.store.put('papers', {'id': 'paper-2', 'title': 'New comparison source'})
-            raise BudgetExhausted('Comparison stopped after saving a new source')
+            raise BudgetExhausted('Design search stopped after saving a new source')
 
         first.search_for_candidate = interrupted_search
         with self.assertRaises(BudgetExhausted):
             first.develop_candidate(candidate)
-        self.assertEqual([task.stage for task in first_backend.calls], ['develop'])
+        self.assertEqual(first_backend.calls, [])
         saved = self.store.rows('candidates')[0]
         self.assertFalse(saved.get('development_complete', False))
-        resumed_backend = FakeBackend([valid_shape(SCHEMAS['review'])])
+        resumed_backend = FakeBackend([method, valid_shape(SCHEMAS['review'])])
         resumed = self.controller(resumed_backend, max_rounds=1)
         resumed.develop_candidate(saved)
-        self.assertEqual([task.stage for task in resumed_backend.calls], ['review'])
+        self.assertEqual([task.stage for task in resumed_backend.calls], ['develop', 'review'])
         self.assertEqual(saved['spec'], method)
         self.assertTrue(saved['development_complete'])
         self.assertNotIn('pending_round', saved)
         self.assertEqual(self.store.get('calls_used'), 2)
 
-    def test_full_text_upgrade_rebinds_draft_before_review(self):
+    def test_design_sources_are_current_before_developing_method(self):
         self.store.put('papers', {'id': 'paper-1', 'title': 'Budget study', 'content_kind': 'abstract'})
         self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
         proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
         proposal['motivation']['evidence_ids'] = ['ev-1']
         candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
-        method = EvidenceIntegrityTests().spec('ev-1')
         refreshed = EvidenceIntegrityTests().spec('ev-2')
-        backend = FakeBackend([method, refreshed, valid_shape(SCHEMAS['review'])])
+        backend = FakeBackend([refreshed, valid_shape(SCHEMAS['review'])])
         controller = self.controller(backend, max_rounds=1)
 
         def upgrade(item):
             self.store.replace_evidence('paper-1', [{'id': 'ev-2', 'paper_id': 'paper-1', 'source_kind': 'full_text'}])
 
         controller.search_for_candidate = upgrade
-        controller.focus_sources = lambda item: None
-        controller.audit_papers = lambda: None
         controller.develop_candidate(candidate)
-        self.assertEqual([task.stage for task in backend.calls], ['develop', 'develop', 'review'])
-        self.assertIn('source_refresh', backend.calls[1].prompt)
+        self.assertEqual([task.stage for task in backend.calls], ['develop', 'review'])
+        self.assertIn('ev-2', backend.calls[0].prompt)
         self.assertEqual(candidate['spec']['motivation']['evidence_ids'], ['ev-2'])
         check_references(candidate['spec'], {'ev-2'}, {'paper-1'})
 

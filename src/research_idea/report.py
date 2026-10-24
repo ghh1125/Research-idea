@@ -64,11 +64,25 @@ def feasibility_markdown(candidate, spec):
 
 def candidate_markdown(candidate, citations=None):
     lines = [idea_markdown(candidate), '']
+    if candidate['proposal'].get('positioning'):
+        lines.extend(['### 构思时的动机与贡献对照', ''])
+        for item in candidate['proposal']['positioning']:
+            paper = citations.paper(item['paper_id']) if citations else item['paper_id']
+            lines.extend([paper, '', '**已有工作回答了：** ' + item['addressed_problem'], '',
+                          '**我们继续回答：** ' + item['remaining_question'], '',
+                          '**为什么是实质进展：** ' + item['contribution'], '', ', '.join(item['evidence_ids']), ''])
     spec = candidate.get('spec') or {}
     if not spec:
         text = '\n'.join(lines)
         return citations.text(text) if citations else text
     method = spec['method']
+    if spec.get('design_decisions'):
+        lines.extend(['### 技术选择与理由', ''])
+        for item in spec['design_decisions']:
+            lines.extend(['**设计问题：** ' + item['question'], '', '**采用：** ' + item['choice'], '',
+                          '**为什么适合：** ' + item['rationale'], '', '**需要的修改：** ' + item['adaptation'], '',
+                          '**简单替代方案：** ' + item['alternative'], '', '**区分实验：** ' + item['first_test'], '',
+                          ', '.join(item['evidence_ids']), ''])
     lines.extend(['### 实现细节', ''])
     lines.extend(['**具体改动：**', '', bullets(method['changes']), '', '**执行步骤：**', '',
                   '\n'.join(f'{i}. {step}' for i, step in enumerate(method['inference_steps'], 1)), ''])
@@ -183,7 +197,7 @@ def export_report(store: Store, output_dir: Path | None = None):
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 4, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 5, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
@@ -200,7 +214,8 @@ def export_report(store: Store, output_dir: Path | None = None):
         "active_skills": store.get("active_skills", [])}
     json_path = target / "report.json"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    lines = ["# Research-idea — 研究方案", "", store.get("topic", ""), ""]
+    title = '研究方案' if data['status'] == 'completed' else '当前构思与方法草稿'
+    lines = ["# Research-idea — " + title, "", store.get("topic", ""), ""]
     if demo:
         lines.extend(["> **合成演示：所有资料和候选仅用于验证软件流程。没有调用真实模型，没有完成科学实验，不构成创新或效果结论。**", ""])
 

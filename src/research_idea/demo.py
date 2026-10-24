@@ -34,12 +34,20 @@ class DemoBackend:
             candidates = []
             for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
                 candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
-                candidates[-1]["motivation"] = {"basis": "research_hypothesis", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
+                candidates[-1]["motivation"] = {"basis": "research_hypothesis", "background": "多来源问答需要可靠地使用已经取得的证据。", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",
                     "causal_explanation": "候选解释：证据关系或顺序影响模型使用已有信息。", "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
                     "expected_progress": "在限定条件下区分错误来源，形成可证伪解释；不是声称提升指标。",
                     "simplest_alternative": "随机交换顺序而不使用候选机制。", "necessity_test": "如果随机对照解释全部差异，则该机制没有额外解释力。"}
+                candidates[-1]['positioning'] = [{'paper_id': p, 'addressed_problem': '合成材料提出证据冲突诊断。',
+                    'remaining_question': '实际错误由缺失还是冲突引起？', 'contribution': '分离两类原因的可检验解释。',
+                    'evidence_ids': [e['id'] for e in payload['evidence'] if e['paper_id'] == p]} for p in papers]
+                candidates[-1]['feasibility_sketch'] = {
+                    'inputs': '模型只接收问题和证据；参考答案只用于评测。',
+                    'available_path': '先人工构造少量配对文本，通过普通文本生成接口比较输出，无需权重或 logits。',
+                    'key_assumption': '输入变换保持任务语义，只改变研究因素。',
+                    'first_check': '人工检查配对样本，确认随机变换不能解释全部差异。'}
             output = {"candidates": candidates, "no_candidate_reason": ""}
         elif task.stage in {"develop", "refine"}:
             overlap_evidence = payload["evidence"][0] if payload["evidence"] else None
@@ -61,6 +69,9 @@ class DemoBackend:
             if task.stage == "refine":
                 changes.append("增加随机信号对照")
             output = {
+                "design_decisions": [{'question': '怎样分离输入因素？', 'choice': '保持证据内容，做成对条件干预。',
+                    'rationale': '直接操纵候选原因并观察预测变化。', 'adaptation': '将通用配对设计用于证据冲突。',
+                    'alternative': '随机改变输入条件。', 'first_test': '先比较少量成对样本与随机对照。', 'evidence_ids': refs}],
                 "review_responses": [{"issue": item['issue'], "decision": "adopt", "change": "增加随机信号对照", "reason": "区分机制收益与随机变化", "evidence_ids": []} for item in payload.get('review', {}).get('issues', [])],
                 "motivation": payload["candidate"]["motivation"],
                 "method": {"summary": "固定模型与检索结果，只改变证据冲突程度或段落顺序；保存配对答案，比较错误与稳定性。先用随机变换作为简单对照，再判断专门干预是否有额外作用。", "base_implementation": "尚未选择；需要检查实际模型推理接口。", "changes": changes, "inputs": "问题、完整证据、条件标签；答案只供评测。", "outputs": "答案和逐样本诊断结果", "trainable_parameters": "不训练：首先诊断现象", "frozen_parameters": "模型参数保持不变", "objective": "不适用：无训练阶段", "supervision": "需要人工核对的评测答案；当前尚未获取", "inference_steps": ["构造匹配输入", "固定预算调用模型", "保存预测"], "resource_requirements": "未知，先测少量样本延迟与调用成本", "assumptions": [{"statement": "数据中存在可控制的证据冲突", "status": "unverified", "evidence_ids": [], "check": "人工检查样本并验证变换保留任务语义"}]},

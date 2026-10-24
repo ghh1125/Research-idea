@@ -26,7 +26,8 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
 4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
-6. 跟随彩色 [search] [paper] [read] [analysis] [review] 查看步骤和证据。
+6. 第一阶段 [concept]：背景 → 问题 → 动机 → Idea；完成贡献对照和基本可行性判断。
+   第二阶段 [design]：Idea → Method；探索技术路线、实现和实验设计。
 7. 最后 [idea] 显示方案与第一步验证；论文标题旁直接给链接，/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
@@ -46,7 +47,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /config                 当前设置      /constraints [文字] 资源限制
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
-/date                   时间窗口：动态策略/查重窗口，或固定日期
+/date                   时间窗口：动态技术/动机对照窗口，或固定日期
 /new [研究方向]          新建空白研究，沿用设置，预算计数从 0 开始
 /open 项目目录           切换项目      /history      最近对话
 /help                   命令说明      /exit         退出
@@ -58,11 +59,12 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'evidence': 'ansigreen', 'analysis': 'ansiyellow', 'thinking': 'ansiyellow',
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
-COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow')
+COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
+              concept='ansimagenta', design='ansicyan')
 TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
-    'review': '方案讨论', 'idea': '研究方案', 'evidence': '原文依据', 'saved': '已保存',
+    'review': '方案讨论', 'idea': '最终研究方案', 'concept': 'Idea 构思', 'design': '技术设计', 'evidence': '原文依据', 'saved': '已保存',
     'error': '这一步未完成', 'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
 BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
     'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',
@@ -81,7 +83,7 @@ BRAND = r'''             R E S E A R C H
 WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea。
 
 1. 输入方向和补充想法，直接与模型讨论。
-2. 输入 /run，开始找论文 → 理解问题 → 设计方法 → 完善方案。
+2. 输入 /run：第一阶段 背景 → 问题 → 动机 → Idea；第二阶段 Idea → Method。
 3. 最后得到问题、动机、具体方法、工作差异和第一步验证。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
@@ -110,12 +112,16 @@ def fragments(tag, text):
     pattern = r'(ev_[a-zA-Z0-9_]+|https?://[^\s]+|arxiv:[^\s]+|doi:[^\s]+)'
     for line in safe_text(text).splitlines():
         title = line.startswith('#')
-        line = re.sub(r'^#{1,6}\s+', '', line).replace('**', '')
+        line = re.sub(r'^#{1,6}\s+', '', line)
         line = re.sub(r'\[([^\]\n]+)\]\((https?://[^)]+)\)', r'\1 · \2', line)
-        base = 'bold' if title else 'ansigreen' if line.startswith(('原文：', '原文位置：')) else ''
-        for part in re.split(pattern, line):
-            style = 'ansigreen bold' if part.startswith('ev_') else 'ansiblue underline' if part.startswith(('http', 'arxiv:', 'doi:')) else base
-            result.append((style, part))
+        base = color + ' bold' if title else 'ansigreen' if line.replace('**', '').startswith(('原文：', '原文位置：')) else ''
+        for span in re.split(r'(\*\*[^*\n]+\*\*)', line):
+            emphasis = span.startswith('**') and span.endswith('**')
+            if emphasis:
+                span = span[2:-2]
+            for part in re.split(pattern, span):
+                style = 'ansigreen bold' if part.startswith('ev_') else 'ansiblue underline' if part.startswith(('http', 'arxiv:', 'doi:')) else color + ' bold' if emphasis else base
+                result.append((style, part))
         result.append(('', '\n'))
     return result
 
@@ -247,7 +253,7 @@ class Chat:
         self.cfg = load_config(self.project)
         labels = {**BUDGET_LABELS, 'model': '模型', 'reasoning_effort': '思考强度', 'constraints': '资源条件',
                   'search_venues': '会议', 'search_date_mode': '日期模式', 'strategy_months': '方法窗口（月）',
-                  'novelty_months': '动机查重窗口（月）', 'search_source': '文献来源', 'auto_search': '自动检索',
+                  'novelty_months': '第一阶段动机对照窗口（月）', 'search_source': '文献来源', 'auto_search': '自动检索',
                   'search_since': '起始日期', 'search_until': '截止日期'}
         values = lambda value: '、'.join(value) if isinstance(value, list) else {'rolling': '动态', 'fixed': '固定', 'hybrid': '会议 + arXiv'}.get(str(value), str(value))
         self.show('system', '已保存，下次运行生效。\n' + '\n'.join(f'{labels.get(k, k)}：{values(v) or "沿用后端配置"}' for k, v in updates.items()))
@@ -332,9 +338,9 @@ class Chat:
                 event = json.loads(line)
                 if event['tag'] in {'error', 'budget'}:
                     reported_error = True
-                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking'}:
+                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking', 'concept', 'design'}:
                     heading = event['text'].split('\n', 1)[0]
-                    state = (re.sub(r'\s*·\s*模型调用.*$', '', heading) if re.match(r'\d/4 · ', heading)
+                    state = (re.sub(r'\s*·\s*模型调用.*$', '', heading) if re.match(r'(?:\d/4|第[一二](?:轮|阶段)(?:完成)?) · ', heading)
                              else TAG_LABELS[event['tag']])
                     if state != self.state or '模型调用' in heading or event['tag'] == 'thinking':
                         self.step_started = time.monotonic()
@@ -433,11 +439,12 @@ class Chat:
                 store = Store(self.project, readonly=True)
                 try:
                     last = store.get('last_activity', {})
+                    citations = Citations.from_store(store)
                 finally:
                     store.close()
                 if last:
                     from .chat_worker import outline
-                    self.show('analysis', '\n'.join(outline(last['result'])))
+                    self.show('analysis', '\n'.join(outline(last['result'], citations=citations)))
                 else:
                     self.show('system', '还没有研究分析。输入 /run 开始。')
         elif command in {'/model', '/reasoning'}:
@@ -520,7 +527,7 @@ class Chat:
             strategy, novelty = config_scope(cfg), config_scope(cfg, 'novelty')
             self.show('system', '\n'.join([
                 '项目：' + str(self.project), f"模型：{cfg['model'] or '继承配置'} · 思考强度 {cfg['reasoning_effort'] or '继承配置'} · 后端 {cfg['backend']}",
-                f"找方法：{strategy['since']} → {strategy['until']}", f"动机查重：{novelty['since']} → {novelty['until']}",
+                f"背景与技术探索：{strategy['since']} → {strategy['until']}", f"第一阶段动机对照：{novelty['since']} → {novelty['until']}",
                 '会议：' + ('、'.join(cfg['search_venues']) or '按主题检索'),
                 f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 全流程最多精读 {cfg['max_papers']} 篇",
                 f"产出：最多 {cfg['max_candidates']} 个 idea，讨论 {cfg['max_rounds']} 轮",
@@ -556,11 +563,11 @@ class Chat:
             from .search_scope import config_scope
             strategy, novelty = config_scope(self.cfg), config_scope(self.cfg, 'novelty')
             mode = '动态，每次运行按当天计算' if self.cfg['search_date_mode'] == 'rolling' else '固定日期'
-            self.show('system', f"日期模式：{mode}\n找方法：{strategy['since']} → {strategy['until']}\n动机查重：{novelty['since']} → {novelty['until']}\n已知的更早相关论文也会参与对比。")
+            self.show('system', f"日期模式：{mode}\n背景与技术探索：{strategy['since']} → {strategy['until']}\n第一阶段动机对照：{novelty['since']} → {novelty['until']}\n已知的更早相关论文也会参与对比。")
             if not value:
                 choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期'])
                 if choice == '动态窗口':
-                    months = await self.session.prompt_async('策略月数 查重月数 [12 6] › ')
+                    months = await self.session.prompt_async('技术探索月数 动机对照月数 [12 6] › ')
                     value = 'rolling ' + (months.strip() or '12 6')
                 elif choice == '固定日期':
                     dates = await self.session.prompt_async('起始日期 截止日期 YYYY-MM-DD › ')

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 
 MOTIVATION_FIELDS = (
-    "problem_observation", "importance", "existing_approach_limit",
+    "background", "problem_observation", "importance", "existing_approach_limit",
     "causal_explanation", "why_this_method", "expected_progress",
     "simplest_alternative", "necessity_test",
 )

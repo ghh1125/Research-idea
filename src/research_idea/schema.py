@@ -20,7 +20,7 @@ def obj(**properties):
 STR = string()
 STRINGS = array(STR)
 PLAN_SEARCH = obj(research_question=STR, scope=STR,
-    queries=array(obj(query=STR, purpose=string(["background", "mechanism", "counterevidence"]), rationale=STR)),
+    queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR)),
     assumptions=STRINGS)
 SCREEN_PAPERS = obj(selection_summary=STR,
     selected=array(obj(paper_id=STR, reason=STR, reading_question=STR)))
@@ -37,10 +37,18 @@ CLAIM_AUDIT = obj(
             "contradicted", "insufficient_evidence"]), next_reading=STRINGS)),
 )
 MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS, opportunity_types=STRINGS, evidence_ids=STRINGS)
-MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
+MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
     causal_explanation=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
+POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
+FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
 PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
-    prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR, motivation=MOTIVATION)), no_candidate_reason=STR)
+    prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
+    motivation=MOTIVATION, positioning=array(POSITIONING), feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
+DESIGN_OPTION = obj(question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
+    adaptation=STR, why_it_helps=STR, simpler_alternative=STR, first_test=STR, evidence_ids=STRINGS)
+DESIGN_TRANSFER = obj(paper_id=STR, options=array(DESIGN_OPTION), reading_gaps=STRINGS)
+DESIGN_DECISION = obj(question=STR, choice=STR, rationale=STR, adaptation=STR,
+    alternative=STR, first_test=STR, evidence_ids=STRINGS)
 METHOD = obj(
     summary=STR, base_implementation=STR, changes=STRINGS, inputs=STR, outputs=STR,
     trainable_parameters=STR, frozen_parameters=STR, objective=STR,
@@ -67,7 +75,7 @@ VALIDATION = obj(summary=STR, weakest_assumption=STR, first_test=STR, baselines=
 ACTION = obj(kind=string(["search", "read_source", "inspect_code", "run_experiment", "revise", "stop"]), description=STR, decision_impact=STR)
 RESPONSE = obj(issue=STR, decision=string(["adopt", "adapt", "decline", "test"]), change=STR, reason=STR, evidence_ids=STRINGS)
 DEVELOP = obj(method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
-              review_responses=array(RESPONSE))
+              design_decisions=array(DESIGN_DECISION), review_responses=array(RESPONSE))
 REVIEW = obj(verdict=string(["continue", "refine", "covered", "blocked"]),
     issues=array(obj(severity=string(["critical", "important", "minor"]), issue=STR, evidence_ids=STRINGS, action=STR)),
     unresolved_questions=STRINGS, revision_instructions=STR, next_action=ACTION,
@@ -85,7 +93,7 @@ PAPER_CARD = obj(paper_id=STR, paper_type=string(["method", "empirical", "theory
     opportunities=array(obj(hypothesis=STR, evidence_ids=STRINGS, why_meaningful=STR, first_test=STR, falsifier=STR)),
     reading_gaps=STRINGS,
     followup_requests=array(obj(target_id=STR, question=STR, decision_impact=STR)))
-SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD,
+SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD, "design_transfer": DESIGN_TRANSFER,
     "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 
 

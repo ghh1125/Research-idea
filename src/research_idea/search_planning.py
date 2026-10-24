@@ -13,7 +13,7 @@ MAX_QUERIES = 3
 MAX_QUERY_CHARS = 300
 MAX_QUERY_WORDS = 40
 MAX_INPUT_QUERIES = 200
-PURPOSES = {"background", "mechanism", "counterevidence"}
+PURPOSES = {"background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"}
 PLAN_FIELDS = {"research_question", "scope", "queries", "assumptions"}
 QUERY_FIELDS = {"query", "purpose", "rationale"}
 
@@ -61,7 +61,7 @@ def normalize_search_plan(plan: dict) -> dict:
             raise ValueError(f"{label}.query needs English academic keywords; non-Latin proper names may accompany them")
         purpose = _text(item["purpose"], label + ".purpose")
         if purpose not in PURPOSES:
-            raise ValueError(f"{label}.purpose must be background, mechanism, or counterevidence")
+            raise ValueError(f"{label}.purpose must be one of {', '.join(sorted(PURPOSES))}")
         rationale = _text(item["rationale"], label + ".rationale")
         key = query.casefold()
         if key not in seen:

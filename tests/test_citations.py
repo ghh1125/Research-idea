@@ -41,6 +41,27 @@ class CitationTests(unittest.TestCase):
         self.assertNotIn('http', citations.reference('ev_123'))
         self.assertEqual(citations.text('ev_missing'), '原文来源未找到')
 
+    def test_cli_design_findings_and_details_name_the_paper_without_internal_ids(self):
+        from research_idea.presentation import activity_summary
+        from research_idea.chat_worker import outline
+        from research_idea.chat import fragments
+        citations = Citations([self.paper], [self.evidence])
+        result = {'paper_id': 'p1', 'options': [{'question': '如何更新状态？',
+            'source_technique': '从可见观察更新状态。', 'shared_structure': '两者都需要保留未决解释。',
+            'source_conditions': '只使用当前观察。', 'adaptation': '把来源状态换成环境规则。',
+            'why_it_helps': '将新观察与旧规则比较。', 'simpler_alternative': '每次重新推断。',
+            'first_test': '比较规则改变后的第一次决策。', 'evidence_ids': ['ev_123']}], 'reading_gaps': []}
+        summary = activity_summary('design_transfer', result, citations)
+        detail = '\n'.join(outline(result, citations=citations))
+        for text in (summary, detail):
+            self.assertIn('[An agent study](https://example.org/paper)', text)
+            self.assertNotIn('ev_123', text)
+            self.assertNotIn('p1', text)
+        styled = fragments('design', summary)
+        self.assertTrue(any('bold' in style and '可借鉴的技术' in text for style, text in styled))
+        self.assertNotIn('**', ''.join(text for _, text in styled))
+        self.assertEqual(result['options'][0]['evidence_ids'], ['ev_123'])
+
     def test_readable_reports_link_inline_evidence_without_changing_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = Store(Path(tmp))

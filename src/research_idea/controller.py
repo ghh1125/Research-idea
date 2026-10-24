@@ -144,6 +144,7 @@ class Controller:
         self.store, self.backend, self.config = store, backend, config
         self.progress = progress or (lambda message: None)
         self.activity = activity or (lambda stage, result, cached: None)
+        self.phase = 'ideation'
         self.started = time.monotonic()
         self.previous_elapsed = float(store.get("elapsed_s", 0))
         self.full_text_attempted = set()
@@ -199,7 +200,7 @@ class Controller:
             self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
         if payload.get('paper_id'):
             paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
-            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))}\n{payload['paper_id']} · {paper.get('year', '')}\n{paper.get('url', '')}")
+            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))} · {paper.get('year', '')}\n{paper.get('url', '')}")
         prompt = make_prompt(stage, payload, guidance)
         # A single bounded repair for invalid structured outputs or citations.
         for attempt in range(2):
@@ -358,27 +359,31 @@ class Controller:
                 self.store.put("papers", enriched)
                 entry.update(status="completed", characters=len(enriched["text"]))
                 changed = True
-                self.progress(f"full text acquired: {paper['id']}")
+                self.progress(f"[read] 已获取正文：{paper['title']}\n{paper.get('url', '')}")
             except LiteratureError as exc:
                 entry.update(status="failed", error=str(exc))
                 self.store.put("papers", dict(paper, full_text_error=str(exc)))
-                self.progress(f"full text unavailable: {paper['id']}; keeping retrieval gap")
+                self.progress(f"[read] 暂未取得正文：{paper['title']}；继续用已有材料推进方案。\n{paper.get('url', '')}")
             finally:
                 self.store.set("full_text_ledger", ledger)
                 self.store.event("full_text_retrieval", entry)
                 self.checkpoint_time()
         return changed
 
-    def read_papers(self):
+    def read_papers(self, selected_ids=None):
         deep = self.config.get("deep_reading", True) and self.config["backend"] != "demo"
-        self.extract_papers(skip_full_text=deep)
+        self.extract_papers(skip_full_text=deep, selected_ids=selected_ids)
         if deep:
             for paper in self.reading_papers():
+                if selected_ids is not None and paper['id'] not in selected_ids:
+                    continue
                 if paper.get("content_kind") == "full_text":
                     read_paper(self, paper)
 
-    def extract_papers(self, skip_full_text=False):
+    def extract_papers(self, skip_full_text=False, selected_ids=None):
         for paper in self.reading_papers():
+            if selected_ids is not None and paper['id'] not in selected_ids:
+                continue
             if skip_full_text and paper.get("content_kind") == "full_text":
                 continue
             text = paper.get("text") or paper.get("abstract") or ""
@@ -401,12 +406,14 @@ class Controller:
                 record.update(extraction_stage="extract", guidance_key=self.guidance_keys["extract"])
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
 
-    def audit_papers(self):
+    def audit_papers(self, selected_ids=None):
         """Interpret reported experiments without treating author claims as proof."""
         audits = {}
         self.store.set("paper_claim_audits", audits)
         evidence = self.store.rows("evidence")
         for paper in self.reading_papers():
+            if selected_ids is not None and paper['id'] not in selected_ids:
+                continue
             own_evidence = [e for e in evidence if e["paper_id"] == paper["id"]]
             if paper.get("content_kind") != "full_text" or not own_evidence:
                 audits[paper["id"]] = {"paper_id": paper["id"], "status": "insufficient_evidence",
@@ -429,10 +436,16 @@ class Controller:
     def plan_search(self, candidate=None):
         payload = {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
                    "venues": self.config.get("search_venues", []), "source": self.config["search_source"],
-                   "filters": config_scope(self.config, 'novelty' if candidate else 'strategy'),
-                   "purpose": 'recent_candidate_overlap' if candidate else 'strategy_discovery'}
+                   "filters": config_scope(self.config, 'design' if candidate else 'strategy'),
+                   "search_windows": {p: config_scope(self.config, p) for p in ('strategy', 'novelty')},
+                   "purpose": 'technical_design' if candidate else 'strategy_discovery'}
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
+            context = self.context()
+            payload['known_papers'] = context['papers']
+            payload['known_techniques'] = [
+                {'paper_id': card['paper_id'], 'components': card.get('components', [])}
+                for card in context['paper_cards']]
             if candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
         result = self.task("plan_search", payload, normalize_search_plan)
@@ -455,36 +468,44 @@ class Controller:
         plan = self.plan_search()
         keys = []
         for query in plan["queries"]:
-            keys.append(self.search_once(query["query"], "initial: " + query["rationale"], max_new=0))
+            purpose = 'novelty' if query['purpose'] == 'motivation' else 'strategy'
+            keys.append(self.search_once(query["query"], query["rationale"], max_new=0, purpose=purpose))
         self.select_search_results(keys, target - len(self.store.rows("papers")))
 
     def search_for_candidate(self, candidate):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
-        scope = config_scope(self.config, 'novelty')
-        self.progress(f"[novelty] 对比候选的动机、解释与核心主张 · {scope['since']} → {scope['until']}")
+        if candidate.get('design_search_complete'):
+            # A stopped download resumes the selected sources, not selection.
+            self.retrieve_full_texts(candidate.get('retrieved_work_ids', []))
+            return
+        scope = config_scope(self.config, 'design')
+        self.progress(f"[design] 第二阶段 · 围绕 idea 寻找可借鉴的技术、基线与实验设计 · {scope['since']} → {scope['until']}")
         room = self.config["max_papers"] - len(self.store.rows("papers"))
         if room <= 0:
-            # A previous run may have saved selected sources just before a
-            # reading interruption. Replay their checkpoints before comparison.
-            self.read_papers()
+            self.progress('[design] 已达到本项目阅读上限，复用已有论文设计技术路线。')
             return
-        plan = self.plan_search(candidate)
+        plan = candidate.get('design_search_plan') or self.plan_search(candidate)
+        candidate['design_search_plan'] = plan
+        self.store.put('candidates', candidate)
         quota = max(1, self.config["max_papers"] // (2 * self.config["max_candidates"]))
         before_ids = {p["id"] for p in self.store.rows("papers")}
-        keys = [self.search_once(query["query"], "candidate " + candidate["id"] + ": " + query["rationale"],
-                                 max_new=0, purpose='novelty') for query in plan["queries"]]
-        if self.select_search_results(keys, min(room, quota), candidate=candidate):
-            self.read_papers()
+        keys = [self.search_once(query["query"], query["rationale"], max_new=0, purpose='design') for query in plan["queries"]]
+        self.select_search_results(keys, min(room, quota), candidate=candidate, checkpoint_design=True)
         new_ids = [p["id"] for p in self.store.rows("papers") if p["id"] not in before_ids]
         candidate["retrieved_work_ids"] = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + new_ids))
+        self.store.put('candidates', candidate)
 
-    def focus_sources(self, candidate):
-        """Re-read methods for this hypothesis; related titles only select reading targets."""
+    def focus_sources(self, candidate, selected_ids=None, reading_question=''):
+        """Read source details that answer a specific question about the idea."""
         closest = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + candidate["proposal"].get("closest_work_ids", [])))
-        self.progress('[novelty] 定向比较已知近邻：方法相似仅是阅读入口；重点检查问题动机、因果解释和可检验主张。')
+        design = self.phase == 'design'
+        self.progress('[design] 定向阅读：原方法怎样作用、迁移需要什么条件、哪种简单对照最有区分力。' if design else
+                      '[novelty] 定向比较问题动机、因果解释与核心主张。')
         papers = {p["id"]: p for p in self.store.rows("papers")}
         selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
+        if selected_ids is not None:
+            selected = [p for p in selected if p['id'] in selected_ids]
         scope = digest([candidate["proposal"], candidate.get('spec')])
         for paper in selected:
             text = paper.get("text") or paper.get("abstract") or ""
@@ -494,6 +515,10 @@ class Controller:
             payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
                 "candidate": candidate["proposal"], "excerpt": excerpt,
                 "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
+            if design:
+                payload.update(purpose='technical_design',
+                    reading_question=reading_question or candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', ''),
+                    design_search_plan=candidate.get('design_search_plan', {}))
             if candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
             result = self.task("inspect_source", payload, lambda x: make_evidence(paper, x["observations"], excerpt))
@@ -508,7 +533,63 @@ class Controller:
                               extraction_scope=scope)
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
 
-    def select_search_results(self, keys, limit, candidate=None):
+    def prepare_design(self, candidate, *, search=True):
+        """Explore reusable techniques before writing the full implementation plan."""
+        self.phase = 'design'
+        def source_key():
+            return digest([[p['id'], digest(p.get('text') or p.get('abstract', ''))]
+                           for p in self.store.rows('papers')])
+        if candidate.get('design_ready') == source_key():
+            return
+        self.store.put('candidates', candidate)
+        self.progress('[design] 第二阶段 · 方案设计：拆解设计问题，探索可迁移方法，确定路线和首测。')
+        if search:
+            self.search_for_candidate(candidate)
+        papers = {p['id']: p for p in self.store.rows('papers')}
+        eligible = dict.fromkeys(candidate.get('retrieved_work_ids', []) +
+                                 candidate['proposal'].get('closest_work_ids', []))
+        ids = [pid for pid in eligible if papers.get(pid, {}).get('content_kind') == 'full_text'][:3]
+        transfers = []
+        for index, paper_id in enumerate(ids, 1):
+            paper = papers.get(paper_id)
+            if not paper or paper.get('content_kind') != 'full_text':
+                continue
+            self.progress(f"[design] 第二阶段 · 技术借鉴 {index}/{len(ids)} · {paper['title']}")
+            own = [e for e in self.store.rows('evidence') if e['paper_id'] == paper_id
+                   and e.get('source_hash') == digest(paper.get('text', ''))]
+            inspected = not own
+            if inspected:
+                self.focus_sources(candidate, [paper_id])
+            for attempt in range(2):
+                own = [e for e in self.store.rows('evidence') if e['paper_id'] == paper_id
+                       and e.get('source_hash') == digest(paper.get('text', ''))]
+                payload = {'candidate': candidate['proposal'], 'paper_id': paper_id, 'title': paper['title'],
+                    'constraints': self.config['constraints'], 'evidence': own,
+                    'design_search_plan': candidate.get('design_search_plan', {}),
+                    'reading_question': candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', '')}
+                def check_transfer(value):
+                    if value['paper_id'] != paper_id:
+                        raise ValueError('Design transfer must describe the supplied paper')
+                    check_references(value, {e['id'] for e in own}, {paper_id})
+                    if len(value['options']) > 3:
+                        raise ValueError('Describe at most three useful design transfers per paper')
+                    for option in value['options']:
+                        if not option['evidence_ids'] or any(not v.strip() for k, v in option.items() if k != 'evidence_ids'):
+                            raise ValueError('A transfer needs a source technique, a concrete adaptation and a first test')
+                transfer = self.task('design_transfer', payload, check_transfer)
+                # Reuse first-round evidence. Only a concrete unanswered design
+                # question warrants one focused read, not another full paper card.
+                if transfer['options'] or not transfer['reading_gaps'] or inspected or attempt:
+                    break
+                self.focus_sources(candidate, [paper_id], reading_question='; '.join(transfer['reading_gaps']))
+                inspected = True
+            transfers.append(transfer)
+            candidate['design_transfers'] = list(transfers)
+            self.store.put('candidates', candidate)
+        candidate.update(design_transfers=transfers, design_ready=source_key())
+        self.store.put('candidates', candidate)
+
+    def select_search_results(self, keys, limit, candidate=None, *, checkpoint_design=False):
         from .literature import deduplicate
         ledger = self.store.get("search_ledger", {})
         entries = [ledger[key] for key in keys if key in ledger]
@@ -523,7 +604,7 @@ class Controller:
         limit = max(0, min(limit, self.config['max_papers'] - len(papers)))
         if pool and limit:
             payload = {'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
-                'purpose': entries[0].get('purpose', 'strategy') if entries else 'strategy',
+                'purpose': 'technical_design' if candidate else 'strategy_discovery',
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
                 'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'publication_date', 'venue')}
@@ -572,19 +653,22 @@ class Controller:
         self.store.set('paper_selections', (selections + [audit])[-100:])
         if candidate is not None:
             candidate['retrieved_work_ids'] = list(dict.fromkeys(
+                [pid for pid in choices if pid in selected] +
                 candidate.get('retrieved_work_ids', []) + sorted(selected)))
+            if checkpoint_design:
+                candidate['design_search_complete'] = True
             self.store.put('candidates', candidate)
         self.progress(f"[search] 标题/摘要池 {len(ranked)} 篇；围绕研究问题筛选，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
         for paper in papers:
             if paper['id'] in selected:
-                self.progress(f"[paper] {paper['title']} · {paper.get('publication_date') or paper.get('year', '')}\n{paper['id']}\n{paper.get('url', '')}")
+                self.progress(f"[paper] {paper['title']} · {paper.get('publication_date') or paper.get('year', '')}\n{paper.get('url', '')}")
                 if paper.get('selection', {}).get('reason'):
                     self.progress('[read] 选读原因：' + paper['selection']['reason']
                                   + '\n重点看：' + paper['selection']['reading_question'])
         hydrated = self.retrieve_full_texts(selected)
         return bool(added or updated or hydrated)
 
-    def search_once(self, query, reason, max_new=None, purpose='strategy'):
+    def search_once(self, query, reason, max_new=None, purpose='strategy', candidate=None):
         from .literature import discover, arxiv_query_expression
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return False
@@ -621,7 +705,7 @@ class Controller:
         if max_new == 0:
             return key
         room = self.config['max_papers'] - len(self.store.rows('papers'))
-        return self.select_search_results([key], min(room, max_new if max_new is not None else 3))
+        return self.select_search_results([key], min(room, max_new if max_new is not None else 3), candidate=candidate)
 
     def run(self):
         recovered = self.store.interrupt_running_tasks()
@@ -629,17 +713,22 @@ class Controller:
             self.store.event('interrupted_tasks_recovered', {'count': recovered})
         self.store.set("status", "running")
         try:
-            self.initial_search()
-            if not self.store.rows("papers"):
-                self.progress('[analysis] 先根据研究方向构思问题假设，并给出具体方法；后续检索用于对比已有工作。')
-            self.retrieve_full_texts()
-            self.read_papers()
-            self.audit_papers()
+            self.phase = 'ideation'
             cohort = self.store.get("cohort")
             cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.user_notes(), self.config["constraints"], self.config["max_candidates"]])
             cohort_key = digest([cohort_key, config_scope(self.config), config_scope(self.config, 'novelty')])
             if self.config.get("reasoning_effort"):
                 cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
+            continuing = bool(cohort and cohort.get('key') == cohort_key)
+            if not continuing:
+                self.progress('[concept] 第一阶段 · 文献构思：理解背景与问题，比较已有动机和贡献，提出 idea。')
+                self.initial_search()
+            initial_ids = cohort.get('initial_paper_ids') if continuing else None
+            if not self.store.rows("papers"):
+                self.progress('[analysis] 先提出可检验的问题与基本思路，第二阶段围绕它设计方法和首测。')
+            self.retrieve_full_texts(initial_ids)
+            self.read_papers(initial_ids)
+            self.audit_papers(initial_ids)
             if cohort:
                 try:
                     check_references(cohort["proposed"], {e["id"] for e in self.store.rows("evidence")}, {p["id"] for p in self.store.rows("papers")})
@@ -662,12 +751,23 @@ class Controller:
                         motive = candidate["motivation"]
                         if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                             raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
+                        for comparison in candidate['positioning']:
+                            if any(not comparison[field].strip() for field in ('addressed_problem', 'remaining_question', 'contribution')):
+                                raise ValueError('Explain the existing problem, remaining question and contribution before presenting the idea')
+                            own = {e['id'] for e in context['evidence'] if e['paper_id'] == comparison['paper_id']}
+                            if not set(comparison['evidence_ids']) <= own:
+                                raise ValueError('Idea positioning must cite evidence from the compared paper')
+                        if not set(candidate['closest_work_ids']) <= {item['paper_id'] for item in candidate['positioning']}:
+                            raise ValueError('Compare each named closest work during ideation, before technical design')
+                        if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
+                            raise ValueError('Describe available inputs, a working path, its key assumption and first check')
                     if not value["candidates"] and not value["no_candidate_reason"].strip():
                         raise ValueError("No-candidate outcome requires a reason")
                 proposed = self.task("propose", proposal_payload, validate_proposal)
                 if self.store.rows("candidates"):
                     self.store.event("cohort_archived", {"candidates": self.store.rows("candidates")})
-                cohort = {"key": cohort_key, "proposed": proposed, "created_at": now()}
+                cohort = {"key": cohort_key, "proposed": proposed, "created_at": now(),
+                          'initial_paper_ids': [p['id'] for p in self.reading_papers()]}
                 self.store.set("cohort", cohort)
                 self.store.set("no_candidate_reason", proposed["no_candidate_reason"])
                 cohort_created = True
@@ -710,7 +810,7 @@ class Controller:
         })
         original_anchor = snapshot(candidate["original_anchor"])
         anchored_proposal = {**candidate["proposal"], **original_anchor}
-        substantive_sections = ("method", "motivation", "prior_art", "novelty_claim", "feasibility", "validation")
+        substantive_sections = ("method", "motivation", "design_decisions", "prior_art", "novelty_claim", "feasibility", "validation")
         progress_limitation = (
             "Exact structured-content and evidence-ID comparison only; wording changes may be counted "
             "as changes, and changed text does not establish that an objection was resolved."
@@ -734,6 +834,11 @@ class Controller:
             candidate.pop("review", None)
             candidate.pop('pending_round', None)
             candidate.pop('comparison_ready', None)
+            candidate.pop('design_ready', None)
+            candidate.pop('design_transfers', None)
+            candidate.pop('design_search_plan', None)
+            candidate.pop('design_search_complete', None)
+            candidate.pop('design_followup_question', None)
         candidate["development_key"] = development_key
         versions = list(candidate.get("versions", []))
         # A spec may have been saved just before an interrupted review. Resume
@@ -743,6 +848,7 @@ class Controller:
         if candidate.get("development_complete"):
             self.progress(f"cached candidate {candidate['id']}")
             return
+        self.prepare_design(candidate)
         for round_index in range(len(versions), self.config["max_rounds"]):
             context = self.context()
             evidence_ids = {e["id"] for e in context["evidence"]}
@@ -757,6 +863,10 @@ class Controller:
                 assess_feasibility(value, context["evidence"])
                 if not value["method"]["changes"] or not value["validation"]["first_test"].strip():
                     raise ValueError("Missing concrete change or first test")
+                decisions = value['design_decisions']
+                if not 1 <= len(decisions) <= 3 or any(
+                        not text.strip() for item in decisions for key, text in item.items() if key != 'evidence_ids'):
+                    raise ValueError('Explain one to three design choices with rationale, adaptation, a simple alternative and first test')
                 if round_index:
                     requested = {item['issue'] for item in (review or {}).get('issues', [])}
                     responses = value['review_responses']
@@ -768,7 +878,9 @@ class Controller:
             previous_spec, previous_review = current, review
             previous_record = versions[-1].get("revision_record", {}) if versions else {}
             previous_evidence_ids = previous_record.get("evidence_ids")
-            payload = {**context, "candidate": anchored_proposal, "round": round_index + 1}
+            payload = {**context, "candidate": anchored_proposal, "round": round_index + 1,
+                       'design_search_plan': candidate.get('design_search_plan', {}),
+                       'design_transfers': candidate.get('design_transfers', [])}
             if current is not None:
                 payload.update(previous_spec=current, review=review)
                 if previous_record:
@@ -784,27 +896,6 @@ class Controller:
                 "develop" if round_index == 0 else "refine", payload, spec_check)
             candidate.update(spec=current, pending_round=round_index, empirical_status='untested', execution_status='running')
             self.store.put('candidates', candidate)
-            if not candidate.get('comparison_ready'):
-                self.progress('[idea] 方法草稿与首测已保存；接着围绕这个方案对比最近工作。')
-                self.search_for_candidate(candidate)
-                self.focus_sources(candidate)
-                self.audit_papers()
-                candidate['comparison_ready'] = True
-                self.store.put('candidates', candidate)
-                context = self.context()
-                evidence_ids = {e['id'] for e in context['evidence']}
-                paper_ids = {p['id'] for p in context['papers']}
-                try:
-                    spec_check(current)
-                except ValueError as exc:
-                    # Retrieval can upgrade an abstract to full text and replace
-                    # its evidence IDs. Rebind the saved draft to current sources
-                    # before asking a reviewer to use it.
-                    refreshed = {**payload, **context, 'previous_draft': current,
-                        'source_refresh': str(exc)}
-                    current = self.task('develop' if round_index == 0 else 'refine', refreshed, spec_check)
-                    candidate['spec'] = current
-                    self.store.put('candidates', candidate)
             novelty, warnings = evidence_gate(current, context["evidence"])
             comparison = assess_novelty(current, context["evidence"])
             feasibility = assess_feasibility(current, context["evidence"])
@@ -812,7 +903,11 @@ class Controller:
             def review_check(value):
                 check_references(value, evidence_ids, paper_ids)
                 assess_motivation({**candidate["proposal"], "motivation": current["motivation"]}, value, context["evidence"])
-            review = self.task("review", {**context, "candidate": anchored_proposal, "method_spec": current}, review_check)
+            review_payload = {**context, "candidate": anchored_proposal, "method_spec": current,
+                              'design_transfers': candidate.get('design_transfers', [])}
+            if previous_review is not None:
+                review_payload.update(previous_review=previous_review, previous_revision_record=previous_record)
+            review = self.task("review", review_payload, review_check)
             motivation = assess_motivation({**candidate["proposal"], "motivation": current["motivation"]}, review, context["evidence"])
             warnings.extend(motivation["warnings"])
             # A review verdict alone cannot prove novelty coverage or empirical success.
@@ -884,10 +979,15 @@ class Controller:
             action = review["next_action"]
             added_evidence = False
             if round_index + 1 < self.config["max_rounds"] and action["kind"] == "search":
-                if self.search_once(action["description"], action["decision_impact"], purpose='novelty'):
-                    self.read_papers()
-                    self.focus_sources(candidate)
-                    self.audit_papers()
+                before = {p['id'] for p in self.store.rows('papers')}
+                if self.search_once(action["description"], action["decision_impact"], purpose='design', candidate=candidate):
+                    new = [p['id'] for p in self.store.rows('papers') if p['id'] not in before]
+                    candidate['retrieved_work_ids'] = list(dict.fromkeys(new + candidate.get('retrieved_work_ids', [])))
+                    candidate['design_followup_question'] = action['decision_impact']
+                    candidate.pop('design_ready', None)
+                    # The review supplied a specific design question. Read its
+                    # selected sources without initiating another broad search.
+                    self.prepare_design(candidate, search=False)
                     added_evidence = True
             # A search may still break an otherwise repeated revision. Compare
             # actual evidence IDs, not merely a successful retrieval response.

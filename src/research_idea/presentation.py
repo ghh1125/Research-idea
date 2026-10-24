@@ -3,19 +3,27 @@ from __future__ import annotations
 
 
 STAGE_LABELS = {
-    'plan_search': ('search', '1/4 · 找论文'),
-    'screen_papers': ('search', '1/4 · 选择值得精读的论文'),
-    'extract': ('read', '2/4 · 阅读论文'),
-    'read_section': ('read', '2/4 · 阅读正文'),
-    'paper_card': ('analysis', '2/4 · 梳理论文的方法与启发'),
-    'inspect_source': ('read', '3/4 · 对照候选补读'),
-    'audit_claims': ('analysis', '2/4 · 理解实验支持了什么'),
-    'map': ('analysis', '3/4 · 找到值得研究的问题'),
-    'propose': ('idea', '3/4 · 提出 idea'),
-    'develop': ('analysis', '4/4 · 设计具体方法'),
-    'refine': ('review', '4/4 · 改进方案'),
-    'review': ('review', '4/4 · 讨论问题、动机与方法'),
+    'plan_search': ('search', '第一阶段 · 文献构思 · 找论文'),
+    'screen_papers': ('search', '第一阶段 · 文献构思 · 选择论文'),
+    'extract': ('read', '第一阶段 · 文献构思 · 阅读论文'),
+    'read_section': ('read', '第一阶段 · 文献构思 · 阅读正文'),
+    'paper_card': ('analysis', '第一阶段 · 文献构思 · 理解问题、方法与启发'),
+    'inspect_source': ('read', '第二阶段 · 方案设计 · 定向阅读'),
+    'design_transfer': ('design', '第二阶段 · 方案设计 · 这篇论文怎样帮助方案'),
+    'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
+    'map': ('analysis', '第一阶段 · 文献构思 · 连接背景、问题与动机'),
+    'propose': ('concept', '第一阶段 · Background → Problem → Motivation → Idea'),
+    'develop': ('design', '第二阶段 · 方案设计 · 确定方法与首测'),
+    'refine': ('design', '第二阶段 · 方案设计 · 完善方案'),
+    'review': ('review', '第二阶段 · 方案设计 · 讨论设计选择'),
 }
+
+
+def stage_label(stage, phase='ideation'):
+    tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
+    if phase == 'design':
+        label = label.replace('第一阶段 · 文献构思', '第二阶段 · 方案设计')
+    return tag, label
 SKILL_LABELS = {
     'research-idea-read-evidence': '定位原文依据',
     'research-idea-analyze-paper': '理解方法与研究启发',
@@ -39,12 +47,26 @@ def points(items):
     return '\n'.join('• ' + str(item) for item in items if str(item).strip())
 
 
-def activity_summary(stage, result):
+def activity_summary(stage, result, citations=None):
     """Show decisions and findings at every stage, rather than nested schema fields."""
     lines = []
     def add(label, value):
         if value:
-            lines.append(label + '：' + ('\n' + points(value) if isinstance(value, list) else str(value)))
+            lines.append('**' + label + '：** ' + ('\n' + points(value) if isinstance(value, list) else str(value)))
+    def section(title):
+        lines.append('### ' + title)
+    def source(paper_id):
+        if citations:
+            add('论文', citations.paper(paper_id))
+    def source_refs(ids, paper_id):
+        if citations:
+            # The paper link is already directly above this source's findings.
+            refs = [citations.location(citations.evidence[eid])
+                    if eid in citations.evidence and citations.evidence[eid]['paper_id'] == paper_id
+                    else citations.reference(eid) for eid in ids]
+            add('原文依据', list(dict.fromkeys(refs)))
+        else:
+            add('原文依据', ids)
     if stage in {'extract', 'read_section', 'inspect_source'}:
         for item in result.get('observations', []):
             add('读到的内容', item['statement'])
@@ -59,6 +81,7 @@ def activity_summary(stage, result):
     elif stage == 'screen_papers':
         add('选读思路', result.get('selection_summary'))
         for item in result.get('selected', []):
+            source(item['paper_id'])
             add('选读原因', item['reason'])
             add('要从正文确认什么', item['reading_question'])
     elif stage == 'paper_card':
@@ -81,16 +104,56 @@ def activity_summary(stage, result):
         add('可能的原因', result.get('competing_explanations'))
     elif stage == 'propose':
         for item in result.get('candidates', []):
-            add('Idea', item['title'])
+            section('Idea · ' + item['title'])
+            section('背景与问题')
+            add('背景与需要', item['motivation'].get('background'))
             add('问题', item['problem'])
+            section('研究动机')
             add('为什么值得做', item['motivation']['importance'])
-            add('方法', item['intervention'])
+            add('现有简单做法的局限', item['motivation']['existing_approach_limit'])
+            section('核心思路')
+            add('可能的原因', item['motivation']['causal_explanation'])
+            add('核心想法', item['intervention'])
+            add('为什么这个想法有用', item['motivation']['why_this_method'])
             add('预期看到什么', item['prediction'])
+            section('基本可行性')
+            sketch = item.get('feasibility_sketch', {})
+            add('可用输入', sketch.get('inputs'))
+            add('关键假设', sketch.get('key_assumption'))
+            if item.get('positioning'):
+                section('与已有工作的区别')
+            for comparison in item.get('positioning', []):
+                source(comparison['paper_id'])
+                add('已有工作解决了什么', comparison['addressed_problem'])
+                add('我们继续回答什么', comparison['remaining_question'])
+                add('预期贡献', comparison['contribution'])
+                source_refs(comparison['evidence_ids'], comparison['paper_id'])
+        if lines:
+            lines.append('第一阶段到此完成。接下来：Idea → Method，探索技术路线并形成研究方案。')
         if not lines:
             add('构思结果', result.get('no_candidate_reason'))
+    elif stage == 'design_transfer':
+        source(result['paper_id'])
+        for option in result.get('options', []):
+            section(option['question'])
+            for key, label in [('source_technique', '可借鉴的技术'),
+                               ('shared_structure', '为什么可以迁移'), ('source_conditions', '原技术的适用条件'),
+                               ('adaptation', '在本方案中怎么改'), ('why_it_helps', '如何解决当前问题'),
+                               ('simpler_alternative', '简单替代方案'), ('first_test', '先做什么实验')]:
+                add(label, option[key])
+            source_refs(option['evidence_ids'], result['paper_id'])
+        if not result.get('options'):
+            add('接下来重点读', result.get('reading_gaps'))
     elif stage in {'develop', 'refine'}:
+        section('当前方法')
         add('动机', result['motivation']['importance'])
         add('方法', result['method'].get('summary') or result['method']['changes'])
+        for decision in result.get('design_decisions', []):
+            section(decision['question'])
+            add('采用', decision['choice'])
+            add('选择理由', decision['rationale'])
+            add('原文依据', decision['evidence_ids'])
+        section('贡献与首测')
         add('与已有工作的差异', result['prior_art']['justification'])
         add('第一步验证', result['validation'].get('summary') or result['validation']['first_test'])
         for response in result.get('review_responses', []):
@@ -103,7 +166,8 @@ def activity_summary(stage, result):
             add('设计讨论', item['issue'])
             add('改进办法', item['action'])
         add('建议先试', result['motivation_assessment']['decisive_test'])
-    return '\n\n'.join(lines)
+    text = '\n\n'.join(lines)
+    return citations.text(text) if citations else text
 
 
 def idea_markdown(candidate):
@@ -117,15 +181,25 @@ def idea_markdown(candidate):
     def add(label, value):
         if value:
             lines.extend(['**' + label + '：** ' + str(value), ''])
+    lines.extend(['#### 问题与动机', ''])
+    add('背景与需要', motivation.get('background'))
     add('研究问题' if motivation.get('basis') == 'research_hypothesis' else '问题', motivation.get('problem_observation', proposal.get('problem')))
     add('为什么值得做', motivation.get('importance', proposal.get('why_it_matters')))
     add('现有方法的局限', motivation.get('existing_approach_limit'))
     add('核心想法', motivation.get('causal_explanation', proposal.get('hypothesis')))
-    add('具体方法', method.get('summary') or proposal.get('intervention') or '\n'.join(method.get('changes', [])))
+    lines.extend(['#### 方法与贡献', ''])
+    add('具体方法' if spec else '基本方法思路', method.get('summary') or proposal.get('intervention') or '\n'.join(method.get('changes', [])))
     add('输入 → 输出', method.get('inputs', '') + ' → ' + method.get('outputs', '') if method else '')
     add('为什么可能奏效', motivation.get('why_this_method', proposal.get('mechanism')))
+    add('希望取得的实质进展', motivation.get('expected_progress'))
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))
     add('最简单的对照', motivation.get('simplest_alternative'))
+    if not spec:
+        sketch = proposal.get('feasibility_sketch', {})
+        add('可用输入', sketch.get('inputs'))
+        add('基本实现路径', sketch.get('available_path'))
+        add('先确认什么', sketch.get('first_check'))
+    lines.extend(['#### 第一项值得做的实验', ''])
     add('第一步验证', validation.get('summary') or validation.get('first_test', proposal.get('prediction')))
     add('值得继续的结果', validation.get('positive', claim.get('observable_consequence')))
     add('需要修改的结果', validation.get('negative', proposal.get('falsifier')))

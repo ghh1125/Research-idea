@@ -15,11 +15,12 @@ from .locking import project_lock
 from .report import export_report
 from .schema import obj, STR, validate
 from .store import Store, now
-from .presentation import STAGE_LABELS, activity_summary, skill_label, error_summary
+from .presentation import STAGE_LABELS, stage_label, activity_summary, skill_label, error_summary
 from .citations import Citations
 
 CHAT_SCHEMA = obj(answer=STR)
 LABELS = {
+    'paper_id': '论文', 'closest_work_ids': '最近相关工作',
     'research_question': '研究问题', 'scope': '检索范围', 'queries': '检索词',
     'query': '查询', 'rationale': '理由', 'purpose': '目的', 'assumptions': '假设',
     'problem': '问题', 'observations': '观察', 'competing_explanations': '竞争解释',
@@ -32,6 +33,15 @@ LABELS = {
     'description': '说明', 'warranted_conclusion': '可支持结论', 'confounds': '竞争解释',
     'limitations': '局限', 'missing_controls': '缺少的控制', 'first_test': '第一步测试',
     'weakest_assumption': '最脆弱假设', 'no_candidate_reason': '没有形成候选的原因',
+    'background': '背景与需要', 'positioning': '动机与贡献对照',
+    'addressed_problem': '已有工作解决什么', 'remaining_question': '我们继续回答什么', 'contribution': '预期贡献',
+    'feasibility_sketch': '基本实现路径', 'inputs': '可用输入', 'available_path': '怎样开始实现',
+    'key_assumption': '关键假设', 'first_check': '最早检查',
+    'options': '可借鉴技术', 'question': '设计问题', 'source_technique': '来源技术',
+    'shared_structure': '共同问题结构', 'source_conditions': '原技术适用条件',
+    'adaptation': '怎样改造', 'why_it_helps': '为什么有帮助', 'simpler_alternative': '简单替代方案',
+    'reading_gaps': '还需读清楚什么', 'design_decisions': '技术选择与理由',
+    'choice': '采用的设计', 'alternative': '简单替代方案',
 }
 
 
@@ -39,34 +49,38 @@ def event(tag, text):
     print(json.dumps({'tag': tag, 'text': str(text)}, ensure_ascii=False), flush=True)
 
 
-def outline(value, depth=0):
+def outline(value, depth=0, citations=None):
     """Display validated structured findings, never hidden provider reasoning."""
     lines = []
     if isinstance(value, dict):
         for key, item in value.items():
             label = LABELS.get(key, key)
+            if citations and key == 'paper_id':
+                item = citations.paper(item)
+            elif citations and key == 'closest_work_ids':
+                item = [citations.paper(pid) for pid in item]
             if isinstance(item, (dict, list)):
                 lines.append('  ' * depth + label + '：')
-                lines.extend(outline(item, depth + 1))
+                lines.extend(outline(item, depth + 1, citations))
             else:
                 lines.append('  ' * depth + label + '：' + str(item))
     elif isinstance(value, list):
         for item in value:
             if isinstance(item, (dict, list)):
                 lines.append('  ' * depth + '—')
-                lines.extend(outline(item, depth + 1))
+                lines.extend(outline(item, depth + 1, citations))
             else:
                 lines.append('  ' * depth + '• ' + str(item))
-    return lines
+    return [citations.text(line) for line in lines] if citations else lines
 
 
-def activity(stage, result, cached):
-    tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
-    event(tag, label + ' · 已复用' if cached else label + '\n\n' + activity_summary(stage, result))
-    event('detail', label + '\n' + '\n'.join(outline(result)))
+def activity(stage, result, cached, phase='ideation', citations=None):
+    tag, label = stage_label(stage, phase)
+    event(tag, label + ' · 已复用' if cached else label + '\n\n' + activity_summary(stage, result, citations))
+    event('detail', label + '\n' + '\n'.join(outline(result, citations=citations)))
 
 
-def progress(message):
+def progress(message, phase='ideation'):
     if message.startswith('[') and '] ' in message:
         tag, text = message[1:].split('] ', 1)
     elif 'unavailable' in message:
@@ -77,13 +91,14 @@ def progress(message):
         stage = message.split(' ', 1)[0]
         if stage == 'cached':
             return
-        tag, label = STAGE_LABELS.get(stage, ('progress', stage))
+        tag, label = stage_label(stage, phase)
         text = message.replace(stage, label, 1)
     if tag == 'skill':
         for name in text.replace(' · ', ', ').split(', '):
             text = text.replace(name, skill_label(name))
-        for stage, (_, label) in STAGE_LABELS.items():
+        for stage in STAGE_LABELS:
             if text.startswith(stage + ' · '):
+                _, label = stage_label(stage, phase)
                 text = text.replace(stage + ' · ', label + ' · ', 1)
                 break
     text = re.sub(r'\(call (\d+)/(\d+)\)', r'· 模型调用 \1/\2', text)
@@ -152,21 +167,26 @@ def research(project):
             if store.get('demo'):
                 raise ValueError('演示项目请用 demo/resume；真实对话请新建项目。')
             def findings(stage, result, cached):
-                store.set('last_activity', {'stage': stage, 'result': result})
-                activity(stage, result, cached)
-                ids = set(re.findall(r'ev_[a-zA-Z0-9_]+', json.dumps(result)))
+                store.set('last_activity', {'stage': stage, 'result': result, 'phase': controller.phase})
                 citations = Citations.from_store(store)
+                if stage == 'screen_papers':
+                    # Screening finishes before selected metadata enters papers.
+                    pool = [p for entry in store.get('search_ledger', {}).values() for p in entry.get('metadata', [])]
+                    citations = Citations(pool + store.rows('papers'), store.rows('evidence'))
+                activity(stage, result, cached, controller.phase, citations)
+                ids = set(re.findall(r'ev_[a-zA-Z0-9_]+', json.dumps(result)))
                 for evidence in store.rows('evidence'):
                     if evidence['id'] in ids and evidence['id'] not in shown_evidence:
                         shown_evidence.add(evidence['id'])
                         event('evidence', citations.block(evidence))
             shown_evidence = {e['id'] for e in store.rows('evidence')}
-            controller = Controller(store, make_backend(cfg, project), cfg, progress=progress, activity=findings)
+            controller = Controller(store, make_backend(cfg, project), cfg,
+                progress=lambda message: progress(message, controller.phase), activity=findings)
             event('skill', '本轮分析方法：' + ' → '.join(skill_label(s['name']) for s in controller.skills) if controller.skills else '使用任务内的分析方法')
             from .search_scope import config_scope
-            for purpose, label in [('strategy', '寻找可借鉴的方法与研究机会'), ('novelty', '候选动机与贡献查重')]:
+            for purpose, label in [('strategy', '背景与技术路线检索窗口'), ('novelty', '第一阶段：近期问题动机与贡献对照窗口')]:
                 window = config_scope(cfg, purpose)
-                event(purpose, f"{label} · {window['since']} → {window['until']}\n按问题动机和具体主张比较，已有方法也可以用于新的研究问题。")
+                event('system', f"{label} · {window['since']} → {window['until']}")
             for paper in store.rows('papers'):
                 event('paper', f"{Citations([paper]).paper(paper['id'])} · {paper.get('year', '')}\n资料类型：{paper.get('content_kind', '')}")
             try:
