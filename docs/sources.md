@@ -83,7 +83,7 @@
 | 参考机制 | 本项目的实现 |
 | --- | --- |
 | IdeaScientist 的 gap_finder 区分问题缺口，innovator 寻找其他子领域中可迁移的机制；reader 带着目标阅读并复用已答问题 | 第一轮 `positioning` 随构思给出动机与贡献对照；第二轮技术查询可以脱离原应用领域，`design_transfer` 记录共同结构、原条件和改造。已有证据复用，有具体缺口才定向补读 |
-| ResearchStudio IdeaSpark 将概念与技术细化分开，并要求可独立解释的简单基线 | 第一轮先说明问题价值、基本干预和可行路径；第二轮再给路线选择、必要性理由、简单替代及区分实验。没有照搬其额外评审关卡 |
+| ResearchStudio IdeaSpark 将概念与技术细化分开，并要求可独立解释的简单基线 | 第一轮先说明问题价值、基本干预和可行路径；第二轮再给参考路线、必要性理由与简单替代。没有照搬其额外评审关卡 |
 | Supervisor-Skills 按研究阶段与价值类型理解贡献，允许有理由的未检验机制进入实验 | 问题价值与方法必要性成为一条连贯论证；效率改善要解释解除的约束，跨域迁移要解释新增能力或理解。没有引入固定分数淘汰机制 |
 | ARIS research-lit 复用已有知识、组织方法线索、指出论文对当前问题的关系 | 技术阅读产出直接面向设计决定，最终 `design_decisions` 留下采用或改造的原因，未选技术不自动成为方法模块 |
 
@@ -94,8 +94,8 @@
 | 固定版本的参考文件 | 借鉴后的实现位置与行为 | 验证 |
 | --- | --- | --- |
 | [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md)，构思角度与核心机制 | [prompts.py](../src/research_idea/prompts.py) 的 `map/propose` 从矛盾、未检验假设、迁移、工作条件和诊断等视角选重要问题；问题价值由新增能力或理解解释，方法保持单一清楚的核心。按用户要求，已知动机与贡献对照在提出 idea 时完成 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：第一轮必须给最近工作对照和基本实现路径，资料少仍能提出可检验假设 |
-| [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py)，`reader/gap_finder/innovator` | [controller.py](../src/research_idea/controller.py) 的 `plan_search/prepare_design/focus_sources` 与 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md)：问题驱动阅读、已读证据复用、来源对象到目标对象的对应、成立条件与最简单替代，形成 `design_transfers` 后才详细设计 | [test_technical_design.py](../tests/test_technical_design.py)：阶段顺序、定向补读、来源归属、时间窗口和下载恢复 |
-| [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/experiment-bridge/SKILL.md)，sanity → baseline → main 的次序 | [design-falsification skill](../src/research_idea/builtin_skills/research-idea-design-falsification/SKILL.md) 先安排接口/样本检查和简单基线，再安排最小机制比较；首测预算与后续扩大确认分开。这里只设计实验，不执行其训练和部署流程 | 内置 skill 路由与结构测试；真实模型联调检查方法、基线和首测的连接 |
+| [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py)，`reader/gap_finder/innovator` | [controller.py](../src/research_idea/controller.py) 的 `plan_search/prepare_design/focus_sources` 与 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md)：问题驱动阅读、已读证据复用、来源对象到目标对象的对应、成立条件与最简单替代，形成 `design_transfers` 后选择适合 idea 的参考路线 | [test_technical_design.py](../tests/test_technical_design.py)：阶段顺序、定向补读、来源归属、时间窗口和下载恢复 |
+| [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/experiment-bridge/SKILL.md)，sanity → baseline → main 的次序 | 借鉴先看关键前提和简单替代的思路；当前 [design-falsification skill](../src/research_idea/builtin_skills/research-idea-design-falsification/SKILL.md) 仅在审阅时比较核心解释。按用户要求，默认不再规划实验，未接入该框架的执行流程 | 内置 skill 路由与结构测试；[test_idea_workflow.py](../tests/test_idea_workflow.py) 验证不提供实验计划仍可完整交付 |
 | CORAL [reflect](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/reflect.md) / [consolidate](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/consolidate.md) | [controller.py](../src/research_idea/controller.py) 的设计讨论传递上一轮意见、实际版本变化和设计者回应；[prompts.py](../src/research_idea/prompts.py) 要求重复批评先说明原回应为什么仍不足，保留已经有理由的选择。采用共享记录与反思思路，材料仍是文献和设计意见，不当成实验评分 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：下一轮审阅收到正确的上一轮意见、修改记录与对应回应 |
 
 默认仍使用用户配置的同一个后端、模型和总预算，不因参考框架而启动额外模型、自动实验或长期循环。

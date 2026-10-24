@@ -30,7 +30,7 @@ STAGE_MAP = {
     "research-idea-compare-methods": ("propose", "inspect_source", "develop", "refine", "review"),
     "research-idea-build-mechanism": ("design_transfer", "develop", "refine"),
     "research-idea-check-feasibility": ("propose", "develop", "refine", "review"),
-    "research-idea-design-falsification": ("develop", "refine", "review"),
+    "research-idea-design-falsification": ("review",),
     "research-idea-audit-claims": ("audit_claims", "extract", "inspect_source", "develop", "refine", "review"),
     "ccf-idea-optimizer": ("map", "propose", "develop", "refine"),
     "ccf-idea-reviewer": ("review",),

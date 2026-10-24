@@ -480,7 +480,7 @@ class Controller:
             self.retrieve_full_texts(candidate.get('retrieved_work_ids', []))
             return
         scope = config_scope(self.config, 'design')
-        self.progress(f"[design] 第二阶段 · 围绕 idea 寻找可借鉴的技术、基线与实验设计 · {scope['since']} → {scope['until']}")
+        self.progress(f"[design] 第二阶段 · 围绕 idea 寻找可借鉴的技术与适用条件 · {scope['since']} → {scope['until']}")
         room = self.config["max_papers"] - len(self.store.rows("papers"))
         if room <= 0:
             self.progress('[design] 已达到本项目阅读上限，复用已有论文设计技术路线。')
@@ -542,7 +542,7 @@ class Controller:
         if candidate.get('design_ready') == source_key():
             return
         self.store.put('candidates', candidate)
-        self.progress('[design] 第二阶段 · 方案设计：拆解设计问题，探索可迁移方法，确定路线和首测。')
+        self.progress('[design] 第二阶段 · 技术参考：探索可借鉴方法，说明适用理由与改造方向。')
         if search:
             self.search_for_candidate(candidate)
         papers = {p['id']: p for p in self.store.rows('papers')}
@@ -574,8 +574,8 @@ class Controller:
                     if len(value['options']) > 3:
                         raise ValueError('Describe at most three useful design transfers per paper')
                     for option in value['options']:
-                        if not option['evidence_ids'] or any(not v.strip() for k, v in option.items() if k != 'evidence_ids'):
-                            raise ValueError('A transfer needs a source technique, a concrete adaptation and a first test')
+                        if not option['evidence_ids'] or any(not v.strip() for k, v in option.items() if k not in {'evidence_ids', 'first_test'}):
+                            raise ValueError('A transfer needs a source technique, a structural mapping and a concrete adaptation')
                 transfer = self.task('design_transfer', payload, check_transfer)
                 # Reuse first-round evidence. Only a concrete unanswered design
                 # question warrants one focused read, not another full paper card.
@@ -725,7 +725,7 @@ class Controller:
                 self.initial_search()
             initial_ids = cohort.get('initial_paper_ids') if continuing else None
             if not self.store.rows("papers"):
-                self.progress('[analysis] 先提出可检验的问题与基本思路，第二阶段围绕它设计方法和首测。')
+                self.progress('[analysis] 先提出可检验的问题与基本思路，第二阶段围绕它提供技术参考。')
             self.retrieve_full_texts(initial_ids)
             self.read_papers(initial_ids)
             self.audit_papers(initial_ids)
@@ -861,12 +861,12 @@ class Controller:
                 validate_comparisons(value["prior_art"]["overlaps"])
                 evidence_gate(value, context["evidence"])
                 assess_feasibility(value, context["evidence"])
-                if not value["method"]["changes"] or not value["validation"]["first_test"].strip():
-                    raise ValueError("Missing concrete change or first test")
+                if not value["method"]["changes"] or not value["method"]["summary"].strip():
+                    raise ValueError("Missing concrete technical direction or changes")
                 decisions = value['design_decisions']
                 if not 1 <= len(decisions) <= 3 or any(
-                        not text.strip() for item in decisions for key, text in item.items() if key != 'evidence_ids'):
-                    raise ValueError('Explain one to three design choices with rationale, adaptation, a simple alternative and first test')
+                        not text.strip() for item in decisions for key, text in item.items() if key not in {'evidence_ids', 'first_test'}):
+                    raise ValueError('Explain one to three design choices with rationale, adaptation and a simple alternative')
                 if round_index:
                     requested = {item['issue'] for item in (review or {}).get('issues', [])}
                     responses = value['review_responses']
@@ -1005,11 +1005,11 @@ class Controller:
                 concern = next((issue["issue"] for issue in review["issues"]), None)
                 concern = concern or next(iter(review["unresolved_questions"]), None) or review["revision_instructions"]
                 candidate["recommended_action"] = {
-                    "kind": "run_experiment",
-                    "description": current['validation']['first_test'],
-                    "decision_impact": "Use the planned test to distinguish the remaining design question: " + (concern or current['validation']['weakest_assumption']),
+                    "kind": current['next_action']['kind'],
+                    "description": current['next_action']['description'] or current['motivation']['necessity_test'],
+                    "decision_impact": "Resolve the remaining research question: " + (concern or current['validation']['weakest_assumption']),
                 }
-                self.progress('[review] 本轮讨论已收束：保留完整方案，把剩余设计分歧放进第一步测试。')
+                self.progress('[review] 本轮讨论已收束：保存 idea、技术参考和关键判断。')
                 self.store.event("revision_stalled", {"candidate_id": candidate["id"], "round": round_index + 1,
                     "reason": "exact_repeat_without_new_evidence"})
                 break

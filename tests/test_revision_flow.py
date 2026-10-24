@@ -97,8 +97,8 @@ class RevisionFlowTests(unittest.TestCase):
         self.assertEqual(len(self.candidate["versions"]), 2)
         self.assertEqual(self.candidate["research_status"], "no_detectable_progress")
         self.assertEqual(self.candidate["empirical_status"], "untested")
-        self.assertEqual(self.candidate["recommended_action"]["kind"], "run_experiment")
-        self.assertEqual(self.candidate["recommended_action"]["description"], method_spec()['validation']['first_test'])
+        self.assertEqual(self.candidate["recommended_action"]["kind"], method_spec()['next_action']['kind'])
+        self.assertEqual(self.candidate["recommended_action"]["description"], method_spec()['next_action']['description'])
         self.assertIn("routing signal", self.candidate["recommended_action"]["decision_impact"])
         saved = self.store.rows("candidates")[0]
         record = saved["versions"][-1]["revision_record"]

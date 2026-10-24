@@ -27,8 +27,8 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
 6. 第一阶段 [concept]：背景 → 问题 → 动机 → Idea；完成贡献对照和基本可行性判断。
-   第二阶段 [design]：Idea → Method；探索技术路线、实现和实验设计。
-7. 最后 [idea] 显示方案与第一步验证；论文标题旁直接给链接，/evidence 查看原文。
+   第二阶段 [design]：Idea → Method；提供可借鉴技术、适用理由与改造建议。
+7. 最后 [idea] 显示核心想法、研究价值、工作差异与技术参考；/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
@@ -64,7 +64,7 @@ COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', det
 TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
-    'review': '方案讨论', 'idea': '最终研究方案', 'concept': 'Idea 构思', 'design': '技术设计', 'evidence': '原文依据', 'saved': '已保存',
+    'review': '方案讨论', 'idea': '研究 Idea', 'concept': 'Idea 构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
     'error': '这一步未完成', 'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
 BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
     'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',
@@ -84,12 +84,12 @@ WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea�
 
 1. 输入方向和补充想法，直接与模型讨论。
 2. 输入 /run：第一阶段 背景 → 问题 → 动机 → Idea；第二阶段 Idea → Method。
-3. 最后得到问题、动机、具体方法、工作差异和第一步验证。
+3. 最后得到核心想法、研究价值、与已有工作的差异，以及技术参考。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
 /intro 使用介绍 · /new 新研究 · /help 全部命令
 
-只提供研究方案与实验设计。运行中显示进展，Ctrl+C 停止，/run 继续。'''
+专注研究 idea，附技术参考。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
 
 def safe_text(text):

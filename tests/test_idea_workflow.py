@@ -69,8 +69,10 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('previous_revision_record', second_review)
         export_report(self.store)
         front = (self.project / 'outputs/report.md').read_text().split('<details>')[0]
-        for label in ('具体方法', '输入 → 输出', '第一步验证', '最简单的对照'):
+        for label in ('新问题是什么', '为什么重要', 'Idea 怎样解决它', '参考路线'):
             self.assertIn(label, front)
+        for label in ('第一步验证', '资源与规模', '值得继续的结果'):
+            self.assertNotIn(label, front)
         self.assertIn('执行步骤', (self.project / ('outputs/' + candidate['id'] + '.md')).read_text())
         for internal in ('prerequisites_unverified', 'motivation_unresolved', '待补证', 'blocked', 'pending'):
             self.assertNotIn(internal, front)
@@ -151,6 +153,25 @@ class IdeaWorkflowTests(unittest.TestCase):
         payload = json.loads(review.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
         self.assertTrue(payload['method_spec']['design_decisions'][0]['rationale'])
 
+    def test_technical_reference_completes_without_an_experiment_plan(self):
+        def omit_plan(task, output):
+            if task.stage in {'develop', 'refine'}:
+                output['validation'] = {key: [] if isinstance(value, list) else ''
+                                        for key, value in output['validation'].items()}
+                for choice in output['design_decisions']:
+                    choice['first_test'] = ''
+        candidate, backend = self.run_flow(RecordingBackend(omit_plan))
+        self.assertTrue(candidate['development_complete'])
+        self.assertEqual(candidate['spec']['validation']['first_test'], '')
+        self.assertEqual(sum(t.stage == 'develop' for t in backend.calls), 1)
+        self.assertEqual(sum(t.stage == 'refine' for t in backend.calls), 1)
+        self.assertTrue(candidate['spec']['feasibility']['required_signals'])
+        export_report(self.store)
+        front = (self.project / 'outputs/report.md').read_text().split('<details>')[0]
+        self.assertIn('技术参考', front)
+        self.assertNotIn('第一步验证', front)
+        self.assertNotIn('完整首测', front)
+
     def test_report_uses_current_intervention_after_reframing_and_keeps_phase_boundary(self):
         candidate, _ = self.run_flow()
         candidate['proposal']['intervention'] = 'Abandoned intervention from the original idea'
@@ -196,7 +217,8 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_readable_findings_and_narrow_terminal_preserve_navigation_and_budget(self):
         candidate, _ = self.run_flow()
         text = activity_summary('develop', candidate['spec'])
-        self.assertIn('第一步验证', text)
+        self.assertIn('针对本场景的改造', text)
+        self.assertNotIn('第一步验证', text)
         self.assertNotIn('required_signals', text)
         chat = Chat(self.project)
         from prompt_toolkit.utils import get_cwidth
@@ -208,7 +230,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('/intro', lines[2])
         rendered = ''.join(value for _, value in fragments('idea', idea_markdown(candidate)))
         self.assertNotIn('**', rendered)
-        self.assertIn('具体方法', rendered)
+        self.assertIn('参考路线', rendered)
 
     def test_ideation_update_reuses_unchanged_reader_version(self):
         self.assertEqual(stage_version('read_section'), '8')
@@ -220,7 +242,7 @@ class IdeaWorkflowTests(unittest.TestCase):
             Controller(self.store, backend, dict(self.config, max_calls=3)).run()
         self.assertTrue(self.store.rows('candidates')[0]['spec']['method']['changes'])
         export_report(self.store)
-        self.assertIn('具体方法', (self.project / 'outputs/report.md').read_text())
+        self.assertIn('参考路线', (self.project / 'outputs/report.md').read_text())
         Controller(self.store, backend, self.config).run()
         self.assertEqual(sum(t.stage == 'develop' for t in backend.calls), 1)
         self.assertEqual(self.store.get('status'), 'completed')

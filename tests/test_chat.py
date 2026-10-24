@@ -183,7 +183,9 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('核心想法', concept['text'])
         self.assertIn('第二阶段', next(e['text'] for e in events if e['tag'] == 'design'))
         self.assertEqual(events[-2]['tag'], 'idea')
-        self.assertIn('第一步验证', events[-2]['text'])
+        self.assertIn('新问题是什么', events[-2]['text'])
+        self.assertIn('技术参考', events[-2]['text'])
+        self.assertNotIn('第一步验证', events[-2]['text'])
         self.assertNotIn('<details>', events[-2]['text'])
         resumed = io.StringIO()
         with patch('research_idea.chat_worker.make_backend', return_value=DemoBackend()), redirect_stdout(resumed):
@@ -255,7 +257,7 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
     async def test_intro_is_always_in_toolbar_and_does_not_call_model(self):
         self.assertIn('/intro 使用介绍', ''.join(text for _, text in self.chat.toolbar()))
         await self.chat.handle('/intro')
-        self.assertIn('第一步验证', self.events[-1][1])
+        self.assertIn('技术参考', self.events[-1][1])
         self.assertFalse(self.chat.busy)
 
     async def test_new_project_starts_empty_with_same_settings_and_old_project_can_reopen(self):

@@ -13,9 +13,9 @@ STAGE_LABELS = {
     'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
     'map': ('analysis', '第一阶段 · 文献构思 · 连接背景、问题与动机'),
     'propose': ('concept', '第一阶段 · Background → Problem → Motivation → Idea'),
-    'develop': ('design', '第二阶段 · 方案设计 · 确定方法与首测'),
-    'refine': ('design', '第二阶段 · 方案设计 · 完善方案'),
-    'review': ('review', '第二阶段 · 方案设计 · 讨论设计选择'),
+    'develop': ('design', '第二阶段 · 技术参考 · 寻找适合 idea 的路线'),
+    'refine': ('design', '第二阶段 · 技术参考 · 完善思路'),
+    'review': ('review', '第二阶段 · 技术参考 · 讨论关键判断'),
 }
 
 
@@ -32,7 +32,7 @@ SKILL_LABELS = {
     'research-idea-compare-methods': '对比动机与贡献',
     'research-idea-build-mechanism': '设计作用机制',
     'research-idea-check-feasibility': '安排实施路径',
-    'research-idea-design-falsification': '设计第一步测试',
+    'research-idea-design-falsification': '检视核心解释',
 }
 STATUS_LABELS = {'initialized': '准备开始', 'running': '研究中', 'completed': '方案已生成',
                  'budget_exhausted': '本轮预算用完，可增加预算后继续', 'blocked': '运行中断，可继续',
@@ -115,7 +115,6 @@ def activity_summary(stage, result, citations=None):
             add('可能的原因', item['motivation']['causal_explanation'])
             add('核心想法', item['intervention'])
             add('为什么这个想法有用', item['motivation']['why_this_method'])
-            add('预期看到什么', item['prediction'])
             section('基本可行性')
             sketch = item.get('feasibility_sketch', {})
             add('可用输入', sketch.get('inputs'))
@@ -139,7 +138,7 @@ def activity_summary(stage, result, citations=None):
             for key, label in [('source_technique', '可借鉴的技术'),
                                ('shared_structure', '为什么可以迁移'), ('source_conditions', '原技术的适用条件'),
                                ('adaptation', '在本方案中怎么改'), ('why_it_helps', '如何解决当前问题'),
-                               ('simpler_alternative', '简单替代方案'), ('first_test', '先做什么实验')]:
+                               ('simpler_alternative', '简单替代方案')]:
                 add(label, option[key])
             source_refs(option['evidence_ids'], result['paper_id'])
         if not result.get('options'):
@@ -153,9 +152,8 @@ def activity_summary(stage, result, citations=None):
             add('选择理由', decision['rationale'])
             add('针对本场景的改造', decision['adaptation'])
             add('原文依据', decision['evidence_ids'])
-        section('贡献与首测')
+        section('与 idea 的关系')
         add('与已有工作的差异', result['prior_art']['justification'])
-        add('第一步验证', result['validation'].get('summary') or result['validation']['first_test'])
         for response in result.get('review_responses', []):
             add('回应讨论', response['issue'])
             add('采用的处理', response['change'])
@@ -165,17 +163,16 @@ def activity_summary(stage, result, citations=None):
         for item in result.get('issues', []):
             add('设计讨论', item['issue'])
             add('改进办法', item['action'])
-        add('建议先试', result['motivation_assessment']['decisive_test'])
     text = '\n\n'.join(lines)
     return citations.text(text) if citations else text
 
 
 def idea_markdown(candidate):
-    """One useful proposal, including method steps and concrete first-test criteria."""
+    """Lead with the idea; technical references support it without an experiment plan."""
     proposal = candidate['proposal']
     spec = candidate.get('spec') or {}
     motivation = spec.get('motivation', proposal.get('motivation', {}))
-    method, validation = spec.get('method', {}), spec.get('validation', {})
+    method = spec.get('method', {})
     claim = spec.get('novelty_claim', {})
     lines = ['### ' + proposal['title'], '']
     def add(label, value):
@@ -190,7 +187,7 @@ def idea_markdown(candidate):
     add('现有方法的局限', motivation.get('existing_approach_limit'))
     add('希望取得的实质进展', motivation.get('expected_progress'))
     lines.extend(['##### Idea 怎样解决它', ''])
-    # Explain the intervention's principle here; operations and protocols belong
+    # Explain the intervention's principle here; supporting techniques belong
     # to the second part. Refinements use the current rationale, not an old idea.
     add('问题成因', motivation.get('causal_explanation', proposal.get('hypothesis')))
     add('核心想法', motivation.get('why_this_method') if spec else proposal.get('intervention'))
@@ -202,15 +199,13 @@ def idea_markdown(candidate):
         add('可用输入', sketch.get('inputs'))
         add('关键假设', sketch.get('key_assumption'))
         return '\n'.join(lines)
-    lines.extend(['#### 第二部分 · Idea → Method', '', '##### 技术路线', ''])
-    add('具体方法', method.get('summary') or '\n'.join(method.get('changes', [])))
-    add('输入 → 输出', method.get('inputs', '') + ' → ' + method.get('outputs', '') if method else '')
-    add('最简单的对照', motivation.get('simplest_alternative'))
-    lines.extend(['##### 第一项值得做的实验', ''])
-    add('第一步验证', validation.get('summary') or validation.get('first_test', proposal.get('prediction')))
-    add('值得继续的结果', validation.get('positive', claim.get('observable_consequence')))
-    add('需要修改的结果', validation.get('negative', proposal.get('falsifier')))
-    add('资源与规模', validation.get('budget_estimate', method.get('resource_requirements')))
+    lines.extend(['#### 第二部分 · Idea → Method · 技术参考', ''])
+    add('参考路线', method.get('summary') or '\n'.join(method.get('changes', [])))
+    for decision in spec.get('design_decisions', []):
+        add('可借鉴的技术', decision['choice'])
+        add('为什么适合', decision['rationale'])
+        add('如何用于这个 idea', decision['adaptation'])
+        add('来源', '、'.join(decision.get('evidence_ids', [])))
     # Specific impossible inputs need an alternative in the design, not a status badge.
     for item in spec.get('feasibility', {}).get('required_signals', []):
         if item.get('availability') == 'unavailable':

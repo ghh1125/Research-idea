@@ -24,7 +24,7 @@ flowchart TD
     T --> B["正文读取与论文分析卡"]
     B --> Q["主张与实验支持审计"]
     Q --> C["问题建模与头脑风暴"]
-    C --> D["形成并保存方法、动机与首测草稿"]
+    C --> D["形成并保存 idea 与技术参考"]
     D --> R["围绕草稿定向检索与深读"]
     R --> E["贡献对照、可行性与机制审阅"]
     E --> F{"下一步需要什么"}
@@ -51,7 +51,7 @@ flowchart TD
 
 `review.motivation_assessment` 将问题意义（`substantial` / `limited` / `unclear`）、因果联系（`plausible` / `unsupported` / `unclear`）、预期进展（`substantive` / `incremental` / `unclear`）分开判断，并给出理由和决定性测试。这些是待核验的审阅判断，用于暴露薄弱动机与不必要的复杂性；系统不能自动判定实质创新或发表价值。
 
-对照中的 `relation` 为 `same`、`different` 或 `unknown`。可行性检查保留 `source_supported`、`unverified`、`blocked`、`not_applicable`；信号可用性保留 `source_supported`、`unverified`、`unavailable`。证据缺口保存在字符串列表 `comparison_gaps`。`feasibility_assessment` 保存 `status`、警告列表 `warnings`、阻塞项 `blocking_checks` 和待核实项 `unverified_checks`；候选的 `feasibility_status` 单独记录。这些诊断保留在 JSON。用户报告直接展示具体方案、实施路径、首测和替代安排。资料不足可以用 research_hypothesis 提出问题假设；有来源的观察仍要求真实引用。
+对照中的 `relation` 为 `same`、`different` 或 `unknown`。可行性检查保留 `source_supported`、`unverified`、`blocked`、`not_applicable`；信号可用性保留 `source_supported`、`unverified`、`unavailable`。证据缺口保存在字符串列表 `comparison_gaps`。`feasibility_assessment` 保存 `status`、警告列表 `warnings`、阻塞项 `blocking_checks` 和待核实项 `unverified_checks`；候选的 `feasibility_status` 单独记录。这些诊断保留在 JSON。用户报告以研究问题、意义、核心洞见和贡献为主，第二部分提供技术参考；实验计划不再是必填内容。资料不足可以用 research_hypothesis 提出问题假设；有来源的观察仍要求真实引用。
 
 `focus_sources` 根据候选的 `closest_work_ids` 选择最多三篇已导入且标记为 `full_text` 的来源，以候选假设为上下文执行 `inspect_source`，每篇最多补充六条方法/条件证据。摘要和笔记不会进入该步骤。每次仍由 `source_chars` 限定启发式正文片段；短来源可覆盖全部提供文本，长来源保留 `partial` 标记。因此该步骤增加有方向的证据抽取，不能保证读完全部方法、附录或排除所有既有工作。
 
@@ -137,7 +137,7 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 读取后新增证据会使旧分析卡失效；来源和 skill 变化会改变缓存身份。预算中断时，报告只展示已完成的阅读范围与当前有效分析，恢复时复用成功任务。全部文本提供给模型也不等于全面理解；图表标题的文本覆盖不等于视觉验证。
 
-主报告先展示 idea 和第一步验证，完整论证与原文依据折叠展示。分析卡是内部推理与按需核查材料，不是增加用户操作步骤的目标。
+主报告先展示 idea 与简要技术参考，完整论证与原文依据折叠展示。分析卡是内部推理与按需核查材料，不是增加用户操作步骤的目标。
 
 ## 构思与交流契约
 

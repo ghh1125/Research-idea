@@ -81,12 +81,13 @@ def candidate_markdown(candidate, citations=None):
         for item in spec['design_decisions']:
             lines.extend(['**设计问题：** ' + item['question'], '', '**采用：** ' + item['choice'], '',
                           '**为什么适合：** ' + item['rationale'], '', '**需要的修改：** ' + item['adaptation'], '',
-                          '**简单替代方案：** ' + item['alternative'], '', '**区分实验：** ' + item['first_test'], '',
+                          '**简单替代方案：** ' + item['alternative'], '',
                           ', '.join(item['evidence_ids']), ''])
-    lines.extend(['### 实现细节', ''])
+    lines.extend(['### 技术参考记录', ''])
     lines.extend(['**具体改动：**', '', bullets(method['changes']), '', '**执行步骤：**', '',
                   '\n'.join(f'{i}. {step}' for i, step in enumerate(method['inference_steps'], 1)), ''])
-    for key, label in [('base_implementation', '基础实现'), ('trainable_parameters', '训练部分'),
+    for key, label in [('inputs', '可用输入'), ('outputs', '预期输出'),
+                       ('base_implementation', '基础实现'), ('trainable_parameters', '训练部分'),
                        ('frozen_parameters', '保持不变的部分'), ('objective', '目标'),
                        ('supervision', '学习信号'), ('resource_requirements', '资源条件')]:
         lines.extend([f'**{label}：** {method[key]}', ''])
@@ -97,12 +98,13 @@ def candidate_markdown(candidate, citations=None):
         lines.extend(['#### ' + (citations.paper(overlap['paper_id']) if citations else overlap['paper_id']), '',
                       '**已有工作涉及：** ' + overlap['covered_claim'], '',
                       '**本方案继续研究：** ' + overlap['remaining_gap'], '', comparison_table(overlap), ''])
-    lines.extend([feasibility_markdown(candidate, spec), '', '### 完整首测协议', ''])
+    lines.extend([feasibility_markdown(candidate, spec), ''])
     validation = spec['validation']
-    lines.extend(['**核心检验：** ' + validation['weakest_assumption'], '',
-                  '**完整首测协议：** ' + validation['first_test'], '', '**比较对象：**', '', bullets(validation['baselines']), '',
-                  '**控制条件：**', '', bullets(validation['controls']), ''])
-    lines.extend(['**结果不明确时的处理：** ' + validation['inconclusive'], ''])
+    # Old projects may contain a full plan; retain it only in expanded records.
+    if validation.get('first_test'):
+        lines.extend(['### 已保存的验证记录', '', validation['first_test'], '',
+                      '**比较对象：**', '', bullets(validation['baselines']), '',
+                      '**控制条件：**', '', bullets(validation['controls']), ''])
     lines.extend(['### 设计讨论与改进', ''])
     for version in candidate.get('versions', []):
         responses = version['spec'].get('review_responses', [])
@@ -221,10 +223,10 @@ def export_report(store: Store, output_dir: Path | None = None):
     if demo:
         lines.extend(["> **合成演示：所有资料和候选仅用于验证软件流程。没有调用真实模型，没有完成科学实验，不构成创新或效果结论。**", ""])
 
-    # Keep the main deliverable focused on an idea and its next test. Existing
+    # Keep the main deliverable focused on the idea and supporting techniques. Existing
     # evidence, paper cards and audit details remain accessible below.
     if candidates:
-        lines.extend(["## Idea 与第一步验证", ""])
+        lines.extend(["## 研究 Idea", ""])
         for candidate in candidates:
             lines.extend([citations.text(idea_markdown(candidate)), ''])
             compared = [o['paper_id'] for o in (candidate.get('spec') or {}).get('prior_art', {}).get('overlaps', [])]

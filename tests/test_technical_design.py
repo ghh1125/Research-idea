@@ -78,6 +78,14 @@ class TechnicalDesignTests(unittest.TestCase):
         self.assertEqual(data(backend.calls[0])['reading_question'], self.paper['selection']['reading_question'])
         self.assertEqual(data(backend.calls[1])['evidence'][0]['id'], self.eid)
 
+    def test_source_transfer_does_not_require_experimental_design(self):
+        transfer = self.transfer()
+        transfer['options'][0]['first_test'] = ''
+        backend = FakeBackend([transfer])
+        Controller(self.store, backend, self.config).prepare_design(self.candidate)
+        self.assertEqual(len(backend.calls), 1)
+        self.assertEqual(self.candidate['design_transfers'], [transfer])
+
     def test_unavailable_new_fulltexts_do_not_displace_reusable_read_sources(self):
         for index in range(3):
             self.store.put('papers', {'id': 'unavailable-' + str(index), 'title': 'Abstract only',
