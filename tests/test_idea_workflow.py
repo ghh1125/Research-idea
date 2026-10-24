@@ -69,7 +69,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('previous_revision_record', second_review)
         export_report(self.store, self.store.project)
         front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
-        for label in ('Problem · 剩余问题及其原因', 'Motivation · 由局限推导研究动机', 'Idea · 基于动机提出核心想法', '参考路线'):
+        for label in ('Problem · 要解决的问题与原因', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法', '参考路线'):
             self.assertIn(label, front)
         for label in ('第一步验证', '资源与规模', '值得继续的结果'):
             self.assertNotIn(label, front)
@@ -98,15 +98,49 @@ class IdeaWorkflowTests(unittest.TestCase):
         proposal_task = next(task for task in backend.calls if task.stage == 'propose')
         payload = json.loads(proposal_task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
         self.assertEqual(payload['problem_model']['opportunities'], problem['opportunities'])
+        self.assertEqual(payload['problem_model']['research_frame'], problem['research_frame'])
+        self.assertEqual(problem['research_frame']['user_goal'], self.store.get('topic'))
+        summary = activity_summary('map', problem)
+        self.assertIn(problem['research_frame']['literature_logic'], summary)
+        self.assertIn('把相关研究连起来看', summary)
         chosen = next(o for o in problem['opportunities'] if o['id'] == candidate['proposal']['opportunity_id'])
+        self.assertEqual(set(problem['opportunity_types']), {'unresolved_need', 'emerging_problem'})
+        self.assertIn(chosen['problem_origin'], problem['opportunity_types'])
+        self.assertIn('问题来源', summary)
         self.assertTrue(chosen['derivation'])
         self.assertTrue(chosen['prior_art_delta'])
         self.assertTrue(candidate['proposal']['selection_reason'])
         export_report(self.store, self.store.project)
         saved = json.loads((self.project / self.store.get('output_folder') / 'report.json').read_text())
         self.assertEqual(saved['problem_model']['opportunities'], problem['opportunities'])
+        self.assertEqual(saved['problem_model']['research_frame'], problem['research_frame'])
         self.assertEqual(sum(t.stage == 'map' for t in backend.calls), 1)
         self.assertEqual(sum(t.stage == 'propose' for t in backend.calls), 1)
+
+    def test_problem_source_is_limited_to_two_origins_and_repaired_in_existing_step(self):
+        attempts = []
+        def missing_comparison_is_not_a_problem_source(task, output):
+            if task.stage == 'map':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['opportunities'][0]['problem_origin'] = 'untested_factor'
+        candidate, backend = self.run_flow(RecordingBackend(missing_comparison_is_not_a_problem_source))
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(sum(t.stage == 'propose' for t in backend.calls), 1)
+        origins = {o['problem_origin'] for o in self.store.get('problem_model')['opportunities']}
+        self.assertEqual(origins, {'unresolved_need', 'emerging_problem'})
+        self.assertTrue(candidate['proposal']['motivation']['research_need'])
+
+    def test_problem_source_summary_matches_the_directions(self):
+        attempts = []
+        def omit_used_source(task, output):
+            if task.stage == 'map':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['opportunity_types'] = ['unresolved_need']
+        self.run_flow(RecordingBackend(omit_used_source))
+        self.assertEqual(len(attempts), 2)
+        self.assertIn('Problem origins must match', attempts[1].prompt)
 
     def test_unknown_origin_is_repaired_before_the_idea_is_presented(self):
         attempts = []
@@ -222,7 +256,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         idea_part, method_part = rendered.split('#### 第二部分 · Idea → Method', 1)
         self.assertNotIn('Current mechanism after review', idea_part)
         self.assertIn('Current mechanism after review', method_part)
-        for heading in ('Problem · 剩余问题及其原因', 'Motivation · 由局限推导研究动机', 'Idea · 基于动机提出核心想法'):
+        for heading in ('Problem · 要解决的问题与原因', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法'):
             self.assertIn(heading, idea_part)
             self.assertNotIn(heading, method_part)
         candidate['spec'] = {}

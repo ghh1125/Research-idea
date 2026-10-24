@@ -93,7 +93,7 @@
 
 | 固定版本的参考文件 | 借鉴后的实现位置与行为 | 验证 |
 | --- | --- | --- |
-| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md)，构思角度与核心机制 | [prompts.py](../src/research_idea/prompts.py) 的 `map/propose` 从矛盾、未检验假设、迁移、工作条件和诊断等视角选重要问题；问题价值由新增能力或理解解释，方法保持单一清楚的核心。按用户要求，已知动机与贡献对照在提出 idea 时完成 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：第一轮必须给最近工作对照和基本实现路径，资料少仍能提出可检验假设 |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md)，构思角度与核心机制 | [idea_instructions.py](../src/research_idea/idea_instructions.py) 的 `map/propose` 将这些视角作为文献线索，再按本项目要求归到“已有重要问题未解决”或“现有方法暴露新问题”，从根本原因推导动机与 idea。按用户要求，已知动机与贡献对照在提出 idea 时完成 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：第一轮必须给最近工作对照和基本实现路径，资料少仍能提出可检验假设 |
 | [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py)，`reader/gap_finder/innovator` | [controller.py](../src/research_idea/controller.py) 的 `plan_search/prepare_design/focus_sources` 与 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md)：问题驱动阅读、已读证据复用、来源对象到目标对象的对应、成立条件与最简单替代，形成 `design_transfers` 后选择适合 idea 的参考路线 | [test_technical_design.py](../tests/test_technical_design.py)：阶段顺序、定向补读、来源归属、时间窗口和下载恢复 |
 | [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/experiment-bridge/SKILL.md)，sanity → baseline → main 的次序 | 借鉴先看关键前提和简单替代的思路；当前 [design-falsification skill](../src/research_idea/builtin_skills/research-idea-design-falsification/SKILL.md) 仅在审阅时比较核心解释。按用户要求，默认不再规划实验，未接入该框架的执行流程 | 内置 skill 路由与结构测试；[test_idea_workflow.py](../tests/test_idea_workflow.py) 验证不提供实验计划仍可完整交付 |
 | CORAL [reflect](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/reflect.md) / [consolidate](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/consolidate.md) | [controller.py](../src/research_idea/controller.py) 的设计讨论传递上一轮意见、实际版本变化和设计者回应；[prompts.py](../src/research_idea/prompts.py) 要求重复批评先说明原回应为什么仍不足，保留已经有理由的选择。采用共享记录与反思思路，材料仍是文献和设计意见，不当成实验评分 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：下一轮审阅收到正确的上一轮意见、修改记录与对应回应 |
@@ -139,3 +139,7 @@
 - [SIGMOD 2026 研究论文说明](https://2026.sigmod.org/calls_papers_sigmod_research.shtml)：研究论文发表在对应 PACMMOD 期次。[DBLP 的 PACMMOD 目录](https://dblp.org/db/journals/pacmmod/index.html)同时列出 SIGMOD 和 PODS 的出版关联，因此检索纳入该系列时保留真实系列名称。
 
 这次扩展更新研究范围、名称匹配与公开正文来源。新增会议使用已匹配的 OpenAlex 出版源检索，不代表为每个会议都增加了独立官方目录适配器。
+## 上下文组织参考
+
+- [IdeaScientist：独立论文读取上下文](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/runner.py)：读取全文使用独立上下文和输入预算，返回聚焦摘要供后续角色使用。借鉴阶段材料分离；本项目保留原文证据及实验结果，继续用已有分块读取。
+- [ARIS：会话恢复与 Research Contract](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/docs/SESSION_RECOVERY_GUIDE_CN.md)：保存精简项目状态与当前 idea 的聚焦文档，用于恢复工作。借鉴明确研究主线与持久化交接，本项目通过 SQLite 和 `research_frame` 实现，不引入额外审批或角色。

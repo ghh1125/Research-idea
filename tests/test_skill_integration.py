@@ -21,7 +21,7 @@ class CaptureBackend:
 
     def generate(self, task):
         self.prompts.append(task.prompt)
-        return BackendResult({"problem": "A research question", "observations": [],
+        return BackendResult({"research_frame": {"user_goal": "Understand the research goal", "literature_logic": "Compare research approaches", "research_question": "What remains?", "scope_connection": "Sources support a focused hypothesis"}, "problem": "A research question", "observations": [],
             "competing_explanations": [], "unresolved_questions": [],
             "opportunity_types": [], "evidence_ids": [], "opportunities": []})
 

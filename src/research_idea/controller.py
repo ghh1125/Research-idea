@@ -21,6 +21,7 @@ from .search_scope import config_scope
 from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
 from .retries import with_retries
+from .research_context import compact_research_context
 
 
 class BudgetExhausted(RuntimeError):
@@ -179,6 +180,10 @@ class Controller:
         return self.config["max_seconds"] - elapsed
 
     def generate(self, task_id, stage, prompt, repair=False):
+        self.store.event('model_context', {'task_id': task_id, 'stage': stage,
+            'characters': len(prompt), 'utf8_bytes': len(prompt.encode('utf-8'))})
+        if stage in {'map', 'propose', 'develop', 'refine', 'review'}:
+            self.progress(f'[context] 本步输入 {len(prompt):,} 字符 · 包含研究要求、论文分析与原文依据')
         def invoke():
             remaining = self.check_budget()
             self.checkpoint_time()
@@ -319,7 +324,7 @@ class Controller:
         searches = list(self.store.get("search_ledger", {}).values()) + self.store.get("manual_search_ledger", [])
         unresolved_sources = {alias for paper in papers if paper.get('content_kind') != 'full_text'
                               for alias in [paper['id'], *paper.get('aliases', [])]}
-        return {"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
+        return compact_research_context({"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
                 "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
@@ -329,7 +334,7 @@ class Controller:
                 "retrieval_gaps": [entry for entry in self.store.get("full_text_ledger", {}).values()
                                    if entry.get("status") != "completed" and entry.get('paper_id') in unresolved_sources],
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
-                                    for entry in searches[-100:]], "evidence": evidence}
+                                    for entry in searches], "evidence": evidence})
 
     def user_notes(self):
         return [m['content'][:3000] for m in self.store.get('chat_messages', [])
@@ -775,7 +780,11 @@ class Controller:
                 refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
                 def validate_problem(value):
                     refs(value)
+                    if any(not part.strip() for part in value['research_frame'].values()):
+                        raise ValueError('Connect the user goal, synthesized literature logic, research question and source scope')
                     opportunities = value['opportunities']
+                    if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:
+                        raise ValueError('Problem origins must match the unresolved needs or emerging problems in the research directions')
                     if len(opportunities) > 4:
                         raise ValueError('Keep at most four substantive research directions')
                     ids = set()

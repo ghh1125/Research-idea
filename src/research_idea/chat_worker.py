@@ -39,6 +39,8 @@ LABELS = {
     'design_axes': '技术角度', 'axis_ids': '对应技术角度', 'why_needed': '为什么需要',
     'required_function': '需要解决的技术问题', 'search_directions': '方法检索方向',
     'background': '背景与需要', 'positioning': '动机与贡献对照',
+    'research_frame': '研究主线', 'user_goal': '用户要解决的大问题',
+    'literature_logic': '相关研究共同说明什么', 'scope_connection': '论文证据与大问题的联系',
     'addressed_problem': '已有工作解决什么', 'remaining_question': '我们继续回答什么', 'contribution': '预期贡献',
     'feasibility_sketch': '基本实现路径', 'inputs': '可用输入', 'available_path': '怎样开始实现',
     'key_assumption': '关键假设', 'first_check': '最早检查',

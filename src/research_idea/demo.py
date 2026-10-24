@@ -53,9 +53,15 @@ class DemoBackend:
             lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
             output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
         elif task.stage == "map":
-            output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["diagnostic", "untested_assumption"], "evidence_ids": refs}
+            output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["unresolved_need", "emerging_problem"], "evidence_ids": refs}
+            output['research_frame'] = {
+                'user_goal': payload.get('topic') or '理解模型怎样更可靠地使用已有信息。',
+                'literature_logic': '合成材料涉及两类解释：没有获得足够信息，以及没有用好已经获得的信息。这两类解释意味着不同的研究方向。',
+                'research_question': '怎样分清信息缺失和信息使用困难，进而改善回答的可靠性？',
+                'scope_connection': '合成笔记只演示推理流程；其中的任务不替代用户的总体研究目标，也不提供真实研究结论。'}
             output['opportunities'] = [
                 {'id': key, 'question': question, 'basis': 'research_hypothesis',
+                 'problem_origin': 'unresolved_need' if key == 'conflict' else 'emerging_problem',
                  'derivation': '合成笔记提供不同错误来源的线索；这些是假设而非已观测的结果。',
                  'insight': insight, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',
                  'prior_art_delta': '演示把错误来源区分为可讨论的问题；合成材料不能证明科学创新。',

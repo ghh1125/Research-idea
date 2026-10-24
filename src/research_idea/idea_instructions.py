@@ -1,0 +1,57 @@
+"""First-phase procedures: synthesize a research problem, then form an idea.
+
+Keep these as complete procedures rather than accumulating overlapping review
+checklists. Source-level audits remain in the reader and the supplied evidence.
+"""
+
+PROBLEM_ORIGIN_RULES = """
+研究问题只从两个角度引出，按实际主因选择其一：
+1. unresolved_need：已有的重要问题，现有主要方法仍不能解决。说明大家要实现什么、已经做到什么，以及这些方法依赖的目标、信息或基本假设为什么仍使关键困难存在。
+2. emerging_problem：现有方法在使用、扩展或发展过程中暴露出的新问题。说明什么做法或变化会怎样引出这个问题，它影响什么重要能力，以及为什么原来的解决思路不能顺带解决它。新问题可以是有理由提出的研究假设，不必已经在论文里测到。
+论文中的矛盾、未检验假设、跨领域启发和能力边界，是发现上述两类问题的线索，不是额外的问题类别。某篇论文没有测某个因素、没有换一种写法或没有组合两个模块，本身都不能构成选题理由。
+要分析已有主要路线为什么在所研究的条件下解决不了这个问题，不能仅凭没有检索到就断言全领域无人解决。比较实际目标、可用信息、作用过程和结论；相似标题或作者声称解决了问题，都不能替代这个分析。
+"""
+
+MAP_INSTRUCTIONS = """
+这一步要把文献提炼成一个值得研究的问题。先理解用户的大课题，再找问题的根本；不要从某篇论文的实验里挑一个小因素作为我们的研究方向。尊重 user_notes 中的最新研究意图与明确范围。
+
+先建立 research_frame：
+- user_goal：用普通话说明用户最终希望模型或研究者能做到什么，以及为什么需要这件事。
+- literature_logic：把有关工作按解决思路串起来。它们分别改变了什么，带来了什么进展，这些进展合起来又说明什么？从目标、信息来源或共同依赖中找出仍存在的关键障碍，或者由这些方法暴露的新问题。按研究逻辑组织段落，论文为论点提供依据，不逐篇罗列摘要。
+- research_question：由这条逻辑推出的重要问题。具体到能力、学习过程或因果关系，不必具体到某个数据集。
+- scope_connection：解释源论文的具体结果为什么能启发这个大问题，哪些是结果、哪些是我们的进一步推论。实验场景作为依据保留，不自动成为用户的研究范围。
+
+接着在 opportunities 中保留两到三个真正不同、值得考虑的方向；最多四个，不凑数。每个方向包含：
+- id、question、problem_origin、basis；basis 为 source_observation 时须有来源依据，为 research_hypothesis 时把问题或原因作为我们提出的判断。
+- derivation：从背景需要出发，说明已有思路怎样应对，为什么还留下重要困难，或者为什么会暴露新困难。解释背后的共同原因，不停在“还没有测过”。
+- insight：从这个原因得出一个不显然的认识，以及它提示应该改变什么基本做法。先有问题的必要性，再有解决它的想法。
+- why_it_matters：解决后能多做到什么，或对这个大课题会产生什么新的理解。即使换掉喜欢的技术，这个问题也应值得研究。
+- prior_art_delta：认真考虑最接近方法的正常用法，包括其已有的更新和主动获取信息。说明它为什么仍未回答这里的核心问题。已有方法可以借鉴；方法相似不等于动机和贡献重合。
+- feasibility_basis：谁能改变什么、需要哪些可获得的信息、为什么这条思路有可能起作用。不要靠额外隐藏信息、任意限制或未知接口制造一个问题。
+- evidence_ids 和 closest_work_ids：只使用已提供的真实 ID。借助 paper_cards 和 paper_claim_audits 回到原文细节；作者的大范围 claim 不等于实验已经解决了大范围问题，证据不足也不让已有机制重新变新。
+
+优先选择能推动原始课题的关键问题。不要因某个小问题容易隔离变量、容易写实验，就把方向收缩到它；也不要只把一个小问题的标题写大。背景、剩余困难、原因、值得改变的原则必须相接。既有工作可能已经解决局部难点，我们需要找出这些进展仍跨不过的障碍，或它们带来的新困难。
+problem、observations、competing_explanations、unresolved_questions 总结上述分析；opportunity_types 为 opportunities 中实际使用的 problem_origin 去重列表。每个方向的字段用一两句有内容的话说明，research_frame 用连贯段落讲透逻辑。正文不列基准参数、数值结果或实验方案，必要的来源条件放在 scope_connection 与证据中。
+""" + PROBLEM_ORIGIN_RULES
+
+PROPOSE_INSTRUCTIONS = """
+交付第一阶段的研究 idea，到 Background → Problem → Motivation → Idea 为止。第二阶段再探索技术参考；这里不写具体例子、实现规格或实验计划。
+
+从 problem_model.research_frame 和 opportunities 选择研究意义、核心认识和可行路径最强的方向，记录 opportunity_id 与 selection_reason。max_candidates 是上限，通常只交付最有说服力的一个。优先解释为什么这个问题值得做，不以容易写出实验、论文数量少或技术组合新鲜作为选择理由。可以改进或综合认识，但要保留主要问题来源和用户的研究目标。
+
+把 motivation 写成一条完整论证，让读者顺着上一步理解下一步：
+1. background：从用户面对的大背景和实际需要讲起。不要一上来规定某篇论文的数据、标签形式或任务。用普通话说清为什么需要继续研究这件事。
+2. existing_work：综合几条已有解决思路，讲清它们帮助我们做到了什么，以及共同依赖什么。按思路组织；具体论文的逐项比较放在 positioning。
+3. problem_observation + importance：从两种问题来源之一提出核心问题。说清已有办法为什么仍办不到所需要的事，或它们会怎样暴露新困难；这会影响什么，而不只是有个因素没被测过。新提出的困难直接以问题或有理由的推测表达。
+4. causal_explanation + existing_approach_limit：解释问题为什么会存在，以及现有思路的目标、信息或工作方式为什么无法自然消除它。把问题上升为可理解的根本原因，而不是某篇论文写法的缺点。用原文细节检验推理，同时承认已有方法真正能做的事。
+5. research_need：因此，下一步需要理解或改变什么？为什么做到这一步才能推进背景中的目标？这就是动机，应在任何技术名称出现之前就有说服力。
+6. why_this_method：据此提出核心 idea：准备让谁利用什么信息、改变什么做法，为什么能作用于刚才的原因。讲清实际发生的改变和作用原理，避免只说“更好挖掘”“自适应利用”。这是有方向的想法，不是完整技术方案。
+7. expected_progress：解释实现这个想法后，人们能多做什么或理解什么。不要把一般涨分、格式变化、增加模块或重新命名的取舍直接当作贡献。
+
+每部分用足够的完整句子展开，避免抽象名词堆叠和重复同一句重要性。标题能让人看懂核心问题；background 不应要求读者先了解源论文。论文的测试任务只是支撑局部判断的依据；除非用户主动限定，idea 不能被这些任务替代。大课题允许聚焦到一个关键障碍，聚焦后仍要说明解决它怎样推进大课题。
+
+在当前构思中完成贡献对照：对每个 closest_work_id 给出 positioning，说明 addressed_problem、remaining_question、contribution，并引用这篇论文的 evidence_ids。相似主题或技术可以带来有用借鉴；只有具体问题、动机与所要回答的贡献相重合，才需要改变切入点。不要用作者的 claim 代替实验细节，也不要把缺少实验支持当成机制的新颖性。已有方案若正常使用就能解决问题，应加强问题认识或换一个更有意义的方向，而不是添加人为限制来保护原方案。
+
+用 feasibility_sketch 简短推演可获得的输入、可操作的改变及它们如何产生作用，修掉可提前发现的信息循环或不可获取的依赖。key_assumption 与 first_check 仅说明关键假设和判断它所需的概念性证据，不展开实验。hypothesis、mechanism、intervention、prediction、falsifier 与主论证保持一致；后两者是研究判断，不是实验计划。motivation.simplest_alternative 与 necessity_test 只作简短内部推敲。
+基于原文的事实引用真实 evidence_ids；basis 区分源论文观察和我们的研究假设。新的解释直接说“我们怀疑”，不在正文反复使用“所供材料”“尚未确认”“没有建立为已观察事实”。大胆提出一个有理由的想法，实验尚未进行、资料范围有限、方法可以借鉴，都不是停止构思的理由。no_candidate_reason 通常为空；只有题目本身存在无法调和的明确矛盾才不交付候选。
+""" + PROBLEM_ORIGIN_RULES

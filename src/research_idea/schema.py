@@ -38,11 +38,13 @@ CLAIM_AUDIT = obj(
         support_judgment=string(["supported_within_tested_scope", "overstated", "not_established",
             "contradicted", "insufficient_evidence"]), next_reading=STRINGS)),
 )
-OPPORTUNITY = obj(id=STR, question=STR, basis=string(["source_observation", "research_hypothesis"]),
+PROBLEM_ORIGINS = ('unresolved_need', 'emerging_problem')
+OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), basis=string(["source_observation", "research_hypothesis"]),
     derivation=STR, insight=STR, why_it_matters=STR, prior_art_delta=STR, feasibility_basis=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS)
-MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
-    opportunity_types=STRINGS, evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
+RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
+MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
+    opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
     problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
     causal_explanation=STR, research_need=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)

@@ -55,10 +55,10 @@ def argument_markdown(motivation, proposal, *, include_intervention=True):
         p.get('addressed_problem', '') for p in proposal.get('positioning', []))
     parts = [
         ('Background · 背景与已有工作', [motivation.get('background'), existing]),
-        ('Problem · 剩余问题及其原因', [motivation.get('problem_observation', proposal.get('problem')),
+        ('Problem · 要解决的问题与原因', [motivation.get('problem_observation', proposal.get('problem')),
             motivation.get('importance', proposal.get('why_it_matters')),
             motivation.get('causal_explanation', proposal.get('hypothesis'))]),
-        ('Motivation · 由局限推导研究动机', [motivation.get('existing_approach_limit'),
+        ('Motivation · 为什么需要这项研究', [motivation.get('existing_approach_limit'),
             motivation.get('research_need')]),
         ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
             motivation.get('why_this_method', proposal.get('intervention')),
@@ -129,10 +129,16 @@ def activity_summary(stage, result, citations=None):
             add('实验支持', item['warranted_conclusion'])
             add('值得区分的解释', item.get('confounds'))
     elif stage == 'map':
+        frame = result.get('research_frame', {})
+        add('我们要解决的大问题', frame.get('user_goal'))
+        add('把相关研究连起来看', frame.get('literature_logic'))
+        add('由此提出的研究问题', frame.get('research_question'))
         add('值得研究的问题', result.get('problem'))
         if result.get('opportunities'):
             for opportunity in result['opportunities']:
                 section('研究切口 · ' + opportunity['question'])
+                add('问题来源', {'unresolved_need': '已有的重要问题，现有方法仍未解决',
+                    'emerging_problem': '现有方法在使用或发展中暴露出的新问题'}.get(opportunity.get('problem_origin')))
                 add('文献怎样导出这个问题', opportunity['derivation'])
                 add('核心洞见', opportunity['insight'])
                 add('研究价值', opportunity['why_it_matters'])

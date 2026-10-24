@@ -64,12 +64,12 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
-              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen')
+              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan')
 TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
     'review': '方案讨论', 'idea': '研究 Idea', 'concept': 'Idea 构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
-    'error': '这一步未完成', 'retry': '等待重试', 'recovered': '调用已恢复',
+    'error': '这一步未完成', 'retry': '等待重试', 'recovered': '调用已恢复', 'context': '本步材料',
     'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
 BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
     'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',

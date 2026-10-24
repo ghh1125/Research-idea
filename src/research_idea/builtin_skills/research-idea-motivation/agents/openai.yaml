@@ -1,4 +1,4 @@
 interface:
   display_name: "Develop Research Motivation"
-  short_description: "Connect a meaningful problem to a necessary method"
+  short_description: "Find the root problem and derive a meaningful idea"
   default_prompt: "Use $research-idea-motivation to analyze the supplied research material."
