@@ -151,6 +151,22 @@ class IdeaWorkflowTests(unittest.TestCase):
         payload = json.loads(review.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
         self.assertTrue(payload['method_spec']['design_decisions'][0]['rationale'])
 
+    def test_report_uses_current_intervention_after_reframing_and_keeps_phase_boundary(self):
+        candidate, _ = self.run_flow()
+        candidate['proposal']['intervention'] = 'Abandoned intervention from the original idea'
+        candidate['spec']['method']['summary'] = ''
+        candidate['spec']['method']['changes'] = ['Current mechanism after review']
+        rendered = idea_markdown(candidate)
+        self.assertIn('Current mechanism after review', rendered)
+        self.assertNotIn('Abandoned intervention', rendered)
+        for heading in ('新问题是什么', '为什么重要', 'Idea 怎样解决它'):
+            self.assertIn(heading, rendered)
+        candidate['spec'] = {}
+        rendered = idea_markdown(candidate)
+        self.assertIn(candidate['proposal']['intervention'], rendered)
+        self.assertNotIn('第一项值得做的实验', rendered)
+        self.assertNotIn(candidate['proposal']['feasibility_sketch']['available_path'], rendered)
+
     def test_discussion_notes_reach_the_designer_and_invalidate_old_proposals(self):
         first, backend = self.run_flow()
         before = len(backend.calls)

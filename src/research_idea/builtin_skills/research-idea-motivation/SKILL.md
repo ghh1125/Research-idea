@@ -26,6 +26,8 @@ When choosing a question, consider a contradictory result, an untested assumptio
 
 Return only the current task JSON. In propose, fill each candidate's `motivation`; in develop/refine, fill top-level `motivation`: `basis`, `background`, `problem_observation`, `evidence_ids`, `importance`, `existing_approach_limit`, `causal_explanation`, `why_this_method`, `expected_progress`, `simplest_alternative`, and `necessity_test`. Use `source_observation` for an observed problem with source IDs; use `research_hypothesis` for a plausible phenomenon or question to investigate, with an initial test of that phenomenon. Hypothetical premises do not need invented citations. In review, use `motivation_assessment`, `issues`, and `revision_instructions`. Keep all other required task fields.
 
+Make the narrative answer directly: what is the new substantive problem, why does it matter, and how does this idea address it? State the setting, bottleneck, consequence and proposed intervention in concrete language. Avoid generic '尚未确认' or originality disclaimers. A meaningful condition belongs in the relevant input, design decision or first test. Keep facts, hypotheses and planned experiments distinct without repeating cautionary labels.
+
 ## Failure behavior
 
 If importance or causality lacks evidence, mark the uncertainty in the applicable text or review enum and identify the decisive missing evidence. Do not substitute confidence scores, invented experiments, or novelty claims. A weak current rationale warrants a concrete revision, not automatic termination. State the proposed explanation directly and attach a distinguishing test; avoid generic disclaimers about whether the idea is globally original or experiments have run.

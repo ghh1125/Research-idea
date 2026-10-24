@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "13"
+PROMPT_VERSION = "14"
 
 
 def stage_version(stage):
@@ -11,7 +11,7 @@ def stage_version(stage):
     if stage == 'paper_card':
         return '9'
     if stage == 'review':
-        return '13'
+        return '14'
     return "8" if stage in {"read_section", "extract", "inspect_source", "paper_card", "audit_claims"} else PROMPT_VERSION
 
 
@@ -63,17 +63,27 @@ MOTIVATION_CHECKS = """
 In develop/refine return an explicit motivation object as the current version of the rationale. Explain deliberate reframing in review_responses and assess the current method_spec.motivation; the original candidate records the starting point, not a ban on improving its story.
 Keep a connected background -> problem -> motivation -> method chain. background describes a concrete use or scientific setting and what it needs, not generic popularity of LLMs. The problem must follow from that setting; importance explains the consequence; the causal explanation leads to the intervention; the first experiment distinguishes that explanation from the strongest simple alternative. The candidate's motivation must identify a concrete source-backed observation with evidence_ids or a clearly phrased research_hypothesis with a test of the phenomenon, importance (what important use or scientific understanding is blocked), existing_approach_limit, a TESTABLE causal_explanation (a hypothesis, not a fact), why_this_method targets that cause, expected_progress beyond an arbitrary metric delta, the simplest_alternative, and necessity_test comparing the mechanism against that alternative. Do not manufacture the problem to justify a favored technique. A new module, parameter sweep, dataset substitution or unmotivated tradeoff alone is not a meaningful contribution. Efficiency may matter when it removes a binding limitation or changes what is achievable; explain that consequence rather than dismissing every efficiency study. Meaningful progress may be an explanation, falsification, new capability or newly understood boundary.
 Motivation has priority over method similarity. An established method can address a substantively different, evidence-backed problem or causal explanation; say which knowledge would change and what prediction distinguishes the new story. Do not claim an inherited mechanism is new. A different label or application alone is insufficient.
+"""
+REVIEW_MOTIVATION_CHECKS = """
 Review the chain independently: motivation_assessment must judge problem_significance (substantial/limited/unclear), causal_link (plausible/unsupported/unclear), and progress (substantive/incremental/unclear), with reason and decisive_test. In reason, identify the strongest available counterargument: the observation may be misread, the consequence may be unimportant, a simpler existing solution may suffice, or the proposed intervention may not act on the alleged cause. Resolve it from supplied evidence or propose a specific change. Review the actual scientific argument, never just field completeness. These are review judgments, not verified scientific truth. If the only contribution is incremental or the causal rationale is unsupported, request revision with a concrete reason. If evidence is missing, mark unclear; do not invent motivation. A necessity test must be capable of showing that the proposed mechanism adds nothing beyond the simple alternative.
 """
+INSTRUCTIONS['review'] += REVIEW_MOTIVATION_CHECKS
 # Reader, designer and reviewer communicate through evidence cards, specs and
 # explicit responses. These are separate bounded calls to the selected backend.
 for _stage in ("map", "propose", "develop", "refine", "review"):
     INSTRUCTIONS[_stage] += """
 Use user_notes as the user's refinements to the research direction; they are not scientific evidence. Write direct, readable Chinese: concrete choices, reasons and test designs. Avoid repeated warnings, pending/blocked labels or demands for completed experiments at the idea stage. For motivation.basis choose source_observation when a supplied source establishes the motivating observation, and cite its evidence IDs; choose research_hypothesis for a proposed phenomenon or question, phrase it as a hypothesis, and make the first test examine it. Plausible inference is welcome; it must not be rewritten as a paper's finding. The purpose is a useful idea with a reasonable problem-motivation-method chain."""
+    INSTRUCTIONS[_stage] += """
+Make the proposal directly answer three questions: what is the new substantive problem, why does it matter, and how does the idea address it? State the specific setting and bottleneck in problem_observation, the capability or understanding at stake in importance, and the intervention's causal effect in why_this_method. Use concrete research questions and proposed operations instead of generic hedges such as '尚未确认', '尚待验证' or '无法保证新颖性'. Preserve material conditions by naming the input, design choice or experiment they change; do not replace unknown facts with claims of success or originality. Avoid repeating literature-coverage caveats in the proposal narrative.
+"""
 for _stage in ("develop", "refine"):
     INSTRUCTIONS[_stage] += """
 review_responses is empty for initial development. During refinement, address each previous issue exactly once with decision, concrete change, reason and any source IDs. A decline may preserve the current method; a test response specifies how the first test resolves the objection. Unknown resources should lead to a small configurable pilot rather than an approval gate."""
     INSTRUCTIONS[_stage] += """\nWrite method.summary as a direct, readable explanation of the mechanism and 2–4 concrete actions, around 150–250 Chinese characters. Write validation.summary as a small first test in 2–3 sentences: what to vary, the simplest comparator, what to measure, and when to continue or change direction. Both summaries must describe the actual detailed spec. Keep the detailed protocol compact: at most six coherent changes, eight execution steps and three closest-work comparisons. Each text field should use one to three concrete sentences; combine related requirements, avoid repeating the same rule across fields, and omit redundant baselines. Preserve all state/action contracts, branches and accounting needed to implement the first test in the detailed method and validation fields. In motivation, prior-art justification and summaries, state the specific argument directly; omit generic disclaimers about global originality, unfinished paper cards, lack of executed experiments, or model judgment. Preserve a concrete limitation when it changes the design or interpretation."""
+    INSTRUCTIONS[_stage] += """
+Explain each chosen technique in the target idea's language: which bottleneck it resolves, what target objects and signals it operates on, what operation changes, and why that change is needed here. Give the borrowed principle its source attribution, then specify the actual adaptation. Renaming a technique or listing modules is not a design. In method.summary describe the resulting target-specific mechanism rather than a catalogue of source methods. Keep the first test to the smallest comparison that decides the next step; put confirmation runs and optional ablations in next_action, with separate cost accounting.
+design_decisions contains only actual technical choices. Keep reviewer classifications and self-assessment out of those entries; give the scientific rationale through motivation and the actual choices instead.
+"""
 
 for _stage in ("develop", "refine", "review"):
     INSTRUCTIONS[_stage] += DETAIL_CHECKS

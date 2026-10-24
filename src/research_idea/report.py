@@ -99,8 +99,10 @@ def candidate_markdown(candidate, citations=None):
                       '**本方案继续研究：** ' + overlap['remaining_gap'], '', comparison_table(overlap), ''])
     lines.extend([feasibility_markdown(candidate, spec), '', '### 完整首测协议', ''])
     validation = spec['validation']
-    lines.extend(['**完整首测协议：** ' + validation['first_test'], '', '**比较对象：**', '', bullets(validation['baselines']), '',
+    lines.extend(['**核心检验：** ' + validation['weakest_assumption'], '',
+                  '**完整首测协议：** ' + validation['first_test'], '', '**比较对象：**', '', bullets(validation['baselines']), '',
                   '**控制条件：**', '', bullets(validation['controls']), ''])
+    lines.extend(['**结果不明确时的处理：** ' + validation['inconclusive'], ''])
     lines.extend(['### 设计讨论与改进', ''])
     for version in candidate.get('versions', []):
         responses = version['spec'].get('review_responses', [])
