@@ -36,15 +36,15 @@ flowchart TD
     F -->|完成讨论或达到预算| H["交付 idea 与简要技术参考"]
 ```
 
-候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，允许修订解释和必要性检验；原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
+候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
 
-`motivation.existing_work` 说明已有方法实际做到了什么；剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 将这些字段组合为 Background、Problem、Motivation、Idea 四段连续论证。审阅定位具体推理缺口，字段完整本身不代表论证成立。
+`motivation.existing_work` 说明已有方法实际做到了什么；剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Problem、Motivation、Idea 四段连续论证，Idea 正文包含当前 `idea_core` 的四段解释。展示优先读取 `spec.idea_core`，否则读取 `proposal.idea_core`；旧保存内容缺少该对象时沿用原有论证，不补造细节。
 
 技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 6`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 7`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -65,6 +65,8 @@ flowchart TD
 第一阶段的 `map.research_frame` 保存用户的大问题、跨论文归纳的研究主线、由此提出的科学问题，以及具体论文证据与这一问题的联系。它直接传给 `propose`，用于组织通俗的 Background → Problem → Motivation → Idea。研究主线在原有综合步骤内形成，不增加模型调用；来源的具体实验条件仍保留在论文卡、引用和逐项对照中。
 
 `opportunities[].problem_origin` 只有 `unresolved_need`（现有主要方法仍不能解决的重要问题）和 `emerging_problem`（现有方法使用或发展时暴露的新问题）。`opportunity_types` 汇总本次实际采用的来源；`opportunity_id` 将选中的问题与候选相连。`idea_instructions.py` 集中定义第一阶段的完整构思程序，先综合已有路线的目标、信息和共同假设，再推导根本问题、动机与 idea，避免层层叠加重复的审查提示。程序检查结构和引用，研究判断仍由模型结合原文进行。
+
+`propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 
 推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
 

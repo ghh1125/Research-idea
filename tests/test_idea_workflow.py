@@ -200,6 +200,81 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('Idea → Method', summary)
         self.assertIn(candidate['proposal']['motivation']['background'], summary)
 
+    def test_idea_repairs_an_empty_construction_path_in_the_existing_proposal_step(self):
+        attempts = []
+        def omit_first_construction(task, output):
+            if task.stage == 'propose':
+                attempts.append(task)
+                if len(attempts) == 1:
+                    output['candidates'][0]['idea_core']['construction_path'] = ''
+        candidate, backend = self.run_flow(RecordingBackend(omit_first_construction))
+        self.assertEqual(len(attempts), 2)
+        self.assertTrue(candidate['proposal']['idea_core']['construction_path'].strip())
+        self.assertEqual(sum(task.stage == 'map' for task in backend.calls), 1)
+        self.assertEqual(sum(task.stage == 'develop' for task in backend.calls), 1)
+        self.assertLess(backend.calls.index(attempts[1]),
+                        next(i for i, task in enumerate(backend.calls) if task.stage == 'develop'))
+
+    def test_concrete_idea_reaches_technical_design_and_the_readable_report(self):
+        candidate, backend = self.run_flow()
+        original = candidate['proposal']['idea_core']
+        self.assertEqual(set(original), {'concrete_target', 'construction_path',
+                                         'capability_bridge', 'essential_difference'})
+        design_plan = next(task for task in backend.calls if task.stage == 'plan_search')
+        develop = next(task for task in backend.calls if task.stage == 'develop')
+        for task in (design_plan, develop):
+            payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+            self.assertEqual(payload['candidate']['idea_core'], original)
+        summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
+        for passage in original.values():
+            self.assertIn(passage, summary)
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        front = (target / 'report.md').read_text().split('<details>')[0]
+        idea_part, _ = front.split('#### 第二部分 · Idea → Method', 1)
+        for passage in candidate['spec']['idea_core'].values():
+            self.assertIn(passage, idea_part)
+        saved = json.loads((target / 'report.json').read_text())
+        self.assertEqual(saved['candidates'][0]['spec']['idea_core'], candidate['spec']['idea_core'])
+
+    def test_revised_idea_core_replaces_the_initial_core_and_is_tracked(self):
+        fields = ('concrete_target', 'construction_path', 'capability_bridge', 'essential_difference')
+        original = {field: 'Original idea passage: ' + field for field in fields}
+        revised = {field: 'Revised idea passage: ' + field for field in fields}
+        def revise_core(task, output):
+            if task.stage == 'propose':
+                output['candidates'][0]['idea_core'] = dict(original)
+            elif task.stage == 'refine':
+                output['idea_core'] = dict(revised)
+        candidate, _ = self.run_flow(RecordingBackend(revise_core))
+        self.assertEqual(candidate['proposal']['idea_core'], original)
+        self.assertEqual(candidate['spec']['idea_core'], revised)
+        rendered = idea_markdown(candidate)
+        idea_part, _ = rendered.split('#### 第二部分 · Idea → Method', 1)
+        for passage in revised.values():
+            self.assertIn(passage, idea_part)
+        for passage in original.values():
+            self.assertNotIn(passage, rendered)
+        changed = {item['field'] for item in candidate['versions'][-1]['revision_record']['changed_fields']}
+        self.assertTrue({'idea_core.' + field for field in fields} <= changed)
+
+    def test_legacy_saved_idea_without_core_still_exports_without_inventing_one(self):
+        candidate, _ = self.run_flow()
+        candidate['proposal'].pop('idea_core')
+        candidate['spec'].pop('idea_core')
+        for version in candidate['versions']:
+            version['spec'].pop('idea_core', None)
+        self.store.put('candidates', candidate)
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        front = (target / 'report.md').read_text().split('<details>')[0]
+        self.assertIn(candidate['proposal']['title'], front)
+        self.assertIn(candidate['spec']['motivation']['background'], front)
+        self.assertIn('第二部分 · Idea → Method', front)
+        saved = json.loads((target / 'report.json').read_text())['candidates'][0]
+        self.assertNotIn('idea_core', saved['proposal'])
+        self.assertNotIn('idea_core', saved['spec'])
+
     def test_refinement_must_answer_the_actual_objection_and_repair_is_bounded(self):
         def remove_response(task, output):
             if task.stage == 'refine':

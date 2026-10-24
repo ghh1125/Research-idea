@@ -92,6 +92,11 @@ class DemoBackend:
                     'available_path': '先人工构造少量配对文本，通过普通文本生成接口比较输出，无需权重或 logits。',
                     'key_assumption': '输入变换保持任务语义，只改变研究因素。',
                     'first_check': '人工检查配对样本，确认随机变换不能解释全部差异。'}
+                candidates[-1]['idea_core'] = {
+                    'concrete_target': '合成资料中，同一问题的两条证据在结论上的冲突，以及证据出现的先后关系。',
+                    'construction_path': '由资料中的陈述和条件组成配对输入，保留原句以核对内容是否变化；不让模型生成的判断充当真实标签。',
+                    'capability_bridge': '固定已经取得的内容，只改变冲突或顺序，从回答变化中区分资料缺失与使用困难；这里提出解释，不宣称获得实测能力。',
+                    'essential_difference': '相比继续增加检索内容，合成候选改变的是已有证据之间的关系，关注信息已提供时的使用困难；真实贡献仍需真实文献判断。'}
             output = {"candidates": candidates, "no_candidate_reason": ""}
         elif task.stage in {"develop", "refine"}:
             overlap_evidence = payload["evidence"][0] if payload["evidence"] else None
@@ -119,6 +124,7 @@ class DemoBackend:
                     'alternative': '随机改变输入条件。', 'first_test': '先比较少量成对样本与随机对照。', 'evidence_ids': refs}],
                 "review_responses": [{"issue": item['issue'], "decision": "adopt", "change": "增加随机信号对照", "reason": "区分机制收益与随机变化", "evidence_ids": []} for item in payload.get('review', {}).get('issues', [])],
                 "motivation": payload["candidate"]["motivation"],
+                "idea_core": payload["candidate"]["idea_core"],
                 "method": {"summary": "固定模型与检索结果，只改变证据冲突程度或段落顺序；保存配对答案，比较错误与稳定性。先用随机变换作为简单对照，再判断专门干预是否有额外作用。", "base_implementation": "尚未选择；需要检查实际模型推理接口。", "changes": changes, "inputs": "问题、完整证据、条件标签；答案只供评测。", "outputs": "答案和逐样本诊断结果", "trainable_parameters": "不训练：首先诊断现象", "frozen_parameters": "模型参数保持不变", "objective": "不适用：无训练阶段", "supervision": "需要人工核对的评测答案；当前尚未获取", "inference_steps": ["构造匹配输入", "固定预算调用模型", "保存预测"], "resource_requirements": "未知，先测少量样本延迟与调用成本", "assumptions": [{"statement": "数据中存在可控制的证据冲突", "status": "unverified", "evidence_ids": [], "check": "人工检查样本并验证变换保留任务语义"}]},
                 "prior_art": {"verdict": "uncertain", "justification": "合成资料不能支持查新结论。", "overlaps": [{"paper_id": (overlap_evidence or {}).get("paper_id", ""), "level": "topic", "covered_claim": "合成资料讨论相似主题", "evidence_ids": ([overlap_evidence["id"]] if overlap_evidence else []), "remaining_gap": "所有真实文献与机制仍待核查", "comparisons": comparisons}], "search_queries": ["long context conflicting evidence controlled evaluation"]},
                 "novelty_claim": {"type": "explanation", "claim": "演示待检验解释：输入证据关系可能影响回答稳定性。", "changed_variable": "冲突程度或段落顺序", "observable_consequence": "内容固定时，配对条件之间的答案稳定性差异", "falsifier": "检查充分后没有差异，或简单控制解释全部差异", "nontriviality": "拟区分错误来源而非增加模块；真实贡献尚需文献与实验验证。"},

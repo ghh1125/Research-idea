@@ -5,7 +5,7 @@ import json
 
 from .idea_instructions import MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES
 
-PROMPT_VERSION = "24"
+PROMPT_VERSION = "25"
 
 
 def stage_version(stage):
@@ -116,6 +116,10 @@ INSTRUCTIONS['develop'] += """
 The first phase has already compared the problem and motivation with known work. Use design_transfers and the new evidence to choose a suitable route before writing implementation detail. Preserve the two planned design_axes in the result, explaining why each is needed by the idea. Return one to three design_decisions linked by axis_ids to those angles, covering both; a single technique can serve both. Each choice gives the question, chosen operation, causal rationale, adaptation and strongest simple alternative; leave first_test empty. Cite source evidence where applicable. Explain why an inherited technique fits this problem, what must change, and how the design serves the stated contribution. Alternative ideas are options, not mandatory modules. A sparse source set still permits a concrete technical suggestion. Do not initiate routine novelty searching after delivering the method; request further reading only for a specific unresolved decision."""
 INSTRUCTIONS['refine'] += """
 Update design_axes and design_decisions together to reflect the actual revised method, retaining the planned angle IDs so choices remain traceable. Explain any substantive change of their meaning in review_responses. Keep the background, problem, motivating explanation, chosen technique and contribution consistent when reframing. Use supplied transfers as design options; do not retain a technique solely because it appeared in a paper."""
+for _stage in ('develop', 'refine'):
+    INSTRUCTIONS[_stage] += """
+For develop, carry candidate.idea_core into the result. For refine, start from previous_spec.idea_core, which contains the latest explanation, rather than reverting to the original candidate. Preserve the specific target, obtainable construction path, causal bridge to capability and essential prior-work difference while choosing technical references. If discussion changes any of these, update idea_core and motivation together and explain that change in review_responses. Do not replace the first phase's concrete explanation with general claims of better representations, useful relations or improved generalization. The final report displays the current idea_core; keep it readable and concise, without an experiment plan.
+"""
 INSTRUCTIONS['review'] += """
 Evaluate the linked background-problem-motivation-method argument, the relevance of borrowed techniques and foreseeable implementation contradictions. Explain a concrete weak link and repair if present; a small metric change or unexplained tradeoff alone is not the intended contribution. Technical search should address a named design decision, missing interface, baseline or control. Do not request another broad novelty sweep by default. A source from a different domain may support the mechanism without addressing the same research motivation."""
 INSTRUCTIONS['review'] += """

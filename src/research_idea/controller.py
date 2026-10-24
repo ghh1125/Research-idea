@@ -860,6 +860,8 @@ class Controller:
                             raise ValueError('Compare each named closest work during ideation, before technical design')
                         if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
                             raise ValueError('Describe available inputs, a working path, its key assumption and first check')
+                        if any(not text.strip() for text in candidate['idea_core'].values()):
+                            raise ValueError('Explain the concrete target, construction path, capability bridge and essential difference in idea_core')
                     if not value["candidates"] and not value["no_candidate_reason"].strip():
                         raise ValueError("No-candidate outcome requires a reason")
                 proposed = self.task("propose", proposal_payload, validate_proposal)
@@ -915,7 +917,7 @@ class Controller:
         })
         original_anchor = snapshot(candidate["original_anchor"])
         anchored_proposal = {**candidate["proposal"], **original_anchor}
-        substantive_sections = ("method", "motivation", "design_axes", "design_decisions", "prior_art", "novelty_claim", "feasibility", "validation")
+        substantive_sections = ("method", "motivation", "idea_core", "design_axes", "design_decisions", "prior_art", "novelty_claim", "feasibility", "validation")
         progress_limitation = (
             "Exact structured-content and evidence-ID comparison only; wording changes may be counted "
             "as changes, and changed text does not establish that an objection was resolved."
@@ -969,6 +971,8 @@ class Controller:
             def spec_check(value):
                 check_references(value, evidence_ids, paper_ids)
                 motive = value["motivation"]
+                if any(not text.strip() for text in value['idea_core'].values()):
+                    raise ValueError('Preserve or revise the concrete idea_core alongside the technical references')
                 if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                     raise ValueError("Method needs a complete, evidence-grounded motivation chain")
                 validate_comparisons(value["prior_art"]["overlaps"])

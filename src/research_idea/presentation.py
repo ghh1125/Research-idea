@@ -49,10 +49,15 @@ def points(items):
     return '\n'.join('• ' + str(item) for item in items if str(item).strip())
 
 
-def argument_markdown(motivation, proposal, *, include_intervention=True):
+def argument_markdown(motivation, proposal, *, include_intervention=True, idea_core=None):
     """Render consecutive parts of the argument, including older saved outputs."""
     existing = motivation.get('existing_work') or '；'.join(
         p.get('addressed_problem', '') for p in proposal.get('positioning', []))
+    core = proposal.get('idea_core', {}) if idea_core is None else idea_core
+    concrete_idea = ['**' + label + '：** ' + core[key] for key, label in (
+        ('concrete_target', '具体利用什么'), ('construction_path', '这些信息怎样得到'),
+        ('capability_bridge', '为什么能带来新能力'), ('essential_difference', '与已有方法的本质区别'))
+        if core.get(key)]
     parts = [
         ('Background · 背景与已有工作', [motivation.get('background'), existing]),
         ('Problem · 要解决的问题与原因', [motivation.get('problem_observation', proposal.get('problem')),
@@ -62,6 +67,7 @@ def argument_markdown(motivation, proposal, *, include_intervention=True):
             motivation.get('research_need')]),
         ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
             motivation.get('why_this_method', proposal.get('intervention')),
+            *concrete_idea,
             motivation.get('expected_progress')]),
     ]
     return '\n\n'.join('**' + label + '**\n\n' + '\n\n'.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
@@ -217,7 +223,8 @@ def idea_markdown(candidate):
         if value:
             lines.extend(['**' + label + '：** ' + str(value), ''])
     lines.extend(['#### 第一部分 · Background → Problem → Motivation → Idea', '',
-                  argument_markdown(motivation, proposal, include_intervention=not spec), ''])
+                  argument_markdown(motivation, proposal, include_intervention=not spec,
+                      idea_core=spec.get('idea_core', proposal.get('idea_core', {}))), ''])
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))
     if not spec:
         sketch = proposal.get('feasibility_sketch', {})

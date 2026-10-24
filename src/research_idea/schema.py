@@ -50,10 +50,11 @@ MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), ba
     causal_explanation=STR, research_need=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
 FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
+IDEA_CORE = obj(concrete_target=STR, construction_path=STR, capability_bridge=STR, essential_difference=STR)
 PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
     prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
     opportunity_id=STR, selection_reason=STR, motivation=MOTIVATION, positioning=array(POSITIONING),
-    feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
+    feasibility_sketch=FEASIBILITY_SKETCH, idea_core=IDEA_CORE)), no_candidate_reason=STR)
 DESIGN_OPTION = obj(axis_ids=STRINGS, question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
     adaptation=STR, why_it_helps=STR, simpler_alternative=STR, first_test=STR, evidence_ids=STRINGS)
 DESIGN_TRANSFER = obj(paper_id=STR, options=array(DESIGN_OPTION), reading_gaps=STRINGS)
@@ -84,7 +85,7 @@ VALIDATION = obj(summary=STR, weakest_assumption=STR, first_test=STR, baselines=
     positive=STR, negative=STR, inconclusive=STR, budget_estimate=STR)
 ACTION = obj(kind=string(["search", "read_source", "inspect_code", "run_experiment", "revise", "stop"]), description=STR, decision_impact=STR)
 RESPONSE = obj(issue=STR, decision=string(["adopt", "adapt", "decline", "test"]), change=STR, reason=STR, evidence_ids=STRINGS)
-DEVELOP = obj(design_axes=array(DESIGN_AXIS), method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
+DEVELOP = obj(design_axes=array(DESIGN_AXIS), method=METHOD, motivation=MOTIVATION, idea_core=IDEA_CORE, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
               design_decisions=array(DESIGN_DECISION), review_responses=array(RESPONSE))
 REVIEW = obj(verdict=string(["continue", "refine", "covered", "blocked"]),
     issues=array(obj(severity=string(["critical", "important", "minor"]), issue=STR, evidence_ids=STRINGS, action=STR)),
