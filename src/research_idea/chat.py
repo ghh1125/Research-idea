@@ -336,8 +336,10 @@ class Chat:
                 stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL, limit=32 * 1024 * 1024,
                 start_new_session=(os.name == 'posix'))
-            request = json.dumps({'project': str(self.project), 'mode': mode, 'message': message}, ensure_ascii=False)
-            self.process.stdin.write(request.encode())
+            # The child may inherit GBK/another Windows stdio encoding. JSON
+            # escapes preserve all Unicode while keeping the wire bytes ASCII.
+            request = json.dumps({'project': str(self.project), 'mode': mode, 'message': message}, ensure_ascii=True)
+            self.process.stdin.write(request.encode('ascii'))
             await self.process.stdin.drain()
             self.process.stdin.close()
             while line := await self.process.stdout.readline():

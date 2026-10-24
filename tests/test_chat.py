@@ -32,6 +32,39 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    async def test_worker_protocol_preserves_unicode_with_legacy_stdio(self):
+        # Run the real parent/worker JSON protocol under non-UTF-8 child stdio.
+        # Only the research/model operation is replaced; no API call is made.
+        script = r'''
+import research_idea.chat_worker as worker
+def echo(project, message):
+    worker.event('skill', '\u672c\u8f6e\u5206\u6790\u65b9\u6cd5')
+    worker.event('assistant', message)
+    worker.event('paper', str(project))
+worker.chat_turn = echo
+raise SystemExit(worker.main())
+'''
+        unicode_project = self.project / '中文项目-🧠'
+        unicode_project.mkdir()
+        self.chat.project = unicode_project
+        message = '旧数据学习新模式 🧠\n保留中文、é 和希腊字母 α'
+        spawn = asyncio.create_subprocess_exec
+        for encoding in ('gbk', 'cp1252', 'ascii'):
+            with self.subTest(encoding=encoding):
+                async def encoded_worker(*args, **kwargs):
+                    return await spawn(sys.executable, '-u', '-c', script,
+                        env=dict(os.environ, PYTHONIOENCODING=encoding, PYTHONUTF8='0'), **kwargs)
+                self.events.clear()
+                with patch('research_idea.chat.asyncio.create_subprocess_exec', side_effect=encoded_worker):
+                    await self.chat.work('chat', message)
+                self.assertEqual(self.events, [('skill', '本轮分析方法'),
+                    ('assistant', message), ('paper', str(unicode_project.resolve()))])
+                self.assertIsNone(self.chat.process)
+                self.assertEqual(self.chat.state, '就绪')
+        saved = [json.loads(line) for line in (unicode_project / 'terminal-events.jsonl')
+                 .read_text(encoding='utf-8').splitlines()]
+        self.assertEqual([e['text'] for e in saved if e['tag'] == 'assistant'], [message] * 3)
+
     async def test_date_and_shortlist_settings_are_editable(self):
         await self.chat.handle('/date rolling 12 6')
         self.assertEqual(load_config(self.project)['novelty_months'], 6)

@@ -57,7 +57,9 @@ LABELS = {
 
 
 def event(tag, text):
-    print(json.dumps({'tag': tag, 'text': str(text)}, ensure_ascii=False), flush=True)
+    # Stdout is a machine protocol, not the terminal display. ASCII JSON works
+    # with legacy stdio encodings; the parent restores Chinese/emoji on decode.
+    print(json.dumps({'tag': tag, 'text': str(text)}, ensure_ascii=True), flush=True)
 
 
 def outline(value, depth=0, citations=None):
