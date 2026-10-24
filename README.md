@@ -24,7 +24,32 @@
 
 ## 3. 整体框架
 
-整体按两个阶段推进：输入研究方向与资料 → 检索和筛选论文 → 阅读正文、比较研究切口 → 提出 idea → 推导两个技术角度 → 寻找与改造方法 → 讨论完善 → 交付 idea 与技术参考。
+```mermaid
+flowchart TD
+    U["输入研究方向、初步想法、论文与资源条件"]
+    subgraph S1["第一阶段 · Background → Problem → Motivation → Idea"]
+        A["检索近期文献，按相关性与时间筛选"]
+        B["阅读正文：已有方法、实验支持、剩余问题"]
+        C["从背景与问题挖掘动机：为什么需要这项研究"]
+        D["结合贡献对照与基本可行性，提出核心 idea"]
+        A --> B --> C --> D
+    end
+    subgraph S2["第二阶段 · Idea → 两个技术角度 → 方法参考"]
+        E["从 idea 推导两个需要解决的技术问题"]
+        F["围绕问题寻找技术：复用已读材料，也探索相邻领域"]
+        G["选择与改造方法，说明为什么适合当前 idea"]
+        H["讨论关键判断，按预算完善思路"]
+        E --> F --> G --> H
+    end
+    O["交付：核心 idea + 技术参考 + 相关论文与依据"]
+    U --> A
+    D --> E
+    H --> O
+    classDef concept fill:#eff6ff,stroke:#3b82f6,color:#172554
+    classDef design fill:#f0fdf4,stroke:#22c55e,color:#14532d
+    class A,B,C,D concept
+    class E,F,G,H design
+```
 
 **第一阶段到提出 idea 结束。** 阅读与构思时就完成动机、贡献对照，形成 Background → Problem → Motivation → Idea 的连续解释。
 
