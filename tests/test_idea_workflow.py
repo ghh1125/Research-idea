@@ -159,8 +159,12 @@ class IdeaWorkflowTests(unittest.TestCase):
         rendered = idea_markdown(candidate)
         self.assertIn('Current mechanism after review', rendered)
         self.assertNotIn('Abandoned intervention', rendered)
+        idea_part, method_part = rendered.split('#### 第二部分 · Idea → Method', 1)
+        self.assertNotIn('Current mechanism after review', idea_part)
+        self.assertIn('Current mechanism after review', method_part)
         for heading in ('新问题是什么', '为什么重要', 'Idea 怎样解决它'):
-            self.assertIn(heading, rendered)
+            self.assertIn(heading, idea_part)
+            self.assertNotIn(heading, method_part)
         candidate['spec'] = {}
         rendered = idea_markdown(candidate)
         self.assertIn(candidate['proposal']['intervention'], rendered)

@@ -145,13 +145,8 @@ def activity_summary(stage, result, citations=None):
         if not result.get('options'):
             add('接下来重点读', result.get('reading_gaps'))
     elif stage in {'develop', 'refine'}:
-        section('新问题是什么')
-        add('问题', result['motivation']['problem_observation'])
-        section('为什么重要')
-        add('研究价值', result['motivation']['importance'])
-        section('Idea 怎样解决它')
+        section('技术路线')
         add('具体方法', result['method'].get('summary') or result['method']['changes'])
-        add('作用理由', result['motivation']['why_this_method'])
         for decision in result.get('design_decisions', []):
             section(decision['question'])
             add('采用', decision['choice'])
@@ -186,29 +181,32 @@ def idea_markdown(candidate):
     def add(label, value):
         if value:
             lines.extend(['**' + label + '：** ' + str(value), ''])
-    lines.extend(['#### 新问题是什么', ''])
+    lines.extend(['#### 第一部分 · Background → Problem → Motivation → Idea', '',
+                  '##### 新问题是什么', ''])
     add('背景与需要', motivation.get('background'))
     add('研究问题' if motivation.get('basis') == 'research_hypothesis' else '问题', motivation.get('problem_observation', proposal.get('problem')))
-    lines.extend(['#### 为什么重要', ''])
+    lines.extend(['##### 为什么重要', ''])
     add('为什么值得做', motivation.get('importance', proposal.get('why_it_matters')))
     add('现有方法的局限', motivation.get('existing_approach_limit'))
     add('希望取得的实质进展', motivation.get('expected_progress'))
-    lines.extend(['#### Idea 怎样解决它', ''])
-    # A cause explains the problem; the intervention describes the idea. Prefer
-    # the current method after refinement so an abandoned proposal cannot leak back.
+    lines.extend(['##### Idea 怎样解决它', ''])
+    # Explain the intervention's principle here; operations and protocols belong
+    # to the second part. Refinements use the current rationale, not an old idea.
     add('问题成因', motivation.get('causal_explanation', proposal.get('hypothesis')))
-    add('具体方法' if spec else '核心想法',
-        (method.get('summary') or '\n'.join(method.get('changes', []))) if spec else proposal.get('intervention'))
-    add('输入 → 输出', method.get('inputs', '') + ' → ' + method.get('outputs', '') if method else '')
-    add('为什么能针对这个问题', motivation.get('why_this_method', proposal.get('mechanism')))
+    add('核心想法', motivation.get('why_this_method') if spec else proposal.get('intervention'))
+    if not spec:
+        add('为什么能针对这个问题', motivation.get('why_this_method', proposal.get('mechanism')))
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))
-    add('最简单的对照', motivation.get('simplest_alternative'))
     if not spec:
         sketch = proposal.get('feasibility_sketch', {})
         add('可用输入', sketch.get('inputs'))
         add('关键假设', sketch.get('key_assumption'))
         return '\n'.join(lines)
-    lines.extend(['#### 第一项值得做的实验', ''])
+    lines.extend(['#### 第二部分 · Idea → Method', '', '##### 技术路线', ''])
+    add('具体方法', method.get('summary') or '\n'.join(method.get('changes', [])))
+    add('输入 → 输出', method.get('inputs', '') + ' → ' + method.get('outputs', '') if method else '')
+    add('最简单的对照', motivation.get('simplest_alternative'))
+    lines.extend(['##### 第一项值得做的实验', ''])
     add('第一步验证', validation.get('summary') or validation.get('first_test', proposal.get('prediction')))
     add('值得继续的结果', validation.get('positive', claim.get('observable_consequence')))
     add('需要修改的结果', validation.get('negative', proposal.get('falsifier')))
