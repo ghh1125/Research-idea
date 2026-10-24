@@ -20,6 +20,7 @@ DEFAULTS = {
     "source_chars": 24000, "search_source": "arxiv", "auto_search": True,
     "deep_reading": True, "max_paper_read_chunks": 3, "max_followup_reads": 2,
     "search_date_mode": "rolling", "strategy_months": 12, "novelty_months": 6,
+    "conference_policy": "latest",
     "search_venues": [], "fetch_full_text": True,
     "search_api_key_env": "", "constraints": "Resources unspecified; do not assume GPU access, model weights, logits, labels, or unlimited API budget.",
     **recent_defaults(),
@@ -51,6 +52,10 @@ def _validated_settings(supplied: dict) -> dict:
         data['search_date_mode'] = 'fixed'
     if data['search_date_mode'] not in {'rolling', 'fixed'}:
         raise ValueError('search_date_mode must be rolling or fixed')
+    if 'conference_policy' not in supplied and data['search_date_mode'] == 'fixed':
+        data['conference_policy'] = 'window'
+    if not isinstance(data['conference_policy'], str) or data['conference_policy'] not in {'latest', 'window'}:
+        raise ValueError('conference_policy must be latest or window')
     for key in ('strategy_months', 'novelty_months'):
         if type(data[key]) is not int or not 1 <= data[key] <= 120:
             raise ValueError(key + ' must be an integer from 1 to 120')

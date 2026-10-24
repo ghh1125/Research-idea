@@ -22,6 +22,7 @@ from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
 from .retries import with_retries
 from .research_context import compact_research_context
+from .paper_metadata import enrich_screening_pool, paper_heading
 
 
 class BudgetExhausted(RuntimeError):
@@ -240,7 +241,7 @@ class Controller:
             self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
         if payload.get('paper_id'):
             paper = next((p for p in self.store.rows('papers') if p['id'] == payload['paper_id']), {})
-            self.progress(f"[paper] {paper.get('title', payload.get('title', ''))} · {paper.get('year', '')}\n{paper.get('url', '')}")
+            self.progress(f"[paper] {paper_heading(paper) or payload.get('title', '')}\n{paper.get('url', '')}")
         prompt = make_prompt(stage, payload, guidance)
         # A single bounded repair for invalid structured outputs or citations.
         for attempt in range(2):
@@ -330,7 +331,7 @@ class Controller:
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
                 "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
-                "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "content_kind", "full_text_error", "full_text_url", "full_text_origin")} for p in papers],
+                "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "conference_year", "edition_basis", "conference_url", "content_kind", "full_text_error", "full_text_url", "full_text_origin")} for p in papers],
                 "retrieval_gaps": [entry for entry in self.store.get("full_text_ledger", {}).values()
                                    if entry.get("status") != "completed" and entry.get('paper_id') in unresolved_sources],
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
@@ -640,12 +641,36 @@ class Controller:
         pool = [paper for paper in ranked if not known_aliases.intersection(paper['aliases'])][:40]
         choices = {}
         limit = max(0, min(limit, self.config['max_papers'] - len(papers)))
+        metadata_audit = {'attempted': 0, 'enriched': 0, 'pages': []}
         if pool and limit:
+            # Compare abstracts fairly before choosing a few full-text reads.
+            # This bounded HTML-only step does not add a model call or a quota.
+            remaining = self.config['max_seconds'] - self.previous_elapsed - (time.monotonic() - self.started)
+            # A saved selection can be restored even with no calls left. Do not
+            # fetch new metadata (and change its cache key) on that resume path.
+            if self.store.get('calls_used', 0) < self.config['max_calls'] and remaining > 0:
+                pool, metadata_audit = enrich_screening_pool(pool, timeout_s=min(12, remaining))
+            if metadata_audit['attempted']:
+                self.progress(f"[search] 已为 {metadata_audit['enriched']} 篇会议候选补充摘要 · 本步只读论文介绍页")
+                self.store.event('paper_metadata_enrichment', metadata_audit)
+            enriched = {paper['id']: paper for paper in pool if paper.get('abstract_source')}
+            if enriched:
+                ranked = [enriched.get(paper['id'], paper) for paper in ranked]
+                by_alias = {alias: paper for paper in enriched.values()
+                            for alias in paper.get('aliases', [paper['id']])}
+                for entry in entries:
+                    for paper in entry.get('metadata', []):
+                        if paper.get('abstract'):
+                            continue
+                        match = next((by_alias[a] for a in paper.get('aliases', [paper['id']]) if a in by_alias), None)
+                        if match:
+                            paper.update(abstract=match['abstract'], abstract_source=match['abstract_source'])
+                self.store.set('search_ledger', ledger)
             payload = {'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
                 'purpose': 'technical_design' if candidate else 'strategy_discovery',
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
-                'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'publication_date', 'venue')}
+                'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'conference_year', 'publication_date', 'venue')}
                     | {'abstract': (paper.get('abstract') or '')[:1800]} for paper in pool]}
             if candidate and candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
@@ -687,6 +712,7 @@ class Controller:
                 added += 1
         audit = {'time': now(), 'queries': [entry['query'] for entry in entries],
                  'screened': len(ranked), 'selected_ids': sorted(selected), 'limit': limit,
+                 'metadata_enrichment': metadata_audit,
                  'semantic_pool_ids': [paper['id'] for paper in pool], 'choices': list(choices.values()),
                  'ranking': [{'paper_id': p['id'], 'title': p['title'], **p['selection']} for p in ranked]}
         selections = self.store.get('paper_selections', [])
@@ -701,7 +727,7 @@ class Controller:
         self.progress(f"[search] 标题/摘要池 {len(ranked)} 篇；围绕研究问题筛选，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
         for paper in papers:
             if paper['id'] in selected:
-                self.progress(f"[paper] {paper['title']} · {paper.get('publication_date') or paper.get('year', '')}\n{paper.get('url', '')}")
+                self.progress(f"[paper] {paper_heading(paper)}\n{paper.get('url', '')}")
                 if paper.get('selection', {}).get('reason'):
                     self.progress('[read] 选读原因：' + paper['selection']['reason']
                                   + '\n重点看：' + paper['selection']['reading_question'])
@@ -725,15 +751,25 @@ class Controller:
         ledger[key] = {"query": query, "reason": reason, "source": self.config["search_source"], "purpose": purpose,
                        "venues": venues, "filters": scope, "status": "started", "time": now(), "attempts": previous.get("attempts", 0) + 1}
         self.store.set("search_ledger", ledger)
-        self.progress(f"[search] {query}\n目的：{reason}\n日期：{scope['since']} → {scope['until']}\n会议：{'、'.join(venues) or '按主题检索'} · arXiv：{'、'.join(scope['arxiv_categories'])}")
+        conference_time = '各会议最新公开一届；本届未公开取上一届' if scope.get('conference_policy') == 'latest' else '按所选日期窗口'
+        self.progress(f"[search] {query}\n目的：{reason}\narXiv 日期：{scope['since']} → {scope['until']}\n会议时间：{conference_time}\n会议：{'、'.join(venues) or '按主题检索'} · arXiv：{'、'.join(scope['arxiv_categories'])}")
         try:
+            # Cold official indexes contain thousands of records. Allow their
+            # first download enough time; later queries reuse the URL cache.
+            search_seconds = 120 if (scope.get('conference_policy') == 'latest'
+                and venues and self.config['search_source'] in {'hybrid', 'openalex'}) else 60
             found = discover(query, source=self.config["search_source"], limit=recall,
-                timeout_s=min(60, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
+                timeout_s=min(search_seconds, self.check_budget()), api_key_env=self.config.get("search_api_key_env") or None,
                 venues=venues, cache_dir=self.store.project / "metadata-cache", **scope)
             ledger[key].update(status="completed", found=len(found), limit=recall,
                               metadata=list(found), coverage=getattr(found, "coverage", {}))
             self.store.set("search_ledger", ledger)
             self.store.event("search", {k: v for k, v in ledger[key].items() if k != 'metadata'})
+            coverage = getattr(found, 'coverage', {})
+            conference_coverage = coverage.get('providers', {}).get('openalex', coverage)
+            editions = conference_coverage.get('conference_editions', {})
+            if editions:
+                self.progress('[search] 本次会议届次：' + '、'.join(f"{venue} {info['year']}" for venue, info in editions.items()))
         except BudgetExhausted:
             raise
         except Exception as exc:

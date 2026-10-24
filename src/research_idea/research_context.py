@@ -12,7 +12,7 @@ def _coverage(value):
     if not isinstance(value, dict):
         return value
     result = {k: deepcopy(value[k]) for k in
-              ('source', 'scope', 'filters', 'requested_venues', 'selected_counts', 'matched_counts')
+              ('source', 'scope', 'filters', 'requested_venues', 'selected_counts', 'matched_counts', 'conference_editions')
               if k in value}
     gaps = list(dict.fromkeys(str(gap) for gap in value.get('gaps', [])))
     if gaps:

@@ -206,12 +206,18 @@ Enter 发送；先按 Esc 再按 Enter 换行；Tab 补全命令；↑↓ 浏览
 | --- | --- |
 | 近期会议 + CS arXiv | `/scope ai-recent` |
 | 只使用本地资料 | `/scope local` |
-| 查看 / 调整日期窗口 | `/date` |
-| 动态窗口：技术 12 个月、动机对照 6 个月 | `/date rolling 12 6` |
-| 固定发表日期范围 | `/date fixed 2025-01-01 2026-10-23` |
+| 查看 / 调整 arXiv 日期与会议届次 | `/date` |
+| arXiv 动态窗口：技术 12 个月、动机对照 6 个月 | `/date rolling 12 6` |
+| 会议采用最新公开的一届（默认） | `/date conference latest` |
+| 会议也限定在日期窗口内 | `/date conference window` |
+| 所有来源采用固定发表日期范围 | `/date fixed 2025-01-01 2026-10-23` |
 | 查看 / 选择会议 | `/venues` / `/venues ACL EMNLP COLM ICLR` |
 
-动态窗口会按运行当天重新计算。新项目默认使用 CS 范围；背景与技术探索看近 12 个月，第一阶段动机与贡献对照关注近 6 个月。已读资料及显式导入的经典论文仍可使用。
+**会议与 arXiv 分开处理时间。** arXiv 默认按运行当天更新窗口：背景与技术探索看近 12 个月，第一阶段动机与贡献对照关注近 6 个月，并限定 CS 范围。会议默认查看每个会议最新已经公开或收录论文的一届；本届尚未公开就取上一届，不会因为会议周期超过半年而被排除。不同会议可以采用不同年份，仍按研究相关性筛选，不为填满会议名单而精读无关论文。
+
+**围绕同一问题，优先参考较新届次。** 例如，2026 届优先于 2025 届；较早论文用于补足关键方法、研究脉络和必要对照。排序采用已核实的会议年份，不会把会议论文较早上传 arXiv 的时间误当成会议年份。CLI 会同时显示论文标题、会议届次和链接。
+
+`/date fixed` 会让会议和 arXiv 都使用指定日期范围。也可随后运行 `/date conference latest`，让会议按截止日期查找最新公开一届。`/scope ai-recent` 恢复默认的“最新会议届次 + arXiv 动态窗口”。已读资料及显式导入的经典论文仍可使用。
 
 `ai-recent` / `ai-recommended` 的会议范围包含 **NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI、AAMAS、KDD、ICDM、ICDE、SIGMOD、VLDB、ACM MM、CVPR、ICCV、SIGIR、WWW**。先按主题、相关性与时间筛选，再决定精读哪些论文；会议名单不代表每篇都要阅读。已有项目可用 `/scope ai-recent` 更新范围，完整分级与来源见 `research-idea venues`。
 
@@ -280,8 +286,9 @@ Windows 也可以直接输入 `/output D:\ResearchResults`；带空格的路径�
 | `--papers ./papers paper.pdf` | 导入 PDF、TXT、Markdown、论文 JSON 或目录 |
 | `--constraints "资源条件"` | 记录设备、时间和数据等条件 |
 | `--literature-preset ai-recent` | 使用近期会议与 CS arXiv |
-| `--date-mode rolling --strategy-months 12 --novelty-months 6` | 设置动态检索窗口 |
-| `--since YYYY-MM-DD --until YYYY-MM-DD` | 设置固定日期范围 |
+| `--date-mode rolling --strategy-months 12 --novelty-months 6` | 设置 arXiv 动态窗口；会议时间策略单独选择 |
+| `--conference-policy latest` / `--conference-policy window` | 会议按最新公开一届，或按日期窗口筛选 |
+| `--since YYYY-MM-DD --until YYYY-MM-DD` | 设置固定日期范围，会议默认也按此窗口；可显式传入 `--conference-policy latest` |
 | `--venues ACL COLM` / `--arxiv-categories cs.CL cs.AI` | 指定会议或 arXiv 分类 |
 | `--max-papers` / `--max-candidates` / `--max-rounds` | 设置论文、idea 与讨论轮数上限 |
 | `--max-calls` / `--max-seconds` / `--timeout-s` | 设置调用与时间上限 |
@@ -295,6 +302,7 @@ Windows 也可以直接输入 `/output D:\ResearchResults`；带空格的路径�
 backend = "codex"
 model = "gpt-6.1-sol"
 reasoning_effort = "high"
+conference_policy = "latest"
 max_papers = 6
 max_candidates = 1
 max_rounds = 2

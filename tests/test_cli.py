@@ -150,6 +150,7 @@ class CLIIntegrationTests(unittest.TestCase):
             self.assertEqual((cfg['strategy_months'], cfg['novelty_months']), (12, 6))
             if expected == 'fixed':
                 self.assertEqual((cfg['search_since'], cfg['search_until']), ('2026-01-01', '2026-10-01'))
+            self.assertEqual(cfg['conference_policy'], 'window' if expected == 'fixed' else 'latest')
 
     def test_launcher_binary_default_preserves_saved_and_explicit_selection(self):
         with patch.dict(os.environ, {'RESEARCH_IDEA_CODEX_BIN': '/tmp/local-codex-wrapper'}), redirect_stdout(io.StringIO()):
@@ -428,6 +429,13 @@ class SetupAndSkillsTests(unittest.TestCase):
         self.assertEqual(cfg["search_until"], "2026-10-23")
         self.assertTrue(cfg["search_cs_only"])
         self.assertEqual(cfg["arxiv_categories"], ["cs.AI", "cs.CL"])
+        self.assertEqual(cfg['conference_policy'], 'window')
+        self.init('--conference-policy', 'latest')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        self.init('--date-mode', 'fixed')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'window')
+        self.init('--since', '2024-01-01', '--conference-policy', 'latest')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
         self.init("--source", "arxiv", "--venues")
         self.assertEqual(load_config(self.project)["search_venues"], [])
 
@@ -437,13 +445,15 @@ class SetupAndSkillsTests(unittest.TestCase):
             with self.subTest(command=command), patch("research_idea.backends.make_backend") as factory, patch.object(Controller, "run"):
                 code, _, error = self.call(command, "--project", self.project, "--no-search",
                                            "--codex-bin", "/custom/codex", "--codex-profile", "r",
-                                           "--skill", self.first_skill, "--no-builtin-skills")
+                                           "--skill", self.first_skill, "--no-builtin-skills",
+                                           "--conference-policy", "window")
                 self.assertEqual(code, 0, error)
                 cfg = factory.call_args.args[0]
                 self.assertEqual(cfg["codex_bin"], "/custom/codex")
                 self.assertEqual(cfg["codex_profile"], "r")
                 self.assertEqual(cfg["skill_paths"], [str(self.first_skill)])
                 self.assertFalse(cfg["builtin_skills"])
+                self.assertEqual(cfg['conference_policy'], 'window')
 
     def test_doctor_reports_binary_and_skill_hashes_without_backend_calls(self):
         self.init("--codex-bin", "/custom/codex", "--skill", self.first_skill)
@@ -527,6 +537,24 @@ class SearchCLITests(unittest.TestCase):
         self.assertEqual(search.call_args.kwargs["venues"], ["EMNLP", "NAACL"])
         self.assertEqual(json.loads(out)["error_count"], 0)
         fetch.assert_not_called()
+
+    def test_manual_search_transmits_conference_policy_without_changing_date_window(self):
+        for policy in ('latest', 'window'):
+            with self.subTest(policy=policy), patch('research_idea.cli.discover', return_value=[]) as search:
+                code, _, error = self.call('search', 'query', '--project', self.project, '--venues', 'ACL',
+                    '--since', '2025-01-01', '--until', '2026-10-23', '--conference-policy', policy)
+            self.assertEqual(code, 0, error)
+            self.assertEqual(search.call_args.kwargs['conference_policy'], policy)
+            self.assertEqual(search.call_args.kwargs['since'], '2025-01-01')
+            self.assertEqual(search.call_args.kwargs['until'], '2026-10-23')
+            # A manual search is one-off; its effective policy is recorded in
+            # the ledger without changing the saved project's settings.
+            self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+            store = Store(self.project)
+            try:
+                self.assertEqual(store.get('manual_search_ledger')[-1]['filters']['conference_policy'], policy)
+            finally:
+                store.close()
 
     def test_manual_full_text_failure_keeps_abstract_and_other_success(self):
         papers = [{"id": "p1", "title": "First paper", "abstract": "First abstract", "content_kind": "abstract"},

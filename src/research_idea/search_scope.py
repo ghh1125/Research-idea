@@ -23,7 +23,8 @@ def months_before(day, months):
     return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
 
 
-def normalize_scope(since="", until="", cs_only=False, arxiv_categories=None) -> dict:
+def normalize_scope(since="", until="", cs_only=False, arxiv_categories=None,
+                    conference_policy="window") -> dict:
     values = {"since": since, "until": until}
     for key, value in values.items():
         if not isinstance(value, str):
@@ -47,7 +48,10 @@ def normalize_scope(since="", until="", cs_only=False, arxiv_categories=None) ->
         for item in categories
     ):
         raise ValueError("arxiv_categories must be a list of arXiv category codes, such as cs.* or cs.CL")
-    return {**values, "cs_only": cs_only, "arxiv_categories": list(dict.fromkeys(categories))}
+    if not isinstance(conference_policy, str) or conference_policy not in {"latest", "window"}:
+        raise ValueError("conference_policy must be latest or window")
+    return {**values, "cs_only": cs_only, "arxiv_categories": list(dict.fromkeys(categories)),
+            "conference_policy": conference_policy}
 
 
 def config_scope(config: dict, purpose='strategy') -> dict:
@@ -61,11 +65,17 @@ def config_scope(config: dict, purpose='strategy') -> dict:
         end = date.fromisoformat(until) if until else date.today()
         since = max(since, months_before(end, config.get('novelty_months', 6)).isoformat())
     return normalize_scope(since, until,
-                           config.get("search_cs_only", False), config.get("arxiv_categories", []))
+                           config.get("search_cs_only", False), config.get("arxiv_categories", []),
+                           config.get("conference_policy", "latest"))
 
 
 def exclusion_reason(paper: dict, scope: dict, source: str, *, verified_venue=False) -> str | None:
     """Missing metadata cannot establish that a hard filter was satisfied."""
+    if verified_venue and source != 'arxiv' and scope.get('conference_policy') == 'latest':
+        # Edition selection happens independently of the topical query. Its
+        # papers may predate the rolling preprint window (or first appear on
+        # arXiv years before their conference publication).
+        scope = dict(scope, since='')
     published = paper.get("publication_date")
     if scope["since"] or scope["until"]:
         try:
@@ -73,8 +83,10 @@ def exclusion_reason(paper: dict, scope: dict, source: str, *, verified_venue=Fa
         except ValueError:
             parsed = None
         if parsed is None:
-            period = paper.get('publication_period', '')
-            if paper.get('source') != 'official_proceedings' or not re.fullmatch(r'\d{4}(?:-\d{2})?', period):
+            edition = paper.get('conference_year')
+            edition_date = verified_venue and scope.get('conference_policy') == 'latest' and type(edition) is int
+            period = paper.get('publication_period') or (str(edition) if edition_date else '')
+            if (not edition_date and paper.get('source') != 'official_proceedings') or not re.fullmatch(r'\d{4}(?:-\d{2})?', period):
                 return "missing or invalid publication date"
             try:
                 year, month = int(period[:4]), int(period[5:]) if len(period) == 7 else 1

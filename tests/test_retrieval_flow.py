@@ -78,6 +78,18 @@ class RetrievalFlowTests(unittest.TestCase):
         self.assertIn("EMNLP", md.read_text())
         self.assertEqual(len(json.loads(js.read_text())["full_text_ledger"]), 1)
 
+    def test_latest_conference_download_time_respects_project_budget(self):
+        cases = [({}, 1000, 120), ({'conference_policy': 'window'}, 1000, 60),
+                 ({'search_source': 'arxiv', 'search_venues': []}, 1000, 60),
+                 ({}, 12, 12)]
+        for i, (settings, remaining, expected) in enumerate(cases):
+            with self.subTest(settings=settings, remaining=remaining):
+                controller = self.controller(**settings)
+                with patch.object(controller, 'check_budget', return_value=remaining), \
+                     patch('research_idea.literature.discover', return_value=[]) as search:
+                    controller.search_once(f'query {i}', 'budget regression', max_new=0)
+                self.assertEqual(search.call_args.kwargs['timeout_s'], expected)
+
     def test_full_text_retry_is_bounded_across_invocations(self):
         self.store.put("papers", self.paper)
         with patch("research_idea.literature.fetch_full_text", side_effect=LiteratureError("PDF unavailable")) as fetch:

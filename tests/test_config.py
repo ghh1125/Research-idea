@@ -41,6 +41,24 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(APIBackend(config, self.project).url,
                          "https://api.openai.com/v1/chat/completions")
 
+    def test_conference_policy_defaults_and_fixed_project_migration(self):
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        self.write_raw({'search_date_mode': 'rolling', 'search_since': '2025-01-01'})
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        self.write_raw({'search_since': '2025-01-01', 'search_until': '2026-10-23'})
+        self.assertEqual(load_config(self.project)['conference_policy'], 'window')
+        self.write_raw({'search_date_mode': 'fixed', 'conference_policy': 'latest'})
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        for policy in ('latest', 'window'):
+            write_config(self.project, {'conference_policy': policy})
+            self.assertEqual(load_config(self.project)['conference_policy'], policy)
+
+    def test_invalid_conference_policy_is_rejected_before_writing(self):
+        for policy in ('recent', '', None, 1, []):
+            with self.subTest(policy=policy), self.assertRaises(ValueError):
+                write_config(self.project, {'conference_policy': policy})
+        self.assertFalse((self.project / 'research.toml').exists())
+
     def test_provider_only_switch_uses_native_anthropic_defaults(self):
         self.write_raw({"backend": "api", "api_provider": "anthropic"})
         config = load_config(self.project)

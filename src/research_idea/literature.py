@@ -133,6 +133,12 @@ def normalize_paper(record: dict[str, Any]) -> dict[str, Any]:
                    "abstract": _clean(record.get("abstract")), "source": str(record.get("source") or "local"),
                    "version": record.get("version") or (arxiv[1] if arxiv else None),
                    "aliases": sorted(aliases | {paper_id}), "content_kind": kind})
+    if 'conference_year' in record:
+        try:
+            edition = int(record['conference_year']) if not isinstance(record['conference_year'], bool) else None
+        except (TypeError, ValueError):
+            edition = None
+        result['conference_year'] = edition if edition is not None and 1000 <= edition <= 9999 else None
     if arxiv:
         result["arxiv_id"] = arxiv[0]
     return result
@@ -161,6 +167,15 @@ def deduplicate(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for field in ("doi", "arxiv_id", "url", "abstract", "authors", "year", "venue", "venue_name", "venue_id", "pdf_url"):
             if not merged.get(field):
                 merged[field] = next((p.get(field) for p in candidates if p.get(field)), merged.get(field))
+        conference = [p for p in candidates if p.get('venue') and
+                      (p.get('venue_evidence') or p.get('venue_id') or p.get('source') in {'official_proceedings', 'openreview'})]
+        if conference:
+            publication = max(conference, key=lambda p: p.get('conference_year') or p.get('year') or 0)
+            for field in ('venue', 'venue_name', 'venue_id', 'venue_evidence', 'conference_year', 'edition_basis',
+                          'requested_venue', 'venue_note'):
+                if publication.get(field) is not None:
+                    merged[field] = publication[field]
+            merged['conference_url'] = publication.get('conference_url') or publication.get('url', '')
         locations = [location for p in candidates for location in p.get("locations", []) if isinstance(location, dict)]
         if locations:
             merged["locations"] = list({json.dumps(location, sort_keys=True): location for location in locations}.values())
@@ -349,15 +364,18 @@ def _query_score(query: str, title: str, abstract: str) -> int:
 
 
 def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> list[dict]:
-    years = list(range(date.today().year, max(2023, date.today().year - 3), -1))
     scope = coverage.get("filters", {})
-    years = [year for year in years if (not scope.get("since") or year >= int(scope["since"][:4]))
+    latest = scope.get('conference_policy') == 'latest'
+    end_year = int((scope.get('until') or date.today().isoformat())[:4])
+    years = list(range(end_year, max(2023, end_year - 3), -1))
+    years = [year for year in years if (latest or not scope.get("since") or year >= int(scope["since"][:4]))
              and (not scope.get("until") or year <= int(scope["until"][:4]))]
     info = {"years": years, "page_size": OPENREVIEW_PAGE_SIZE, "max_pages_per_year": OPENREVIEW_MAX_PAGES,
             "ranking": "lexical token overlap in title and abstract", "years_scanned": []}
     coverage["openreview_colm"] = info
     candidates = []
     for year in years:
+        accepted_count = 0
         venue_id = f"colmweb.org/COLM/{year}/Conference"
         status = {"year": year, "venue_id": venue_id, "pages": 0, "scanned": 0, "truncated": False}
         info["years_scanned"].append(status)
@@ -379,14 +397,18 @@ def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> l
                     if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", identifier):
                         continue
                     title, abstract = _clean(_openreview_value(content, "title")), _clean(_openreview_value(content, "abstract"))
-                    score = _query_score(query, title, abstract)
-                    if not title or not score:
-                        continue
                     timestamp = note.get("pdate") or note.get("cdate")
                     try:
                         published = datetime.fromtimestamp(timestamp / 1000, timezone.utc).date().isoformat()
                     except (TypeError, ValueError, OverflowError, OSError):
                         published = None
+                    if not title or exclusion_reason({'publication_date': published, 'conference_year': year,
+                            'source': 'openreview'}, scope, 'openreview', verified_venue=True):
+                        continue
+                    accepted_count += 1
+                    score = _query_score(query, title, abstract)
+                    if not score:
+                        continue
                     paper = normalize_paper({"id": "openreview:" + identifier, "title": title,
                         "abstract": abstract, "authors": _openreview_value(content, "authors", []), "year": year,
                         "publication_date": published,
@@ -394,6 +416,7 @@ def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> l
                         "pdf_url": "https://openreview.net/pdf?" + urlencode({"id": identifier}) if _openreview_value(content, "pdf") else None,
                         "doi": _openreview_value(content, "doi"), "source": "openreview", "content_kind": "abstract",
                         "venue": "COLM", "venue_name": _openreview_value(content, "venue", f"COLM {year}"),
+                        "conference_year": year, "edition_basis": "accepted_venue",
                         "venue_id": venue_id, "venue_evidence": "accepted content.venueid", "retrieval_relevance": score})
                     candidates.append(paper)
                 count = payload.get("count")
@@ -405,7 +428,68 @@ def _discover_colm(query: str, limit: int, deadline: float, coverage: dict) -> l
         except LiteratureError as exc:
             status["error"] = str(exc)
             coverage["gaps"].append(f"COLM {year}: {exc}")
+        if latest and accepted_count:
+            coverage.setdefault('conference_editions', {})['COLM'] = {
+                'year': year, 'basis': 'accepted_venue', 'venue_id': venue_id,
+                'papers_indexed': accepted_count}
+            break
     return sorted(candidates, key=lambda p: (p["retrieval_relevance"], p["year"]), reverse=True)[:limit]
+
+
+def _latest_openalex_year(venue, source_ids, scope, deadline, headers, coverage):
+    """Find the newest indexed edition without using the topical query.
+
+    Prefer explicitly dated publication sources; use publication-year groups
+    for continuous series. Record which basis was used. The three-calendar-year
+    horizon covers the current and previous annual/biennial edition.
+    """
+    end = scope.get('until') or date.today().isoformat()
+    end_year = int(end[:4])
+    dated = {}
+    for source in coverage.get('openalex_sources', {}).get(venue, []):
+        years = set(re.findall(r'\b(?:19|20)\d{2}\b', source.get('display_name', '')))
+        if source['id'] in source_ids and len(years) == 1:
+            dated[source['id']] = int(next(iter(years)))
+    edition = None
+    eligible_ids = [sid for sid, year in dated.items() if end_year - 2 <= year <= end_year]
+    if eligible_ids:
+        groups, _ = _json_results(OPENALEX_ENDPOINT + '?' + urlencode({
+            'filter': 'primary_location.source.id:' + '|'.join(eligible_ids) + ',to_publication_date:' + end,
+            'group_by': 'primary_location.source.id', 'per-page': 200}),
+            deadline, headers, field='group_by')
+        published_ids = {_source_id(row.get('key')) for row in groups if isinstance(row, dict)
+                         and type(row.get('count')) is int and row['count'] > 0}
+        years = [dated[sid] for sid in eligible_ids if sid in published_ids]
+        if years:
+            year = max(years)
+            edition = {'year': year, 'basis': 'publication_source_edition',
+                       'source_ids': [sid for sid in eligible_ids if dated[sid] == year and sid in published_ids]}
+    # Continuous/undated series need a publication-year fallback. Never let a
+    # merged preprint's earlier date override an explicitly dated proceedings.
+    undated_ids = [sid for sid in source_ids if sid not in dated]
+    if undated_ids and (edition is None or edition['year'] < end_year):
+        filters = 'primary_location.source.id:' + '|'.join(undated_ids)
+        filters += f',publication_year:{end_year - 2}-{end_year},to_publication_date:{end}'
+        try:
+            groups, _ = _json_results(OPENALEX_ENDPOINT + '?' + urlencode({
+                'filter': filters, 'group_by': 'publication_year', 'per-page': 200}),
+                deadline, headers, field='group_by')
+        except LiteratureError as exc:
+            if edition is None:
+                raise
+            groups = []
+            coverage['gaps'].append(f'{venue} continuous-series edition lookup: {exc}')
+        years = [int(row['key']) for row in groups if isinstance(row, dict)
+                 and re.fullmatch(r'\d{4}', str(row.get('key', '')))
+                 and type(row.get('count')) is int and row['count'] > 0
+                 and end_year - 2 <= int(row['key']) <= end_year]
+        if years and (edition is None or max(years) > edition['year']):
+            edition = {'year': max(years), 'basis': 'indexed_publication_year', 'source_ids': undated_ids}
+    if edition is None:
+        coverage['gaps'].append(f'{venue}: no recent indexed edition found')
+        return None
+    coverage.setdefault('conference_editions', {})[venue] = edition
+    return edition['year']
 
 
 def _interleave(pools: list[list[dict]], limit: int) -> list[dict]:
@@ -458,14 +542,15 @@ def arxiv_query_expression(query: str) -> str:
 def _filter_scope(papers, scope, coverage, source):
     kept = []
     excluded = coverage.setdefault("excluded", [])
+    initial_count = len(excluded)
     for paper in papers:
         reason = exclusion_reason(paper, scope, source, verified_venue=bool(paper.get("venue")))
         if reason:
             excluded.append({"paper_id": paper["id"], "reason": reason})
         else:
             kept.append(paper)
-    if excluded:
-        coverage["gaps"].append(f"{len(excluded)} records excluded by date/domain metadata checks")
+    if len(excluded) > initial_count:
+        coverage["gaps"].append(f"{len(excluded) - initial_count} records excluded by date/domain metadata checks")
     return kept
 
 
@@ -473,7 +558,8 @@ def _filter_scope(papers, scope, coverage, source):
 def discover(query: str, source: str = "arxiv", limit: int = 10,
              timeout_s: float = 30, api_key_env: str | None = None,
              venues: list[str] | None = None, since: str = "", until: str = "",
-             cs_only: bool = False, arxiv_categories: list[str] | None = None) -> DiscoveryResults:
+             cs_only: bool = False, arxiv_categories: list[str] | None = None,
+             conference_policy: str = "window") -> DiscoveryResults:
     """Retrieve bounded metadata pages. No full-text retrieval is implied.
 
     arXiv accepts native syntax; plain terms/phrases use all: joined with AND.
@@ -492,7 +578,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         raise LiteratureError("Unknown source; choose arxiv, openalex or hybrid")
     try:
         venues = normalize_venues(venues)
-        scope = normalize_scope(since, until, cs_only, arxiv_categories)
+        scope = normalize_scope(since, until, cs_only, arxiv_categories, conference_policy)
     except ValueError as exc:
         raise LiteratureError(str(exc)) from None
     if source == "arxiv" and venues:
@@ -586,9 +672,23 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
             raise LiteratureError("The configured OpenAlex API key environment variable is empty")
         headers["Authorization"] = "Bearer " + key
     pools = {venue: [] for venue in venues}
+    latest = conference_policy == 'latest' and bool(venues)
+    if latest:
+        # Query-independent public proceedings establish the edition first.
+        # Core AI/NLP venues stay searchable even when OpenAlex returns 429.
+        from .proceedings import discover_proceedings, SUPPORTED_VENUES
+        supported = [v for v in venues if v in SUPPORTED_VENUES]
+        if supported:
+            official_deadline = min(deadline, time.monotonic() + _remaining(deadline) * .65)
+            try:
+                for paper in discover_proceedings(query, supported, limit, official_deadline, scope, coverage):
+                    pools[paper['venue']].append(paper)
+            except LiteratureError as exc:
+                coverage['gaps'].append(f'Official proceedings: {exc}')
     # Reserve half the total time for each provider when both were requested.
-    other_venues = [venue for venue in venues if venue != "COLM"]
-    alex_deadline = time.monotonic() + _remaining(deadline) * 0.35 if venues else deadline
+    editions = coverage.setdefault('conference_editions', {})
+    other_venues = [venue for venue in venues if venue != "COLM" and not (latest and venue in editions)]
+    alex_deadline = time.monotonic() + _remaining(deadline) * (.85 if latest else .35) if venues else deadline
     resolved = _openalex_sources(other_venues, alex_deadline, headers, coverage) if other_venues else {}
     # Fetch a bounded page per requested venue: a prolific venue must not crowd
     # another out before the final round-robin selection.
@@ -596,9 +696,26 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         (venue, {"search": query, "per-page": limit,
                  "filter": "primary_location.source.id:" + "|".join(sid for sid, name in resolved.items() if name == venue)})
         for venue in other_venues if venue in resolved.values()]
+    selected_years = {}
+    if latest:
+        ready = []
+        for venue, params in requests:
+            try:
+                year = _latest_openalex_year(venue, [sid for sid, name in resolved.items() if name == venue],
+                                            scope, alex_deadline, headers, coverage)
+                if year is not None:
+                    selected_years[venue] = year
+                    edition = editions[venue]
+                    params['filter'] = 'primary_location.source.id:' + '|'.join(edition['source_ids'])
+                    if edition['basis'] == 'indexed_publication_year':
+                        params['filter'] += f',publication_year:{year}'
+                    ready.append((venue, params))
+            except LiteratureError as exc:
+                coverage['gaps'].append(f'{venue} edition lookup: {exc}')
+        requests = ready
     for _, params in requests:
         filters = [params["filter"]] if params.get("filter") else []
-        if since:
+        if since and not latest:
             filters.append("from_publication_date:" + since)
         if until:
             filters.append("to_publication_date:" + until)
@@ -627,6 +744,13 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
                             paper['venue_note'] = 'Associated publication series; the specific conference track is not established by the series name alone.'
                         else:
                             paper["venue"] = matched
+                        if latest:
+                            edition = editions[matched]
+                            if (paper.get('venue_id') not in edition['source_ids'] or
+                                edition['basis'] == 'indexed_publication_year' and paper.get('year') != selected_years[matched]):
+                                coverage['gaps'].append(f'{matched}: result outside selected edition excluded')
+                                continue
+                            paper.update(conference_year=selected_years[matched], edition_basis=edition['basis'])
                         pools[matched].append(paper)
                     else:
                         papers.append(paper)
@@ -636,10 +760,21 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
             if not venues:
                 raise
             coverage["gaps"].append(f"OpenAlex works {requested_venue}: {exc}")
-    if "COLM" in venues:
+    if "COLM" in venues and not (latest and 'COLM' in editions):
         pools["COLM"] = _discover_colm(query, limit, min(deadline, time.monotonic() + 5), coverage)
+    if latest and time.monotonic() + 1 < deadline:
+        # Reuse spare time after metadata APIs finish for a large or temporarily
+        # slow official index. This is one bounded retry, not a second search
+        # of older editions when a published current edition had no topic hit.
+        pending = [v for v in venues if v in SUPPORTED_VENUES and v not in editions]
+        if pending:
+            try:
+                for paper in discover_proceedings(query, pending, limit, deadline, scope, coverage):
+                    pools[paper['venue']].append(paper)
+            except LiteratureError as exc:
+                coverage['gaps'].append(f'Official edition retry: {exc}')
     failed_index = any(any(marker in gap for marker in ('HTTP ', 'cooldown', 'could not be reached', 'time budget exhausted')) for gap in coverage['gaps'])
-    if venues and failed_index and time.monotonic() < deadline:
+    if venues and not latest and failed_index and time.monotonic() < deadline:
         from .proceedings import discover_proceedings
         missing = [venue for venue in venues if not pools[venue]]
         try:
@@ -653,6 +788,9 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         # Order venue pools by their best topical/date-ranked result, retaining
         # round-robin diversity among the relevant venues.
         from .selection import rank_metadata
+        # Filter before quotas so an ineligible record never occupies another
+        # venue's slot and prevents a valid result from being returned.
+        pools = {venue: _filter_scope(pool, scope, coverage, 'openalex') for venue, pool in pools.items()}
         ranked = rank_metadata([p for pool in pools.values() for p in pool], [query])
         ordered = {}
         for paper in ranked:

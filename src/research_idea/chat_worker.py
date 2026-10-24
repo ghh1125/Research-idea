@@ -19,6 +19,7 @@ from .presentation import STAGE_LABELS, stage_label, activity_summary, skill_lab
 from .citations import Citations
 from .output_paths import saved_report
 from .retries import with_retries
+from .paper_metadata import venue_label
 
 CHAT_SCHEMA = obj(answer=STR)
 LABELS = {
@@ -236,7 +237,8 @@ def research(project):
                 window = config_scope(cfg, purpose)
                 event('system', f"{label} · {window['since']} → {window['until']}")
             for paper in store.rows('papers'):
-                event('paper', f"{Citations([paper]).paper(paper['id'])} · {paper.get('year', '')}\n资料类型：{paper.get('content_kind', '')}")
+                label = venue_label(paper) or paper.get('year') or ''
+                event('paper', f"{Citations([paper]).paper(paper['id'])} · {label}\n资料类型：{paper.get('content_kind', '')}")
             try:
                 controller.run()
             finally:

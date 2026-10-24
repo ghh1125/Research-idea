@@ -16,7 +16,7 @@ def terms(text):
 
 
 def rank_metadata(records, queries):
-    """Relevance bands first, recency second; never infer scientific overlap.
+    """Relevance bands first, newest conference edition/date next.
 
     Scores are lexical title/abstract matches, not model confidence. Bands keep
     a new tangential paper from replacing a substantially more relevant one.
@@ -30,13 +30,16 @@ def rank_metadata(records, queries):
                     / (1.25 * len(words)), query) for query, words in query_terms]
         score, query = max(matches, default=(0.0, ''), key=lambda item: item[0])
         published = paper.get('publication_date') or ''
+        edition = paper.get('conference_year')
+        if type(edition) is int and not published.startswith(str(edition)):
+            published = f'{edition:04d}-00-00'
         try:
             date.fromisoformat(published)
         except (ValueError, TypeError):
-            published = f"{paper.get('year') or 0:04d}-00-00"
+            published = f"{edition or paper.get('year') or 0:04d}-00-00"
         selection = {'relevance': round(score, 4), 'relevance_band': int(score * 5),
                      'matched_query': query, 'date': published,
-                     'basis': 'title/abstract lexical match; relevance band then newest date; metadata only'}
+                     'basis': 'title/abstract lexical match; relevance band then newest conference edition/date; metadata only'}
         ranked.append(dict(paper, selection=selection))
     return sorted(ranked, key=lambda p: (-p['selection']['relevance_band'],
         tuple(-ord(c) for c in p['selection']['date']), -p['selection']['relevance'], p['id']))

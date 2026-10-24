@@ -25,7 +25,7 @@ from .output_paths import output_parent, saved_report
 INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认成为正式研究主题。
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
 3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
-4. /scope ai-recent 使用近期 AI 会议 + CS arXiv；/papers 路径 可导入论文。
+4. /scope ai-recent 使用各会议最新公开一届 + 近期 CS arXiv；/date 调整范围，/papers 路径 导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
 6. 第一阶段 [concept]：背景 → 问题 → 动机 → Idea；完成贡献对照和基本可行性判断。
    第二阶段 [design]：Idea → Method；提供可借鉴技术、适用理由与改造建议。
@@ -51,7 +51,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /output [目录|default]   保存位置；只改父目录，文件夹自动命名 idea-时间戳
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
-/date                   时间窗口：动态技术/动机对照窗口，或固定日期
+/date                   arXiv 时间窗口与会议届次：最新公开一届或日期范围
 /new [研究方向]          新建空白研究，沿用设置，预算计数从 0 开始
 /open 项目目录           切换项目      /history      最近对话
 /help                   命令说明      /exit         退出
@@ -259,8 +259,9 @@ class Chat:
         labels = {**BUDGET_LABELS, 'model': '模型', 'reasoning_effort': '思考强度', 'constraints': '资源条件',
                   'search_venues': '会议', 'search_date_mode': '日期模式', 'strategy_months': '方法窗口（月）',
                   'novelty_months': '第一阶段动机对照窗口（月）', 'search_source': '文献来源', 'auto_search': '自动检索',
+                  'conference_policy': '会议时间范围',
                   'search_since': '起始日期', 'search_until': '截止日期'}
-        values = lambda value: '、'.join(value) if isinstance(value, list) else {'rolling': '动态', 'fixed': '固定', 'hybrid': '会议 + arXiv'}.get(str(value), str(value))
+        values = lambda value: '、'.join(value) if isinstance(value, list) else {'rolling': '动态', 'fixed': '固定', 'hybrid': '会议 + arXiv', 'latest': '各会议最新公开的一届', 'window': '按日期窗口'}.get(str(value), str(value))
         self.show('system', '已保存，下次运行生效。\n' + '\n'.join(f'{labels.get(k, k)}：{values(v) or "沿用后端配置"}' for k, v in updates.items()))
 
     def topic(self, text=''):
@@ -565,7 +566,9 @@ class Chat:
             strategy, novelty = config_scope(cfg), config_scope(cfg, 'novelty')
             self.show('system', '\n'.join([
                 '项目：' + str(self.project), f"模型：{cfg['model'] or '继承配置'} · 思考强度 {cfg['reasoning_effort'] or '继承配置'} · 后端 {cfg['backend']}",
-                f"背景与技术探索：{strategy['since']} → {strategy['until']}", f"第一阶段动机对照：{novelty['since']} → {novelty['until']}",
+                f"arXiv 背景与技术探索：{strategy['since']} → {strategy['until']}", f"arXiv 第一阶段动机对照：{novelty['since']} → {novelty['until']}",
+                '会议时间：' + ('各会议最新公开的一届；本届未公开则选上一届' if cfg['conference_policy'] == 'latest' else '按上述日期窗口'),
+                '参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络',
                 '会议：' + ('、'.join(cfg['search_venues']) or '按主题检索'),
                 f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 全流程最多精读 {cfg['max_papers']} 篇",
                 f"产出：最多 {cfg['max_candidates']} 个 idea，讨论 {cfg['max_rounds']} 轮",
@@ -603,35 +606,43 @@ class Chat:
             from .search_scope import config_scope
             strategy, novelty = config_scope(self.cfg), config_scope(self.cfg, 'novelty')
             mode = '动态，每次运行按当天计算' if self.cfg['search_date_mode'] == 'rolling' else '固定日期'
-            self.show('system', f"日期模式：{mode}\n背景与技术探索：{strategy['since']} → {strategy['until']}\n第一阶段动机对照：{novelty['since']} → {novelty['until']}\n已知的更早相关论文也会参与对比。")
+            conference = ('各会议最新公开的一届；本届未公开则选上一届，不按月数截断'
+                          if self.cfg['conference_policy'] == 'latest' else '按所设日期窗口筛选')
+            self.show('system', f"arXiv 日期模式：{mode}\narXiv 背景与技术探索：{strategy['since']} → {strategy['until']}\narXiv 第一阶段动机对照：{novelty['since']} → {novelty['until']}\n会议论文：{conference}\n参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络\n截止日期：{strategy['until'] or '运行当天'}\n已知的更早相关论文也会参与对比。")
             if not value:
-                choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期'])
+                choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期', '会议按最新公开一届', '会议按日期窗口'])
                 if choice == '动态窗口':
                     months = await self.session.prompt_async('技术探索月数 动机对照月数 [12 6] › ')
                     value = 'rolling ' + (months.strip() or '12 6')
                 elif choice == '固定日期':
                     dates = await self.session.prompt_async('起始日期 截止日期 YYYY-MM-DD › ')
                     value = 'fixed ' + dates.strip()
+                elif choice == '会议按最新公开一届':
+                    value = 'conference latest'
+                elif choice == '会议按日期窗口':
+                    value = 'conference window'
                 elif choice not in {'', '返回'}:
-                    raise ValueError('请选择编号，或 /date rolling 12 6、/date fixed 起始日期 截止日期')
+                    raise ValueError('请选择编号，或 /date rolling 12 6、/date fixed 起始日期 截止日期、/date conference latest')
             if value:
                 fields = shlex.split(value)
                 if fields[0] == 'rolling' and len(fields) in {1, 3}:
                     strategy_months, novelty_months = map(int, fields[1:] or [12, 6])
                     self.settings(search_date_mode='rolling', strategy_months=strategy_months, novelty_months=novelty_months)
                 elif fields[0] == 'fixed' and len(fields) == 3:
-                    self.settings(search_date_mode='fixed', search_since=fields[1], search_until=fields[2])
+                    self.settings(search_date_mode='fixed', search_since=fields[1], search_until=fields[2], conference_policy='window')
+                elif fields[0] == 'conference' and len(fields) == 2 and fields[1] in {'latest', 'window'}:
+                    self.settings(conference_policy=fields[1])
                 else:
-                    raise ValueError('/date rolling 12 6 或 /date fixed YYYY-MM-DD YYYY-MM-DD')
+                    raise ValueError('/date rolling 12 6、/date fixed YYYY-MM-DD YYYY-MM-DD 或 /date conference latest|window')
         elif command == '/scope':
             from .search_scope import recent_defaults, AI_VENUES, config_scope
             if value == 'ai-recent':
-                self.settings(**recent_defaults(), search_source='hybrid', search_venues=list(AI_VENUES), auto_search=True, search_date_mode='rolling')
+                self.settings(**recent_defaults(), search_source='hybrid', search_venues=list(AI_VENUES), auto_search=True, search_date_mode='rolling', conference_policy='latest')
             elif value == 'local':
                 self.settings(auto_search=False)
             elif value:
                 since, until = shlex.split(value)
-                self.settings(search_since=since, search_until=until, search_date_mode='fixed')
+                self.settings(search_since=since, search_until=until, search_date_mode='fixed', conference_policy='window')
             else:
                 self.show('search', f"{config_scope(self.cfg)['since']} → {config_scope(self.cfg)['until']} · {self.cfg['search_source']} · 自动检索 {self.cfg['auto_search']}\n/scope ai-recent | local | YYYY-MM-DD YYYY-MM-DD")
         elif command == '/new':

@@ -167,10 +167,13 @@ def validate_active_skills(cfg, project):
 def apply_scope_options(args, cfg):
     before = dict(cfg)
     if getattr(args, "literature_preset", None) == "ai-recent":
-        cfg.update(recent_defaults(), search_source="hybrid", search_venues=list(AI_VENUES), search_date_mode='rolling')
+        cfg.update(recent_defaults(), search_source="hybrid", search_venues=list(AI_VENUES), search_date_mode='rolling', conference_policy='latest')
     if getattr(args, 'since', None) is not None or getattr(args, 'until', None) is not None:
         cfg['search_date_mode'] = 'fixed'
-    for key in ('search_date_mode', 'strategy_months', 'novelty_months'):
+        cfg['conference_policy'] = 'window'
+    if getattr(args, 'search_date_mode', None) == 'fixed':
+        cfg['conference_policy'] = 'window'
+    for key in ('search_date_mode', 'strategy_months', 'novelty_months', 'conference_policy'):
         if getattr(args, key, None) is not None:
             cfg[key] = getattr(args, key)
     for arg, key in (("since", "search_since"), ("until", "search_until"),
@@ -348,6 +351,8 @@ def build_parser():
         p.add_argument("--project", type=Path, required=True, help="Project directory")
     def scope_args(p):
         p.add_argument('--date-mode', dest='search_date_mode', choices=['rolling', 'fixed'], default=None)
+        p.add_argument('--conference-policy', choices=['latest', 'window'], default=None,
+                       help='Conference time scope: latest public edition per venue (default), or the date window')
         p.add_argument('--strategy-months', type=int, default=None, help='Rolling strategy window (default: 12 months)')
         p.add_argument('--novelty-months', type=int, default=None, help='Candidate novelty window (default: 6 months)')
         p.add_argument("--literature-preset", choices=["ai-recent"], default=None,

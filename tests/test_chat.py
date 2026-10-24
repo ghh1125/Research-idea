@@ -37,6 +37,7 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(load_config(self.project)['novelty_months'], 6)
         await self.chat.handle('/date fixed 2025-01-01 2026-10-23')
         self.assertEqual(load_config(self.project)['search_date_mode'], 'fixed')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'window')
         with self.assertRaises(ValueError):
             await self.chat.handle('/date rolling 6 12')
         await self.chat.handle('/budget search_results_per_query 30')
@@ -45,6 +46,30 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(load_config(self.project)['search_venues'], ['ACL', 'COLM', 'ICLR'])
         await self.chat.handle('/venues')
         self.assertIn('ICLR: CCF2026 A', self.events[-1][1])
+
+    async def test_date_conference_choice_is_independent_and_visible(self):
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        await self.chat.handle('/date conference window')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'window')
+        self.assertEqual(load_config(self.project)['search_date_mode'], 'rolling')
+        await self.chat.handle('/date fixed 2025-01-01 2026-10-23')
+        await self.chat.handle('/date conference latest')
+        cfg = load_config(self.project)
+        self.assertEqual(cfg['conference_policy'], 'latest')
+        self.assertEqual(cfg['search_until'], '2026-10-23')
+        with self.assertRaises(ValueError):
+            await self.chat.handle('/date conference arbitrary')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
+        with patch.object(self.chat, 'pick', new=AsyncMock(return_value='返回')):
+            await self.chat.handle('/date')
+        self.assertIn('arXiv 背景与技术探索', self.events[-1][1])
+        self.assertIn('本届未公开则选上一届', self.events[-1][1])
+        await self.chat.handle('/config')
+        self.assertIn('会议时间：各会议最新公开的一届', self.events[-1][1])
+        await self.chat.handle('/scope 2025-01-01 2026-10-23')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'window')
+        await self.chat.handle('/scope ai-recent')
+        self.assertEqual(load_config(self.project)['conference_policy'], 'latest')
 
     async def test_settings_persist_and_invalid_strength_preserves_config(self):
         await self.chat.handle('/model custom-model')

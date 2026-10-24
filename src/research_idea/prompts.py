@@ -50,6 +50,9 @@ Enumerate ALL required_signals and when needed (training/inference/evaluation): 
 INSTRUCTIONS['paper_card'] += """
 The controller supplies citation_groups to prevent citation-type mixups. Each experiments entry MUST cite at least one reported_result_ids ID; each author_limitations entry MUST cite at least one author_limitation_ids ID. If a group is empty, leave the corresponding array empty. Describe author assertions in the framework, and put your own concerns in analyst_concerns. Do not relabel evidence or invent a result to fill a section. Keep each framework summary to one or two focused sentences; normally choose at most three central components, experiments and opportunities. Spend detail on what changes the user's idea, rather than repeating the same caveats in every field.
 """
+INSTRUCTIONS['screen_papers'] += """
+Conference candidates may come from each venue's latest publicly available edition, independently of the rolling preprint window. A latest-edition paper remains current literature even when its publication or original preprint date is older than six months. Compare the actual problem, method and abstract first; at comparable substantive relevance, prefer a verified conference paper and use recent arXiv work to add useful developments. Do not fill a quota with tangential conference papers or infer conference status from a PDF host.
+"""
 INSTRUCTIONS['review'] += """
 Before attributing failure to missing learning or proposing more diagnostic experience, inspect the actual observation/action contract. If the current observation already exposes the decision-relevant state, compare a minimal reactive policy that uses it. Where stale experience is the proposed cause, consider the same agent without that old experience. Identify what must genuinely be inferred beyond visible state, and whether a simpler existing procedure already achieves the objective. If it does, improve or reframe the research question; do not manufacture difficulty by hiding normally available information or weakening the baseline. Keep these checks within the three consequential issues, and account for the cost of any added comparisons.
 """
@@ -133,6 +136,11 @@ READABLE_RESEARCH_WRITING = """
 用数句完整的话展开每一个重要推理：已有办法怎样帮助解决问题，为什么仍有困难，困难可能由什么造成，我们准备怎样改变它。读者应能跟着前一段理解后一段，不需要自己补出省略的因果关系。每段围绕一个重点；篇幅用于解释事情和理由，不重复口号。论文名称要和它实际做了什么一起介绍，优先解释与本问题直接相关的进展。不要照搬输入材料中的概括句，也不要用另一个专业词解释一个专业词。让读者不查术语、不打开论文，也能复述问题和核心想法。
 标题和两个技术角度用简短、直接的问题表达；具体条件与原因放在正文展开。先说需要做到什么，再说哪类技术可以帮忙。保留来源的适用条件、归属和研究假设，语言简化不能把推测写成事实、补造论文结论或夸大创新性。不要为了解释而增加虚构场景、具体例子或实验计划。提交前按读者视角检查一次：每句话说的事情是否明确，有没有用一串抽象名词代替本应讲清的过程。
 """
+for _stage in ('screen_papers', 'map', 'propose', 'develop', 'refine'):
+    INSTRUCTIONS[_stage] += """
+Among papers addressing the same substantive question, prioritize newer conference editions for reference and contribution comparison: use conference_year when supplied, rather than an earlier preprint date. Lead with the most recent relevant response; use older editions to supply essential mechanisms, foundations or counterevidence. Recency determines attention, not whether a source's claim is true or whether an older work already covers the proposed contribution.
+"""
+
 for _stage in ('screen_papers', 'plan_search', 'map', 'propose', 'design_transfer', 'develop', 'refine', 'review'):
     INSTRUCTIONS[_stage] += READABLE_RESEARCH_WRITING
 

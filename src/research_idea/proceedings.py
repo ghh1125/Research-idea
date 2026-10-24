@@ -13,6 +13,8 @@ import time
 
 from .selection import rank_metadata
 
+SUPPORTED_VENUES = {'ACL', 'EMNLP', 'NAACL', 'ICML', 'NeurIPS', 'ICLR', 'COLM'}
+
 
 class Node:
     def __init__(self, tag='', attrs=()):
@@ -135,6 +137,7 @@ def parse_index(html, url, venue, year):
     precise = re.search(r'on (\d{2} [A-Z][a-z]+ \d{4})\.', title) if venue == 'ICML' else None
     for record in records:
         record.update(year=year, venue=venue, source='official_proceedings', content_kind='abstract',
+                      conference_year=year, edition_basis='official_proceedings',
                       venue_evidence=url, venue_name=venue, publication_date_precision='month' if month else 'year',
                       publication_period=f'{year}-{month}' if month else str(year))
         if precise:
@@ -147,16 +150,25 @@ def parse_index(html, url, venue, year):
 def discover_proceedings(query, venues, limit, deadline, scope, coverage):
     from .literature import _request_bytes, _remaining, LiteratureError, deduplicate
     from .search_scope import exclusion_reason
-    records, attempts = [], []
+    records, attempts = [], coverage.setdefault('official_proceedings', [])
+    latest = scope.get('conference_policy') == 'latest'
     end_year = int((scope['until'] or date.today().isoformat())[:4])
     start_year = int((scope['since'] or str(end_year - 1))[:4])
     # A fallback is bounded too: recent two editions per venue, not an archive crawl.
-    years = list(range(end_year, max(start_year, end_year - 1) - 1, -1))
-    supported = {'ACL', 'EMNLP', 'NAACL', 'ICML', 'NeurIPS', 'ICLR', 'COLM'}
-    requested = [v for v in venues if v in supported]
-    coverage['official_proceedings'] = attempts
+    years = list(range(end_year, end_year - 3, -1)) if latest else list(range(end_year, max(start_year, end_year - 1) - 1, -1))
+    requested = [v for v in venues if v in SUPPORTED_VENUES]
+    editions = coverage.setdefault('conference_editions', {})
     for venue in requested:
-        venue_deadline = min(deadline, time.monotonic() + _remaining(deadline) / max(1, len(requested) - requested.index(venue)))
+        if time.monotonic() >= deadline:
+            coverage['gaps'].append('Official proceedings lookup reached its time budget')
+            break
+        remaining_venues = requested[requested.index(venue):]
+        # NeurIPS' yearly index is particularly large; reserve proportionate
+        # download time while all venues still share the same deadline.
+        weight = lambda name: 2 if name == 'NeurIPS' else 1
+        allowance = _remaining(deadline) * weight(venue) / sum(weight(v) for v in remaining_venues)
+        venue_deadline = min(deadline, time.monotonic() + allowance)
+        newer_errors = []
         for year in years:
             if time.monotonic() >= venue_deadline:
                 break
@@ -184,6 +196,7 @@ def discover_proceedings(query, venues, limit, deadline, scope, coverage):
                 except LiteratureError as exc:
                     coverage['gaps'].append(f'ICML official index: {exc}')
                     break
+            edition_papers = []
             for url in urls:
                 entry = {'venue': venue, 'year': year, 'url': url}
                 attempts.append(entry)
@@ -192,11 +205,22 @@ def discover_proceedings(query, venues, limit, deadline, scope, coverage):
                     papers = parse_index(html, url, venue, year)
                     entry.update(status='completed', indexed=len(papers))
                     eligible = [p for p in papers if exclusion_reason(p, scope, 'official_proceedings', verified_venue=True) is None]
-                    records.extend(rank_metadata(eligible, [query])[:limit * 2])
+                    edition_papers.extend(eligible)
                 except (LiteratureError, UnicodeError) as exc:
                     entry.update(status='failed', error=str(exc))
+                    if getattr(exc, 'status', None) != 404 and 'HTTP 404' not in str(exc):
+                        newer_errors.append({'year': year, 'url': url, 'error': str(exc)})
+            if latest and edition_papers:
+                # An edition exists even if this particular query has no
+                # relevant titles. Do not substitute an older topical hit.
+                editions[venue] = {'year': year, 'basis': 'official_proceedings',
+                    'url': edition_papers[0]['venue_evidence'], 'papers_indexed': len(edition_papers),
+                    'newer_unresolved': [e for e in newer_errors if e['year'] > year]}
+                records.extend(rank_metadata(edition_papers, [query])[:limit * 2])
+                break
+            records.extend(rank_metadata(edition_papers, [query])[:limit * 2])
     for venue in venues:
-        if venue not in supported:
+        if venue not in SUPPORTED_VENUES:
             coverage['gaps'].append(f'{venue}: no official-index fallback adapter; index coverage remains incomplete')
     # Some official volumes publish a month/year only. Preserve that precision.
     from .search_scope import exclusion_reason
