@@ -16,7 +16,7 @@ from .feasibility import assess_feasibility
 from .motivation import assess_motivation
 from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAMES
 from .claims import assess_claims, current_claim_audits
-from .search_planning import normalize_search_plan
+from .search_planning import normalize_search_plan, normalize_design_axes, check_axis_links
 from .search_scope import config_scope
 from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
@@ -179,6 +179,8 @@ class Controller:
 
     def task(self, stage, payload, checker=None):
         guidance = [s for s in self.skills if stage in s["stages"]]
+        if stage == 'plan_search' and payload.get('purpose') != 'technical_design':
+            guidance = [s for s in guidance if s['name'] != 'research-idea-build-mechanism']
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
         fingerprint = [stage_version(stage), stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
         if self.config.get("reasoning_effort"):
@@ -448,8 +450,9 @@ class Controller:
                 for card in context['paper_cards']]
             if candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
-        result = self.task("plan_search", payload, normalize_search_plan)
-        plan = normalize_search_plan(result)
+        normalizer = lambda value: normalize_search_plan(value, technical=candidate is not None)
+        result = self.task("plan_search", payload, normalizer)
+        plan = normalizer(result)
         key = candidate["id"] if candidate else "initial"
         plans = self.store.get("search_plans", {})
         plans[key] = plan
@@ -536,9 +539,14 @@ class Controller:
     def prepare_design(self, candidate, *, search=True):
         """Explore reusable techniques before writing the full implementation plan."""
         self.phase = 'design'
+        if not candidate.get('design_search_plan', {}).get('design_axes'):
+            self.progress('[design] 第二阶段 · 从 idea 推导两个技术问题，再选择可借鉴的方法。')
+            candidate['design_search_plan'] = self.plan_search(candidate)
+            self.store.put('candidates', candidate)
         def source_key():
-            return digest([[p['id'], digest(p.get('text') or p.get('abstract', ''))]
-                           for p in self.store.rows('papers')])
+            return digest([candidate['design_search_plan'],
+                           [[p['id'], digest(p.get('text') or p.get('abstract', ''))]
+                            for p in self.store.rows('papers')]])
         if candidate.get('design_ready') == source_key():
             return
         self.store.put('candidates', candidate)
@@ -573,8 +581,9 @@ class Controller:
                     check_references(value, {e['id'] for e in own}, {paper_id})
                     if len(value['options']) > 3:
                         raise ValueError('Describe at most three useful design transfers per paper')
+                    check_axis_links(value['options'], candidate['design_search_plan']['design_axes'])
                     for option in value['options']:
-                        if not option['evidence_ids'] or any(not v.strip() for k, v in option.items() if k not in {'evidence_ids', 'first_test'}):
+                        if not option['evidence_ids'] or any(not v.strip() for k, v in option.items() if k not in {'evidence_ids', 'first_test', 'axis_ids'}):
                             raise ValueError('A transfer needs a source technique, a structural mapping and a concrete adaptation')
                 transfer = self.task('design_transfer', payload, check_transfer)
                 # Reuse first-round evidence. Only a concrete unanswered design
@@ -611,6 +620,8 @@ class Controller:
                     | {'abstract': (paper.get('abstract') or '')[:1800]} for paper in pool]}
             if candidate and candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
+            if candidate:
+                payload['design_search_plan'] = candidate.get('design_search_plan', {})
             allowed = {paper['id'] for paper in pool}
             def check_selection(value):
                 selected_ids = [item['paper_id'] for item in value['selected']]
@@ -835,7 +846,7 @@ class Controller:
         })
         original_anchor = snapshot(candidate["original_anchor"])
         anchored_proposal = {**candidate["proposal"], **original_anchor}
-        substantive_sections = ("method", "motivation", "design_decisions", "prior_art", "novelty_claim", "feasibility", "validation")
+        substantive_sections = ("method", "motivation", "design_axes", "design_decisions", "prior_art", "novelty_claim", "feasibility", "validation")
         progress_limitation = (
             "Exact structured-content and evidence-ID comparison only; wording changes may be counted "
             "as changes, and changed text does not establish that an objection was resolved."
@@ -897,8 +908,12 @@ class Controller:
                 if not value["method"]["changes"] or not value["method"]["summary"].strip():
                     raise ValueError("Missing concrete technical direction or changes")
                 decisions = value['design_decisions']
+                axes = normalize_design_axes(value['design_axes'])
+                if {a['id'] for a in axes} != {a['id'] for a in candidate['design_search_plan']['design_axes']}:
+                    raise ValueError('Keep technical choices connected to the planned technical angles')
+                check_axis_links(decisions, axes, require_all=True)
                 if not 1 <= len(decisions) <= 3 or any(
-                        not text.strip() for item in decisions for key, text in item.items() if key not in {'evidence_ids', 'first_test'}):
+                        not text.strip() for item in decisions for key, text in item.items() if key not in {'evidence_ids', 'first_test', 'axis_ids'}):
                     raise ValueError('Explain one to three design choices with rationale, adaptation and a simple alternative')
                 if round_index:
                     requested = {item['issue'] for item in (review or {}).get('issues', [])}

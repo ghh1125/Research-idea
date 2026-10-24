@@ -11,12 +11,18 @@ from research_idea.backend_types import BackendResult
 from research_idea.config import DEFAULTS
 from research_idea.controller import Controller
 from research_idea.schema import SCHEMAS
+from research_idea.demo import demo_design_plan
 from research_idea.store import Store
 
 
 def shape(schema):
     if schema["type"] == "object":
-        return {key: shape(value) for key, value in schema["properties"].items()}
+        result = {key: shape(value) for key, value in schema["properties"].items()}
+        if 'design_axes' in result:
+            result['design_axes'] = demo_design_plan()['design_axes']
+        if 'axis_ids' in result:
+            result['axis_ids'] = ['relations', 'use']
+        return result
     if schema["type"] == "array":
         return []
     return schema.get("enum", ["A concrete testable statement"])[0]
@@ -81,7 +87,7 @@ class RevisionFlowTests(unittest.TestCase):
                         hypothesis="Observable signals can identify marginal benefit of extra inference.",
                         prediction="Matched-budget routing will change accuracy on held-out questions.")
         proposal["motivation"]["evidence_ids"] = ["ev-1"]
-        self.candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
+        self.candidate = {"id": "idea-1", "proposal": proposal, "versions": [], "design_search_plan": demo_design_plan()}
 
     def tearDown(self):
         self.store.close()

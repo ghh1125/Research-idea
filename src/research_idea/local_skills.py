@@ -28,7 +28,7 @@ STAGE_MAP = {
     "research-idea-analyze-paper": ("read_section", "paper_card"),
     "research-idea-motivation": ("map", "propose", "develop", "refine", "review"),
     "research-idea-compare-methods": ("propose", "inspect_source", "develop", "refine", "review"),
-    "research-idea-build-mechanism": ("design_transfer", "develop", "refine"),
+    "research-idea-build-mechanism": ("plan_search", "design_transfer", "develop", "refine"),
     "research-idea-check-feasibility": ("propose", "develop", "refine", "review"),
     "research-idea-design-falsification": ("review",),
     "research-idea-audit-claims": ("audit_claims", "extract", "inspect_source", "develop", "refine", "review"),

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from research_idea.demo import demo_design_plan
 from research_idea.config import DEFAULTS
 from research_idea.controller import BudgetExhausted, Controller, make_evidence
 from research_idea.literature import normalize_paper
@@ -37,7 +38,7 @@ class TechnicalDesignTests(unittest.TestCase):
         proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
         proposal['motivation']['evidence_ids'] = [self.eid]
         proposal['closest_work_ids'] = ['paper-1']
-        self.candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
+        self.candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': [], 'design_search_plan': demo_design_plan()}
 
     def tearDown(self):
         self.store.close()
@@ -53,6 +54,37 @@ class TechnicalDesignTests(unittest.TestCase):
                       first_test='Compare rule discrimination at equal observation budgets.',
                       evidence_ids=[self.eid])
         return {'paper_id': 'paper-1', 'options': [option], 'reading_gaps': []}
+
+    def test_angles_are_planned_before_reading_and_reach_design_without_network(self):
+        self.candidate.pop('design_search_plan')
+        plan = demo_design_plan()
+        method = fixtures.EvidenceIntegrityTests().spec(self.eid)
+        backend = FakeBackend([plan, self.transfer(), method, valid_shape(SCHEMAS['review'])])
+        controller = Controller(self.store, backend, self.config)
+        with patch('research_idea.literature.discover', side_effect=AssertionError('Network disabled')):
+            controller.develop_candidate(self.candidate)
+        self.assertEqual([t.stage for t in backend.calls], ['plan_search', 'design_transfer', 'develop', 'review'])
+        for task in backend.calls[1:3]:
+            self.assertEqual(data(task)['design_search_plan']['design_axes'], plan['design_axes'])
+        self.assertEqual(self.candidate['spec']['design_decisions'][0]['axis_ids'], ['relations', 'use'])
+
+    def test_full_reading_quota_still_plans_angles_before_using_known_sources(self):
+        self.candidate.pop('design_search_plan')
+        backend = FakeBackend([demo_design_plan(), self.transfer()])
+        controller = Controller(self.store, backend, dict(self.config, auto_search=True, max_papers=1))
+        with patch.object(controller, 'search_once', side_effect=AssertionError('No reading room')):
+            controller.prepare_design(self.candidate)
+        self.assertEqual([t.stage for t in backend.calls], ['plan_search', 'design_transfer'])
+
+    def test_method_choice_cannot_silently_drop_a_planned_angle(self):
+        method = fixtures.EvidenceIntegrityTests().spec(self.eid)
+        import copy
+        invalid = copy.deepcopy(method)
+        invalid['design_decisions'][0]['axis_ids'] = ['relations']
+        backend = FakeBackend([self.transfer(), invalid, method, valid_shape(SCHEMAS['review'])])
+        Controller(self.store, backend, self.config).develop_candidate(self.candidate)
+        self.assertEqual(sum(t.stage == 'develop' for t in backend.calls), 2)
+        self.assertIn('Address both technical angles', backend.calls[2].prompt)
 
     def test_source_transfer_precedes_method_and_reuses_first_round_reading(self):
         method = fixtures.EvidenceIntegrityTests().spec(self.eid)

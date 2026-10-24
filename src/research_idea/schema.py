@@ -19,8 +19,10 @@ def obj(**properties):
 
 STR = string()
 STRINGS = array(STR)
+DESIGN_AXIS = obj(id=STR, question=STR, why_needed=STR, required_function=STR, search_directions=STRINGS)
 PLAN_SEARCH = obj(research_question=STR, scope=STR,
-    queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR)),
+    design_axes=array(DESIGN_AXIS),
+    queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR, axis_ids=STRINGS)),
     assumptions=STRINGS)
 SCREEN_PAPERS = obj(selection_summary=STR,
     selected=array(obj(paper_id=STR, reason=STR, reading_question=STR)))
@@ -41,18 +43,19 @@ OPPORTUNITY = obj(id=STR, question=STR, basis=string(["source_observation", "res
     evidence_ids=STRINGS, closest_work_ids=STRINGS)
 MAP = obj(problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=STRINGS, evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
-MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
-    causal_explanation=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
+MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
+    problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
+    causal_explanation=STR, research_need=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
 FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
 PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
     prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
     opportunity_id=STR, selection_reason=STR, motivation=MOTIVATION, positioning=array(POSITIONING),
     feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
-DESIGN_OPTION = obj(question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
+DESIGN_OPTION = obj(axis_ids=STRINGS, question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
     adaptation=STR, why_it_helps=STR, simpler_alternative=STR, first_test=STR, evidence_ids=STRINGS)
 DESIGN_TRANSFER = obj(paper_id=STR, options=array(DESIGN_OPTION), reading_gaps=STRINGS)
-DESIGN_DECISION = obj(question=STR, choice=STR, rationale=STR, adaptation=STR,
+DESIGN_DECISION = obj(axis_ids=STRINGS, question=STR, choice=STR, rationale=STR, adaptation=STR,
     alternative=STR, first_test=STR, evidence_ids=STRINGS)
 METHOD = obj(
     summary=STR, base_implementation=STR, changes=STRINGS, inputs=STR, outputs=STR,
@@ -79,7 +82,7 @@ VALIDATION = obj(summary=STR, weakest_assumption=STR, first_test=STR, baselines=
     positive=STR, negative=STR, inconclusive=STR, budget_estimate=STR)
 ACTION = obj(kind=string(["search", "read_source", "inspect_code", "run_experiment", "revise", "stop"]), description=STR, decision_impact=STR)
 RESPONSE = obj(issue=STR, decision=string(["adopt", "adapt", "decline", "test"]), change=STR, reason=STR, evidence_ids=STRINGS)
-DEVELOP = obj(method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
+DEVELOP = obj(design_axes=array(DESIGN_AXIS), method=METHOD, motivation=MOTIVATION, prior_art=PRIOR, novelty_claim=NOVELTY, feasibility=FEASIBILITY, validation=VALIDATION, next_action=ACTION,
               design_decisions=array(DESIGN_DECISION), review_responses=array(RESPONSE))
 REVIEW = obj(verdict=string(["continue", "refine", "covered", "blocked"]),
     issues=array(obj(severity=string(["critical", "important", "minor"]), issue=STR, evidence_ids=STRINGS, action=STR)),

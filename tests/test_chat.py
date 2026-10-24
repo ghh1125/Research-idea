@@ -183,7 +183,7 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('核心想法', concept['text'])
         self.assertIn('第二阶段', next(e['text'] for e in events if e['tag'] == 'design'))
         self.assertEqual(events[-2]['tag'], 'idea')
-        self.assertIn('新问题是什么', events[-2]['text'])
+        self.assertIn('Problem · 剩余问题及其原因', events[-2]['text'])
         self.assertIn('技术参考', events[-2]['text'])
         self.assertNotIn('第一步验证', events[-2]['text'])
         self.assertNotIn('<details>', events[-2]['text'])

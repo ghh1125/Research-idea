@@ -67,7 +67,7 @@ class SkillIntegrationTests(unittest.TestCase):
         audits = [s["name"] for s in controller.skills if "audit_claims" in s["stages"]]
         self.assertEqual(audits, ["research-idea-audit-claims"])
         planners = [s["name"] for s in controller.skills if "plan_search" in s["stages"]]
-        self.assertEqual(planners, ["research-idea-read-evidence"])
+        self.assertEqual(planners, ["research-idea-read-evidence", "research-idea-build-mechanism"])
 
     def test_explicit_skill_changes_prompt_and_invalidates_its_task(self):
         path = self.skill("ccf-idea-optimizer", "Compare a causal explanation with its simplest rival.")

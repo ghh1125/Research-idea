@@ -14,6 +14,7 @@ from research_idea.controller import (
     locate_quote, make_evidence,
 )
 from research_idea.schema import SCHEMAS, validate
+from research_idea.demo import demo_design_plan
 from research_idea.store import Store
 
 
@@ -23,7 +24,12 @@ QUOTE = "The observed benefit depends on the available inference budget."
 def valid_shape(schema):
     """Create a small fixture from the declared contract, not production code."""
     if schema["type"] == "object":
-        return {key: valid_shape(value) for key, value in schema["properties"].items()}
+        result = {key: valid_shape(value) for key, value in schema["properties"].items()}
+        if 'design_axes' in result:
+            result['design_axes'] = demo_design_plan()['design_axes']
+        if 'axis_ids' in result:
+            result['axis_ids'] = ['relations', 'use']
+        return result
     if schema["type"] == "array":
         return []
     if schema["type"] == "string":
@@ -328,7 +334,7 @@ class ControllerExecutionTests(unittest.TestCase):
         review["verdict"] = "covered"
         proposal = valid_shape(SCHEMAS["propose"]["properties"]["candidates"]["items"])
         proposal["motivation"]["evidence_ids"] = ["ev-1"]
-        candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
+        candidate = {"id": "idea-1", "proposal": proposal, "versions": [], "design_search_plan": demo_design_plan()}
         backend = FakeBackend([method, review])
         self.controller(backend).develop_candidate(candidate)
         saved = self.store.rows("candidates")[0]
@@ -347,7 +353,7 @@ class ControllerExecutionTests(unittest.TestCase):
         review = valid_shape(SCHEMAS["review"])
         proposal = valid_shape(SCHEMAS["propose"]["properties"]["candidates"]["items"])
         proposal["motivation"]["evidence_ids"] = ["ev-1"]
-        candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
+        candidate = {"id": "idea-1", "proposal": proposal, "versions": [], "design_search_plan": demo_design_plan()}
         self.controller(FakeBackend([method, review]), max_rounds=1).develop_candidate(candidate)
         self.assertEqual(candidate["feasibility_status"], "blocked")
         self.assertEqual(candidate["research_status"], "implementation_blocked")
@@ -362,7 +368,7 @@ class ControllerExecutionTests(unittest.TestCase):
         review["motivation_assessment"]["progress"] = "incremental"
         proposal = valid_shape(SCHEMAS["propose"]["properties"]["candidates"]["items"])
         proposal["motivation"]["evidence_ids"] = ["ev-1"]
-        candidate = {"id": "idea-1", "proposal": proposal, "versions": []}
+        candidate = {"id": "idea-1", "proposal": proposal, "versions": [], "design_search_plan": demo_design_plan()}
         backend = FakeBackend([method, review, method, review])
         self.controller(backend).develop_candidate(candidate)
         # The reviewer now receives the previous critique and revision record.
@@ -394,7 +400,7 @@ class ControllerExecutionTests(unittest.TestCase):
         self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
         proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
         proposal['motivation']['evidence_ids'] = ['ev-1']
-        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
+        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': [], 'design_search_plan': demo_design_plan()}
         method = EvidenceIntegrityTests().spec('ev-1')
         first_backend = FakeBackend([])
         first = self.controller(first_backend, max_rounds=1)
@@ -426,7 +432,7 @@ class ControllerExecutionTests(unittest.TestCase):
         self.store.replace_evidence('paper-1', [{'id': 'ev-1', 'paper_id': 'paper-1', 'source_kind': 'abstract'}])
         proposal = valid_shape(SCHEMAS['propose']['properties']['candidates']['items'])
         proposal['motivation']['evidence_ids'] = ['ev-1']
-        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': []}
+        candidate = {'id': 'idea-1', 'proposal': proposal, 'versions': [], 'design_search_plan': demo_design_plan()}
         refreshed = EvidenceIntegrityTests().spec('ev-2')
         backend = FakeBackend([refreshed, valid_shape(SCHEMAS['review'])])
         controller = self.controller(backend, max_rounds=1)

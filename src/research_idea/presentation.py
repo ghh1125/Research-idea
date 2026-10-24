@@ -21,6 +21,8 @@ STAGE_LABELS = {
 
 def stage_label(stage, phase='ideation'):
     tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
+    if phase == 'design' and stage == 'plan_search':
+        return 'design', '第二阶段 · 从 idea 推导技术角度与检索方向'
     if phase == 'design':
         label = label.replace('第一阶段 · 文献构思', '第二阶段 · 方案设计')
     return tag, label
@@ -45,6 +47,32 @@ def skill_label(name):
 
 def points(items):
     return '\n'.join('• ' + str(item) for item in items if str(item).strip())
+
+
+def argument_markdown(motivation, proposal, *, include_intervention=True):
+    """Render consecutive parts of the argument, including older saved outputs."""
+    existing = motivation.get('existing_work') or '；'.join(
+        p.get('addressed_problem', '') for p in proposal.get('positioning', []))
+    parts = [
+        ('Background · 背景与已有工作', [motivation.get('background'), existing]),
+        ('Problem · 剩余问题及其原因', [motivation.get('problem_observation', proposal.get('problem')),
+            motivation.get('importance', proposal.get('why_it_matters')),
+            motivation.get('causal_explanation', proposal.get('hypothesis'))]),
+        ('Motivation · 由局限推导研究动机', [motivation.get('existing_approach_limit'),
+            motivation.get('research_need')]),
+        ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
+            motivation.get('why_this_method', proposal.get('intervention')),
+            motivation.get('expected_progress')]),
+    ]
+    return '\n\n'.join('**' + label + '**\n\n' + ' '.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
+                        for label, values in parts)
+
+
+def design_axes_markdown(axes):
+    return '\n\n'.join(
+        f"**技术角度 {index}：{axis['question']}**\n\n{axis['why_needed']}\n\n"
+        f"需要解决：{axis['required_function']}"
+        for index, axis in enumerate(axes, 1))
 
 
 def activity_summary(stage, result, citations=None):
@@ -75,6 +103,8 @@ def activity_summary(stage, result, citations=None):
             lines.append('这段没有新增引用，继续分析其他材料。')
     elif stage == 'plan_search':
         add('研究问题', result.get('research_question'))
+        if result.get('design_axes'):
+            lines.append(design_axes_markdown(result['design_axes']))
         for item in result.get('queries', []):
             add('检索', item['query'])
             add('为什么找它', item['rationale'])
@@ -113,16 +143,7 @@ def activity_summary(stage, result, citations=None):
     elif stage == 'propose':
         for item in result.get('candidates', []):
             section('Idea · ' + item['title'])
-            section('新问题是什么')
-            add('背景与需要', item['motivation'].get('background'))
-            add('问题', item['problem'])
-            section('为什么重要')
-            add('为什么值得做', item['motivation']['importance'])
-            add('现有简单做法的局限', item['motivation']['existing_approach_limit'])
-            section('Idea 怎样解决它')
-            add('可能的原因', item['motivation']['causal_explanation'])
-            add('核心想法', item['intervention'])
-            add('为什么这个想法有用', item['motivation']['why_this_method'])
+            lines.append(argument_markdown(item['motivation'], item))
             add('选择这个方向的理由', item.get('selection_reason'))
             section('基本可行性')
             sketch = item.get('feasibility_sketch', {})
@@ -153,6 +174,8 @@ def activity_summary(stage, result, citations=None):
         if not result.get('options'):
             add('接下来重点读', result.get('reading_gaps'))
     elif stage in {'develop', 'refine'}:
+        if result.get('design_axes'):
+            lines.append(design_axes_markdown(result['design_axes']))
         section('技术路线')
         add('具体方法', result['method'].get('summary') or result['method']['changes'])
         for decision in result.get('design_decisions', []):
@@ -188,20 +211,7 @@ def idea_markdown(candidate):
         if value:
             lines.extend(['**' + label + '：** ' + str(value), ''])
     lines.extend(['#### 第一部分 · Background → Problem → Motivation → Idea', '',
-                  '##### 新问题是什么', ''])
-    add('背景与需要', motivation.get('background'))
-    add('研究问题' if motivation.get('basis') == 'research_hypothesis' else '问题', motivation.get('problem_observation', proposal.get('problem')))
-    lines.extend(['##### 为什么重要', ''])
-    add('为什么值得做', motivation.get('importance', proposal.get('why_it_matters')))
-    add('现有方法的局限', motivation.get('existing_approach_limit'))
-    add('希望取得的实质进展', motivation.get('expected_progress'))
-    lines.extend(['##### Idea 怎样解决它', ''])
-    # Explain the intervention's principle here; supporting techniques belong
-    # to the second part. Refinements use the current rationale, not an old idea.
-    add('问题成因', motivation.get('causal_explanation', proposal.get('hypothesis')))
-    add('核心想法', motivation.get('why_this_method') if spec else proposal.get('intervention'))
-    if not spec:
-        add('为什么能针对这个问题', motivation.get('why_this_method', proposal.get('mechanism')))
+                  argument_markdown(motivation, proposal, include_intervention=not spec), ''])
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))
     if not spec:
         sketch = proposal.get('feasibility_sketch', {})
@@ -209,12 +219,17 @@ def idea_markdown(candidate):
         add('关键假设', sketch.get('key_assumption'))
         return '\n'.join(lines)
     lines.extend(['#### 第二部分 · Idea → Method · 技术参考', ''])
-    add('参考路线', method.get('summary') or '\n'.join(method.get('changes', [])))
+    axes = spec.get('design_axes') or candidate.get('design_search_plan', {}).get('design_axes', [])
+    if axes:
+        lines.extend([design_axes_markdown(axes), ''])
+    by_id = {a['id']: a['question'] for a in axes}
     for decision in spec.get('design_decisions', []):
+        add('对应技术问题', '；'.join(by_id[i] for i in decision.get('axis_ids', []) if i in by_id))
         add('可借鉴的技术', decision['choice'])
         add('为什么适合', decision['rationale'])
         add('如何用于这个 idea', decision['adaptation'])
         add('来源', '、'.join(decision.get('evidence_ids', [])))
+    add('参考路线 · 怎样共同实现 Idea' if axes else '参考路线', method.get('summary') or '\n'.join(method.get('changes', [])))
     # Specific impossible inputs need an alternative in the design, not a status badge.
     for item in spec.get('feasibility', {}).get('required_signals', []):
         if item.get('availability') == 'unavailable':

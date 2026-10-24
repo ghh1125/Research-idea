@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from research_idea.backend_types import BackendError, BackendResult
+from research_idea.demo import demo_design_plan
 from research_idea.config import DEFAULTS
 from research_idea.controller import BudgetExhausted, Controller
 from research_idea.report import export_report
@@ -45,7 +46,8 @@ class PipelineBackend:
             queries = ["candidate routing matched budget", "candidate routing simpler controls", "candidate routing counterexamples"] if "candidate" in payload else QUERIES
             output = {"research_question": "When can observable feedback improve adaptive routing?",
                       "scope": "Inference-time routing with matched evaluation budgets.",
-                      "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion."}
+                      "design_axes": demo_design_plan()["design_axes"] if "candidate" in payload else [],
+                      "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion.", "axis_ids": ["relations", "use"] if "candidate" in payload else []}
                                   for query, purpose in zip(queries, ("background", "mechanism", "counterevidence"))],
                       "assumptions": ["Resource access remains unspecified."]}
         elif task.stage == "screen_papers":

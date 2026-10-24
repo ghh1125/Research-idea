@@ -16,6 +16,7 @@ MAX_INPUT_QUERIES = 200
 PURPOSES = {"background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"}
 PLAN_FIELDS = {"research_question", "scope", "queries", "assumptions"}
 QUERY_FIELDS = {"query", "purpose", "rationale"}
+AXIS_FIELDS = {'id', 'question', 'why_needed', 'required_function', 'search_directions'}
 
 
 def _object(value, fields, label):
@@ -35,7 +36,39 @@ def _text(value, label):
     return text
 
 
-def normalize_search_plan(plan: dict) -> dict:
+def normalize_design_axes(axes):
+    """Keep two functional questions connected to the idea, without scoring them."""
+    if not isinstance(axes, list) or len(axes) != 2:
+        raise ValueError('Explain two complementary technical angles before choosing techniques')
+    result = []
+    for axis in axes:
+        _object(axis, AXIS_FIELDS, 'design_axis')
+        item = {key: _text(axis[key], 'design_axis.' + key)
+                for key in AXIS_FIELDS - {'search_directions'}}
+        directions = axis['search_directions']
+        if not isinstance(directions, list) or not directions:
+            raise ValueError('Each technical angle needs plausible method search directions')
+        item['search_directions'] = [_text(d, 'search_direction') for d in directions]
+        result.append(item)
+    if len({axis['id'] for axis in result}) != 2:
+        raise ValueError('Technical angle IDs must be distinct')
+    return result
+
+
+def check_axis_links(items, axes, *, require_all=False):
+    allowed = {axis['id'] for axis in axes}
+    linked = set()
+    for item in items:
+        ids = item.get('axis_ids')
+        if (not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids)
+                or len(set(ids)) != len(ids) or not set(ids) <= allowed):
+            raise ValueError('Link each query or technical choice to supplied technical angle IDs')
+        linked.update(ids)
+    if require_all and linked != allowed:
+        raise ValueError('Address both technical angles; do not lose one during selection')
+
+
+def normalize_search_plan(plan: dict, *, technical=False) -> dict:
     """Validate shape, normalize whitespace, and retain at most three queries.
 
     Query deduplication is case-insensitive and keeps the first query's purpose
@@ -44,7 +77,12 @@ def normalize_search_plan(plan: dict) -> dict:
     belong in the prompt: the modest Latin-letter check only catches an entirely
     untranslated query, while allowing accents and non-Latin proper names.
     """
-    _object(plan, PLAN_FIELDS, "search_plan")
+    # Older saved search plans can still be normalized and displayed.
+    optional = {'design_axes'} if isinstance(plan, dict) and 'design_axes' in plan else set()
+    _object(plan, PLAN_FIELDS | optional, "search_plan")
+    axes = normalize_design_axes(plan.get('design_axes')) if technical else []
+    if not technical and plan.get('design_axes') not in (None, []):
+        raise ValueError('Strategy discovery precedes technical angles; use design_axes=[]')
     research_question = _text(plan["research_question"], "research_question")
     scope = _text(plan["scope"], "scope")
     raw_queries = plan["queries"]
@@ -53,7 +91,8 @@ def normalize_search_plan(plan: dict) -> dict:
     queries, seen = [], set()
     for index, item in enumerate(raw_queries):
         label = f"queries[{index}]"
-        _object(item, QUERY_FIELDS, label)
+        optional = {'axis_ids'} if isinstance(item, dict) and 'axis_ids' in item else set()
+        _object(item, QUERY_FIELDS | optional, label)
         query = _text(item["query"], label + ".query")
         if len(query) > MAX_QUERY_CHARS or len(query.split()) > MAX_QUERY_WORDS:
             raise ValueError(f"{label}.query must use concise academic keywords: at most {MAX_QUERY_CHARS} characters and {MAX_QUERY_WORDS} words")
@@ -64,13 +103,29 @@ def normalize_search_plan(plan: dict) -> dict:
             raise ValueError(f"{label}.purpose must be one of {', '.join(sorted(PURPOSES))}")
         rationale = _text(item["rationale"], label + ".rationale")
         key = query.casefold()
+        if technical:
+            check_axis_links([item], axes)
+        elif item.get('axis_ids') not in (None, []):
+            raise ValueError('Strategy queries do not refer to technical angles')
         if key not in seen:
             seen.add(key)
             if len(queries) < MAX_QUERIES:
-                queries.append({"query": query, "purpose": purpose, "rationale": rationale})
+                normalized = {"query": query, "purpose": purpose, "rationale": rationale}
+                if 'axis_ids' in item:
+                    normalized['axis_ids'] = list(item['axis_ids'])
+                queries.append(normalized)
+        elif technical:
+            retained = next((q for q in queries if q['query'].casefold() == key), None)
+            if retained is not None:
+                retained['axis_ids'] = list(dict.fromkeys(retained['axis_ids'] + item['axis_ids']))
     assumptions = plan["assumptions"]
     if not isinstance(assumptions, list):
         raise ValueError("assumptions must be a list of strings")
     assumptions = [_text(value, f"assumptions[{index}]") for index, value in enumerate(assumptions)]
-    return {"research_question": research_question, "scope": scope,
-            "queries": queries, "assumptions": assumptions}
+    result = {"research_question": research_question, "scope": scope,
+              "queries": queries, "assumptions": assumptions}
+    if technical:
+        check_axis_links(queries, axes, require_all=True)
+    if 'design_axes' in plan:
+        result['design_axes'] = axes
+    return result

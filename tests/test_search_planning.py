@@ -5,6 +5,7 @@ import copy
 import unittest
 
 from research_idea.search_planning import normalize_search_plan
+from research_idea.demo import demo_design_plan
 
 
 def plan():
@@ -24,6 +25,29 @@ def plan():
 
 
 class SearchPlanningTests(unittest.TestCase):
+    def test_technical_queries_preserve_their_angles_when_deduplicated(self):
+        value = demo_design_plan()
+        value['queries'][1]['query'] = value['queries'][0]['query'].upper()
+        result = normalize_search_plan(value, technical=True)
+        self.assertEqual(len(result['queries']), 1)
+        self.assertEqual(result['queries'][0]['axis_ids'], ['relations', 'use'])
+        self.assertEqual(result['design_axes'], value['design_axes'])
+
+    def test_technical_plan_requires_two_distinct_angles_and_queries_for_both(self):
+        for change in ('missing_angle', 'duplicate_id', 'unknown_link', 'lost_angle'):
+            with self.subTest(change=change):
+                value = demo_design_plan()
+                if change == 'missing_angle':
+                    value['design_axes'].pop()
+                elif change == 'duplicate_id':
+                    value['design_axes'][1]['id'] = value['design_axes'][0]['id']
+                elif change == 'unknown_link':
+                    value['queries'][0]['axis_ids'] = ['invented']
+                else:
+                    value['queries'] = value['queries'][:1]
+                with self.assertRaises(ValueError):
+                    normalize_search_plan(value, technical=True)
+
     def test_normalizes_whitespace_without_mutating_input(self):
         value = plan()
         value["research_question"] = "  How does\n adaptation work? "
@@ -84,8 +108,12 @@ class SearchPlanningTests(unittest.TestCase):
                     normalize_search_plan(value)
 
     def test_invalid_types_and_purposes_require_repair(self):
+        for value in (None, 1, [], "search words"):
+            with self.subTest(plan=value), self.assertRaises(ValueError):
+                normalize_search_plan(value)
         for field, replacement in (("research_question", 1), ("scope", None),
                                    ("queries", "search words"), ("queries", ["search words"]),
+                                   ("queries", [None]), ("queries", [1]),
                                    ("assumptions", "one assumption"), ("assumptions", [None])):
             with self.subTest(field=field, replacement=replacement):
                 value = plan()

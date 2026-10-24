@@ -203,7 +203,7 @@ def export_report(store: Store, output_dir: Path | None = None):
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 5, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 6, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),

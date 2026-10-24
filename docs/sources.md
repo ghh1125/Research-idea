@@ -113,6 +113,15 @@
 
 这些参考帮助设计思考流程，不能证明生成的 idea 已经具有科学创新。回归测试检查切口传递、选择关联、来源有效性、恢复和报告；真实产出另行查看问题意义、洞见与贡献论证。
 
+### 将论证与技术选择接起来
+
+结合上述 ARIS 的结构性缺口、Supervisor-Skills 的隐藏假设追问及 IdeaScientist 的跨领域迁移思路，本项目进一步落实两个衔接：
+
+- [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 先承认已有工作的有效贡献，再从剩余问题、成因和当前方法的限制推出研究需要；`existing_work` 与 `research_need` 分别保存这两个容易缺失的环节。研究意义与方法必要性需要连成论证，不能靠重要性口号或技术名称替代。
+- [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个互补的功能问题，再找可借鉴技术。`plan_search → design_transfer → develop/refine` 传递同一组 `design_axes`，查询和选择通过 `axis_ids` 关联。技术可以来自其他 CS 领域，也可以同时解决两个问题。
+
+这两个角度的组织方式按本项目的用户要求设计，并非上述框架统一规定的流程。[检索规划测试](../tests/test_search_planning.py) 和[技术设计测试](../tests/test_technical_design.py) 检查先后顺序、对应关系及无网络时的复用；实际论证质量需要查看模型产出。
+
 ## 目录与会议来源核对
 
 - [CCF 2026 目录原文副本](https://dengpingfan.github.io/papers/CCF-Recommend-2026.pdf)：第 57–58 页；[CCF 官方目录入口](https://www.ccf.org.cn/Academic_Evaluation/By_category/)。官方页面当前有浏览器验证，本轮以目录原文核对分级。

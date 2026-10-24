@@ -18,11 +18,11 @@
 
 ## 研究流程
 
-**第一阶段：Background → Problem → Motivation → Idea。** 查读关键论文，分析真实结论、动机与贡献，判断基本可行性，以提出 idea 结束。
+**第一阶段：Background → Problem → Motivation → Idea。** 先交代背景中的需要和现有工作已经做到了什么，再指出仍存在的问题及其原因，解释现有方法为什么没有消除这个原因。由此推导“需要理解或实现什么”，形成研究动机；最后提出针对这一需要的核心 idea。四部分是一条连续论证，动机不能只重复“问题很重要”，idea 也不能跳过原因分析直接堆技术。
 
 构思时先比较少量有文献依据的不同切口，再说明为什么选择最终的核心想法。每个切口都连接“文献细节 → 尚未回答的问题 → 核心洞见 → 研究价值与可行路径”。相关工作很多、方法相似或词项接近，不会直接成为放弃理由；判断针对具体研究贡献。
 
-**第二阶段：Idea → Method（技术参考）。** 围绕 idea 探索可借鉴技术，说明它为什么适合、需要怎样改造。技术参考辅助用户继续思考，不默认展开完整实现或实验计划。
+**第二阶段：Idea → 两个技术角度 → 方法参考。** 先推导实现 idea 需要解决的两个互补技术问题，分别说明为什么需要、方法应具备什么能力，以及可以从什么方向寻找方法；再据此检索、阅读和选择技术，说明针对本场景的改造，以及它们怎样共同支撑 idea。两个角度是问题分解，同一种方法也可以同时服务两个角度；技术参考不默认展开完整实现或实验计划。
 
 技术可以来自其他计算机领域：先说明共同问题结构和原技术的适用条件，再决定如何迁移、为何有帮助。每次补读都服务于一个具体设计问题。
 
@@ -235,7 +235,7 @@ skill_max_chars = 48000
 
 加载的是指定 Markdown 文本。引用文件需额外显式选择；技能内的脚本、网络访问与工具不会自动执行，也不会改变研究任务的输出格式、证据规则和预算。原文证据与 skill 指导严格分开。每次记录名称、来源、阶段、路径与 SHA-256；修改 skill 后相关任务和候选批次会失效重算，旧历史保留。
 
-推荐把 CCFA idea optimizer/reviewer、experiment designer 作为补充，按需要显式附加它们的具体参考文件。系统内置八个 skill 为项目自主编写，未打包第三方代码或文档；ARIS/CCFA 的设计借鉴见 [来源](docs/sources.md)。
+推荐把 CCFA idea optimizer/reviewer、experiment designer 作为补充，按需要显式附加它们的具体参考文件。系统内置八个 skill 为项目自主编写，未打包第三方代码或文档；ARIS、Supervisor-Skills、IdeaScientist 和 research-idea-explorer 等的设计借鉴见 [来源](docs/sources.md)。
 
 ## 使用自己的主题和论文
 
@@ -261,7 +261,7 @@ research-idea search "conflicting evidence language models" \
   --project ./research-projects/conflict --source arxiv --limit 10
 ```
 
-`search` 支持 arXiv 和 OpenAlex；按会议检索时，COLM 另外使用 OpenReview 的录用记录。网络、索引覆盖和 API 配额取决于运行环境；OpenAlex 可用 `search_api_key_env` 指定密钥环境变量。建议使用英文检索词，并把机制、条件和竞争解释拆成不同查询。第一阶段把研究意图整理成最多三条英文查询，覆盖背景、动机问题、机制或失败条件；第二阶段围绕 idea 的核心困难，重新检索可迁移机制与技术路线，不要求所有查询都带上原应用领域。计划与实际搜索分别记录，初轮使用约一半文献容量，剩余容量留给技术探索。已导入足够文献时可跳过初始检索；`--no-search` 完全跳过检索规划和联网。
+`search` 支持 arXiv 和 OpenAlex；按会议检索时，COLM 另外使用 OpenReview 的录用记录。网络、索引覆盖和 API 配额取决于运行环境；OpenAlex 可用 `search_api_key_env` 指定密钥环境变量。建议使用英文检索词，并把机制、条件和竞争解释拆成不同查询。第一阶段把研究意图整理成最多三条英文查询，覆盖背景、动机问题、机制或失败条件；第二阶段围绕 idea 的核心困难，重新检索可迁移机制与技术路线，不要求所有查询都带上原应用领域。计划与实际搜索分别记录，初轮使用约一半文献容量，剩余容量留给技术探索。已导入足够文献时可跳过初始检索；`--no-search` 跳过联网检索，第二阶段仍会梳理两个技术角度并使用已有材料。
 
 ### 会议论文与全文
 
@@ -460,7 +460,7 @@ research-idea export --project ./research-projects/conflict
 
 `status` 和 `inspect` 使用 SQLite 只读快照，可在研究流程运行期间查看进度；修改项目的命令仍受单写入进程锁保护。
 
-输出位于项目的 `outputs/report.md`、`report.json` 和各候选 Markdown 文件。逐篇分析卡位于 `outputs/papers/`。JSON 报告的 `schema_version` 为 `5`，包含背景—问题—动机—方法的论证、第一阶段 `positioning` 与 `feasibility_sketch`、第二阶段 `design_transfers` 与最终 `design_decisions`、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及兼容旧项目的 `validation` 字段（默认不生成实验计划）、`feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
+输出位于项目的 `outputs/report.md`、`report.json` 和各候选 Markdown 文件。逐篇分析卡位于 `outputs/papers/`。JSON 报告的 `schema_version` 为 `6`，包含已有工作进展与研究需要之间的论证、两个 `design_axes` 及查询和方法的 `axis_ids` 关联、第一阶段 `positioning` 与 `feasibility_sketch`、第二阶段 `design_transfers` 与最终 `design_decisions`、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及兼容旧项目的 `validation` 字段（默认不生成实验计划）、`feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
 
 ## 开发与测试
 

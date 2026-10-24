@@ -14,6 +14,8 @@ def proposal():
     return {"motivation": {
         "basis": "source_observation",
         "background": "The target system must act reliably when several causes produce similar observations.",
+        "existing_work": "Existing systems collect observations to guide their actions.",
+        "research_need": "The remaining ambiguity calls for an account of which observations distinguish the relevant causes.",
         "problem_observation": "The supplied source reports an unresolved failure under a specified condition.",
         "evidence_ids": ["ev-observation"],
         "importance": "This failure prevents the target task from meeting its stated requirement.",

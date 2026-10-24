@@ -13,6 +13,28 @@ DEMO_PAPERS = [
 ]
 
 
+def demo_design_plan(*, technical=True):
+    """Synthetic planning fixture; these are not literature-derived findings."""
+    axes = [
+        {'id': 'relations', 'question': '怎样保留文本证据之间的关系？',
+         'why_needed': '只有保留关系，才能讨论证据齐全时为什么仍发生使用错误。',
+         'required_function': '在不使用答案标签的情况下表达支持、冲突与适用条件。',
+         'search_directions': ['文本关系表示', '条件性知识表示']},
+        {'id': 'use', 'question': '怎样让回答过程使用这些条件关系？',
+         'why_needed': '关系记录需要参与推理，才能作用于候选提出的信息使用问题。',
+         'required_function': '根据可见条件组织证据，使回答依据可追溯到对应关系。',
+         'search_directions': ['条件推理', '证据约束生成']},
+    ] if technical else []
+    return {'research_question': 'How can supplied evidence support conditional reasoning?',
+            'scope': 'Synthetic planning example, not a scientific finding.', 'design_axes': axes,
+            'queries': [{'query': query, 'purpose': 'mechanism', 'rationale': reason,
+                         'axis_ids': [axis] if technical else []}
+                        for query, axis, reason in [
+                            ('text evidence relation representation', 'relations', 'Find relation representations.'),
+                            ('conditional evidence reasoning generation', 'use', 'Find ways to use conditional evidence.')]],
+            'assumptions': ['Synthetic demonstration only.']}
+
+
 class DemoBackend:
     name = "demo-synthetic"
 
@@ -20,7 +42,9 @@ class DemoBackend:
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
         refs = [e["id"] for e in payload.get("evidence", [])]
         papers = [p["id"] for p in payload.get("papers", [])]
-        if task.stage == "screen_papers":
+        if task.stage == 'plan_search':
+            output = demo_design_plan(technical=payload.get('purpose') == 'technical_design')
+        elif task.stage == "screen_papers":
             output = {'selection_summary': 'Synthetic selection for workflow demonstration.',
                 'selected': [{'paper_id': p['id'], 'reason': 'Synthetic topic-related source.',
                               'reading_question': 'Which synthetic statement illustrates the workflow?'}
@@ -47,9 +71,11 @@ class DemoBackend:
                 candidates[-1]['opportunity_id'] = payload['problem_model']['opportunities'][len(candidates) - 1]['id']
                 candidates[-1]['selection_reason'] = '合成演示优先区分信息缺失与使用困难，保留研究问题和可用信息之间的联系。'
                 candidates[-1]["motivation"] = {"basis": "research_hypothesis", "background": "多来源问答需要可靠地使用已经取得的证据。", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
+                    "existing_work": "合成场景中的现有做法通过检索向回答模型提供相关文本，以缓解信息缺失。",
                     "importance": "若实际存在，将影响依据多来源材料回答的可靠性；重要性仍待真实数据验证。",
                     "existing_approach_limit": "假设只增加检索无法区分证据缺失和冲突处理失误；尚需文献验证。",
                     "causal_explanation": "候选解释：证据关系或顺序影响模型使用已有信息。", "why_this_method": "固定检索与内容，对冲突或顺序作干预以区分原因。",
+                    "research_need": "因此需要在证据已经提供的条件下，弄清关系与顺序怎样影响使用过程，才能确定问题应从检索还是推理环节解决。",
                     "expected_progress": "在限定条件下区分错误来源，形成可证伪解释；不是声称提升指标。",
                     "simplest_alternative": "随机交换顺序而不使用候选机制。", "necessity_test": "如果随机对照解释全部差异，则该机制没有额外解释力。"}
                 candidates[-1]['positioning'] = [{'paper_id': p, 'addressed_problem': '合成材料提出证据冲突诊断。',
@@ -81,7 +107,8 @@ class DemoBackend:
             if task.stage == "refine":
                 changes.append("增加随机信号对照")
             output = {
-                "design_decisions": [{'question': '怎样分离输入因素？', 'choice': '保持证据内容，做成对条件干预。',
+                "design_axes": payload.get('design_search_plan', demo_design_plan()).get('design_axes', []),
+                "design_decisions": [{'axis_ids': ['relations', 'use'], 'question': '怎样分离输入因素？', 'choice': '保持证据内容，做成对条件干预。',
                     'rationale': '直接操纵候选原因并观察预测变化。', 'adaptation': '将通用配对设计用于证据冲突。',
                     'alternative': '随机改变输入条件。', 'first_test': '先比较少量成对样本与随机对照。', 'evidence_ids': refs}],
                 "review_responses": [{"issue": item['issue'], "decision": "adopt", "change": "增加随机信号对照", "reason": "区分机制收益与随机变化", "evidence_ids": []} for item in payload.get('review', {}).get('issues', [])],
