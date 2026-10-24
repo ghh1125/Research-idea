@@ -893,7 +893,7 @@ class Controller:
                 selected = directions.get(item['opportunity_id'])
                 if selected and 'selected_opportunity' not in candidate:
                     candidate['selected_opportunity'] = {key: selected[key]
-                        for key in ('id', 'question', 'problem_origin', 'derivation')}
+                        for key in ('id', 'question', 'problem_origin', 'basis', 'derivation', 'prior_art_delta')}
                 candidates.append(candidate)
             self.store.replace_candidates(candidates)
             for candidate in candidates:

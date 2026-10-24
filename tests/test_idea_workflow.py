@@ -132,11 +132,101 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertEqual(motive['problem_origin'], chosen['problem_origin'])
                 self.assertTrue(motive['problem_derivation'].strip())
                 self.assertEqual(candidate['selected_opportunity'],
-                    {field: chosen[field] for field in ('id', 'question', 'problem_origin', 'derivation')})
+                    {field: chosen[field] for field in
+                     ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta')})
                 summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
                 self.assertIn(motive['problem_derivation'], summary)
                 self.assertLess(summary.index(motive['problem_derivation']),
                                 summary.index(motive['problem_observation']))
+
+    def test_conditional_hypotheses_with_cited_premises_survive_both_origin_paths(self):
+        from research_idea.literature import normalize_paper
+        self.config['max_candidates'] = 2
+        premise = 'A retriever returns passages with source identifiers and allows another retrieval request.'
+        self.store.put('papers', normalize_paper({
+            'id': 'conditional-premise', 'title': 'Synthetic retrieval capability premise',
+            'content_kind': 'notes', 'source': 'synthetic_demo',
+            'text': 'Synthetic fixture; not a real scientific paper.\n' + premise +
+                    '\nNo observations of the proposed difficulties are reported.'}))
+        derivations = {
+            'unresolved_need': '如果来源的适用条件不同，回答时混用这些条件可能使已有信息无法被正确使用；这是由信息使用过程推导的假设，文献前提只说明系统能取得段落并继续检索。',
+            'emerging_problem': '如果新旧来源的适用条件不一致，为扩大覆盖而持续追加来源可能增加条件混用；这是关于扩展后果的假设，材料并未报告这种困难。',
+        }
+        existing_response = '已有方法可以追加检索并取得新来源；需要分析何时这些正常操作足以澄清条件，何时追加内容仍保留相互冲突的适用条件。'
+        def inject_hypotheses(task, output):
+            if task.stage == 'extract':
+                output['observations'] = [{'statement': premise, 'quote': premise, 'kind': 'author_claim',
+                    'conditions': 'Synthetic description of an available operation, not a failure observation.',
+                    'source_section': 'capability premise'}]
+            elif task.stage == 'map':
+                for direction in output['opportunities']:
+                    direction.update(basis='research_hypothesis',
+                        derivation=derivations[direction['problem_origin']], prior_art_delta=existing_response)
+            elif task.stage == 'propose':
+                for candidate in output['candidates']:
+                    motive = candidate['motivation']
+                    motive.update(basis='research_hypothesis',
+                        problem_derivation=derivations[motive['problem_origin']],
+                        existing_approach_limit=existing_response)
+        _, backend = self.run_flow(RecordingBackend(inject_hypotheses))
+        evidence = self.store.rows('evidence')
+        self.assertTrue(evidence)
+        self.assertEqual({item['kind'] for item in evidence}, {'author_claim'})
+        self.assertEqual({item['quote'] for item in evidence}, {premise})
+        directions = {item['id']: item for item in self.store.get('problem_model')['opportunities']}
+        for task in backend.calls:
+            payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+            if task.stage == 'propose':
+                for direction in payload['problem_model']['opportunities']:
+                    self.assertEqual(direction['basis'], 'research_hypothesis')
+                    self.assertTrue(direction['evidence_ids'])
+                    self.assertEqual(direction['derivation'], derivations[direction['problem_origin']])
+                    self.assertEqual(direction['prior_art_delta'], existing_response)
+            elif task.stage in {'plan_search', 'develop', 'refine', 'review'}:
+                selected = payload['selected_opportunity']
+                original = directions[selected['id']]
+                self.assertEqual(selected, {key: original[key] for key in
+                    ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta')})
+                current = payload.get('method_spec') or payload.get('previous_spec') or payload['candidate']
+                self.assertEqual(current['motivation']['basis'], 'research_hypothesis')
+                self.assertTrue(current['motivation']['evidence_ids'])
+        stages = [task.stage for task in backend.calls]
+        self.assertEqual({stage: stages.count(stage) for stage in set(stages)},
+                         {'extract': 1, 'map': 1, 'propose': 1, 'plan_search': 2,
+                          'develop': 2, 'refine': 2, 'review': 4})
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        front = (target / 'report.md').read_text().split('<details>')[0]
+        saved = json.loads((target / 'report.json').read_text())
+        for candidate in saved['candidates']:
+            motive = candidate['spec']['motivation']
+            self.assertEqual(motive['basis'], 'research_hypothesis')
+            self.assertEqual(motive['problem_derivation'], derivations[motive['problem_origin']])
+            self.assertIn(motive['problem_derivation'], front)
+            self.assertEqual(candidate['selected_opportunity']['basis'], 'research_hypothesis')
+            self.assertEqual(candidate['selected_opportunity']['prior_art_delta'], existing_response)
+
+    def test_four_field_problem_snapshot_resumes_without_extra_calls_and_exports(self):
+        backend = RecordingBackend()
+        with self.assertRaises(BudgetExhausted):
+            Controller(self.store, backend, dict(self.config, max_calls=4)).run()
+        candidate = self.store.rows('candidates')[0]
+        legacy = {key: candidate['selected_opportunity'][key]
+                  for key in ('id', 'question', 'problem_origin', 'derivation')}
+        candidate['selected_opportunity'] = legacy
+        self.store.put('candidates', candidate)
+        before = len(backend.calls)
+        Controller(self.store, backend, self.config).run()
+        self.assertEqual([task.stage for task in backend.calls[before:]], ['review', 'refine', 'review'])
+        for task in backend.calls[before:]:
+            payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+            self.assertEqual(payload['selected_opportunity'], legacy)
+        export_report(self.store, self.store.project)
+        target = self.project / self.store.get('output_folder')
+        saved = json.loads((target / 'report.json').read_text())
+        self.assertEqual(saved['status'], 'completed')
+        self.assertEqual(saved['candidates'][0]['selected_opportunity'], legacy)
+        self.assertIn(candidate['proposal']['title'], (target / 'report.md').read_text())
 
     def test_valid_but_mismatched_proposal_origin_is_repaired_once(self):
         attempts = []

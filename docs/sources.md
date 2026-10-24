@@ -113,14 +113,19 @@
 
 这些参考帮助设计思考流程，不能证明生成的 idea 已经具有科学创新。回归测试检查切口传递、选择关联、来源有效性、恢复和报告；真实产出另行查看问题意义、洞见与贡献论证。
 
-### 将论证与技术选择接起来
+### 背景、问题与动机怎样推导
 
-结合上述 ARIS 的结构性缺口、Supervisor-Skills 的隐藏假设追问及 IdeaScientist 的跨领域迁移思路，本项目进一步落实两个衔接：
+2026-10-25 进一步核对以下固定版本的具体做法。这里只借鉴推理方式，没有执行第三方 skill 或复制其正文。
 
-- [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 先承认已有工作的有效贡献，再从剩余问题、成因和当前方法的限制推出研究需要；`existing_work` 与 `research_need` 分别保存这两个容易缺失的环节。研究意义与方法必要性需要连成论证，不能靠重要性口号或技术名称替代。
-- [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个互补的功能问题，再找可借鉴技术。`plan_search → design_transfer → develop/refine` 传递同一组 `design_axes`，查询和选择通过 `axis_ids` 关联。技术可以来自其他 CS 领域，也可以同时解决两个问题。
+| 参考及源码行为 | 本项目采用的思路 |
+| --- | --- |
+| ARIS [idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 从共同假设、矛盾结果和扩展条件寻找结构性问题；[research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-refine/SKILL.md) 保留原问题，分析原流程卡点、简单修补为何不足，再找最小干预，并允许反驳造成问题漂移或堆模块的意见 | 从已有机制推演有意义的使用条件与可能困难，先形成研究需要，再选操作；修订围绕同一目标推进，必要时有理由地调整问题 |
+| IdeaScientist [gap_finder](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py#L139) 按机制组织已有进展，解释最接近的方法为何仍留下困难，随后才交给 innovator；[rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py#L180) 追问谁受到阻碍、解决后能获得什么能力或认识 | 在同一条件下考虑已有方法的正常回应，避免用“没采用我们的操作”替代剩余问题；动机说明跨过障碍为什么推进背景目标 |
+| Supervisor-Skills [paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 追问隐藏前提、发展变化与问题意义；[idea-evaluator](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 接受尚无实测结果但有机制论证的 idea | 允许基于文献线索提出合理猜想，用成立条件和推导说明问题为何可能出现；研究意义由它对原目标的影响解释，不要求先完成实验 |
 
-这两个角度的组织方式按本项目的用户要求设计，并非上述框架统一规定的流程。[检索规划测试](../tests/test_search_planning.py) 和[技术设计测试](../tests/test_technical_design.py) 检查先后顺序、对应关系及无网络时的复用；实际论证质量需要查看模型产出。
+综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`map` 先梳理已有工作的机制，再推演有意义的条件、可能困难及影响，考虑同条件下已有方法的回应，由此提出动机；`propose` 再展开回应这个动机的 idea。问题仍只来自已有重要需要或发展中出现的新困难。论文支持的前提与我们的推断分别表达；假设不成立时可以相应调整问题，不要求一个由假设推出的问题在该假设错误后仍然成立。
+
+这是面向本项目的综合设计，不固定示例中的领域、困难数量或方法模块，也不引入上述框架的评分、额外审查或实验执行。第二阶段继续由 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个技术问题，借助 `design_axes` 连接检索、迁移与方法选择；一种技术可以服务两个问题。测试检查阶段衔接和材料传递，实际论证是否更好仍应通过产出判断。
 
 ## 目录与会议来源核对
 

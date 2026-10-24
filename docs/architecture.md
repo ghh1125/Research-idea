@@ -64,9 +64,9 @@ flowchart TD
 
 第一阶段的 `map.research_frame` 保存用户的大问题、跨论文归纳的研究主线、由此提出的科学问题，以及具体论文证据与这一问题的联系。它直接传给 `propose`，用于组织通俗的 Background → Problem → Motivation → Idea。研究主线在原有综合步骤内形成，不增加模型调用；来源的具体实验条件仍保留在论文卡、引用和逐项对照中。
 
-`opportunities[].problem_origin` 只有 `unresolved_need`（现有主要方法仍不能解决的重要问题）和 `emerging_problem`（现有方法使用或发展时暴露的新问题）。`opportunity_types` 汇总本次实际采用的来源；`opportunity_id` 将选中的问题与候选相连。`idea_instructions.py` 集中定义第一阶段的完整构思程序，先综合已有路线的目标、信息和共同假设，再推导根本问题、动机与 idea，避免层层叠加重复的审查提示。程序检查结构和引用，研究判断仍由模型结合原文进行。
+`opportunities[].problem_origin` 只有 `unresolved_need`（未充分满足的重要需要）和 `emerging_problem`（方法使用或发展产生的新困难）。两类均允许根据已有机制、合理条件和后果推演尚未实测的问题，`basis` 单独记录其依据性质。`opportunity_types` 汇总来源；`opportunity_id` 关联所选问题。`idea_instructions.py` 集中定义构思程序：`map` 先理解已有机制，推演困难和最强已有回应，再提炼研究需要与洞见；`propose` 才展开具体操作及作用原理。程序检查结构和引用，研究判断仍由模型结合原文进行。
 
-共享 `MOTIVATION` 中的 `problem_origin` 使用同一组两值枚举，`problem_derivation` 保存从背景到具体选题的连续解释。构思时校验来源与 `opportunity_id` 指向的切口一致，控制器将该切口的 `id/question/problem_origin/derivation` 保存为 `candidate.selected_opportunity` 快照，并作为顶层输入传给后续技术探索、设计和审阅。`develop/refine` 可以完善当前推导；有理由改变问题或来源时更新 `motivation` 并在现有回应中解释，原快照保持不变，修改进入 `revision_record`。程序检查来源身份和必填内容，缺失时沿用一次输出修复，不用关键词判定研究价值，也不增加评分、审批或实验任务。
+共享 `MOTIVATION` 中的 `problem_origin` 使用同一组两值枚举，`problem_derivation` 保存从背景到具体选题的连续解释。构思时校验来源与 `opportunity_id` 指向的切口一致，控制器将其 `id/question/problem_origin/basis/derivation/prior_art_delta` 保存为 `candidate.selected_opportunity`，交给后续技术探索、设计和审阅。`basis` 和 `prior_art_delta` 保留推断性质及已有回应，旧四字段快照不补造历史。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。检查和输出修复仍沿用现有机制，不通过关键词判定研究价值或增加审批任务。
 
 `propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 
