@@ -64,7 +64,7 @@ def argument_markdown(motivation, proposal, *, include_intervention=True):
             motivation.get('why_this_method', proposal.get('intervention')),
             motivation.get('expected_progress')]),
     ]
-    return '\n\n'.join('**' + label + '**\n\n' + ' '.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
+    return '\n\n'.join('**' + label + '**\n\n' + '\n\n'.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
                         for label, values in parts)
 
 

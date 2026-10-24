@@ -26,6 +26,8 @@ Return only the active task JSON. For design_transfer, give up to three options 
 
 For technical plan_search, save the two questions in design_axes before writing queries. Link each query by axis_ids and cover both angles. For design_transfer, link each usable option to the angle whose required_function it serves. For develop/refine, retain the planned angle IDs in design_axes and link the chosen design_decisions through axis_ids; explain how the choices work together to realize the idea. Search directions may cross CS subfields when their problem structure fits. A borrowed technique needs a target-specific adaptation, not just a new name.
 
+Give each angle a short question a reader can understand without specialist terminology. Explain below it what must be achieved, why the idea needs it, and how a method could help; move technical conditions out of the heading into those sentences. In method.summary and design_decisions, use connected paragraphs to explain actual operations and why they fit together. Unpack necessary terms and acronyms on first use. Keep internal implementation fields brief, but give the public explanation enough space to be understood without consulting the paper. Preserve the scientific meaning while making the language easier to read.
+
 ## Failure behavior
 
 An unspecified interface or missing signal becomes an explicit assumption and verification action, not a claim that implementation works. If a substitute changes the hypothesis, update the rationale and explain the changed prediction. A concrete redesign is more useful than a pending approval label. Do not fabricate code availability, measurements, or completed experiments.

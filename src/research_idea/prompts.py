@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "17"
+PROMPT_VERSION = "19"
 
 
 def stage_version(stage):
@@ -11,7 +11,7 @@ def stage_version(stage):
     if stage == 'paper_card':
         return '9'
     if stage == 'review':
-        return '17'
+        return '19'
     return "8" if stage in {"read_section", "extract", "inspect_source", "paper_card", "audit_claims"} else PROMPT_VERSION
 
 
@@ -53,7 +53,7 @@ Synthesize across papers when their conditions permit: a common untested assumpt
 INSTRUCTIONS['propose'] += """
 This phase ends at background -> problem -> motivation -> idea. The intervention is the core idea or causal principle, not a completed method specification. The internal feasibility_sketch anticipates obvious implementation obstacles; phase two supplies technical references only; a detailed implementation or experiment protocol is outside this request.
 The primary deliverable is a novel, meaningful research idea. Select the strongest route from problem_model.opportunities, record its opportunity_id, and explain the substantive choice in selection_reason. Compare the actual research value, unresolved contribution and plausible information path of the supplied directions; do not rank by paper counts, topical distance, or ease of writing a protocol. You may sharpen or combine insights while naming the primary originating direction. Develop the strongest angle from the problem map: state the underlying insight, why the obvious existing response misses it, and what important capability or understanding the idea would add. 'Better information helps', 'more compute helps', or a new combination alone is not a sufficient contribution; identify the substantive design principle, causal explanation or capability that remains to be learned. An established technique can support a genuinely different question. If a promising angle collapses to an obvious response, improve the insight or choose another angle within the user's direction, rather than rescue it with a contrived benchmark, arbitrary fees or extra modules. Do this within the current reasoning task, not through additional rejection rounds.
-Explain the substantive research setting and scientific question that need this result. Do not replace them with an invented puzzle whose difficulty disappears with ordinary instructions. Do not include concrete illustrative cases in the deliverable. Use one or two concrete sentences per field, avoid repeating the same argument, and keep positioning focused on the closest supplied work.
+Explain the substantive research setting and scientific question that need this result. Do not replace them with an invented puzzle whose difficulty disappears with ordinary instructions. Do not include concrete illustrative cases in the deliverable. Give each part enough complete sentences to explain the situation, cause and consequence; avoid repeating the same argument, and keep positioning focused on the closest supplied work.
 Before returning the idea, resolve the strongest objection using the supplied material: does a nearest work already answer this motivation, does the problem follow from the background, is the consequence important, does the intervention act on the proposed cause, and can it work with the actual inputs? Improve the proposal in this same task; do not defer known contradictions to the second phase. For each closest_work_id include positioning that explains its addressed problem and the remaining meaningful contribution, not a renamed story. In the internal feasibility_sketch reason through the information and implementation dependencies, identify the key assumption and the evidence that would resolve it. No worked example or experimental plan is needed. Do not depend on hidden test answers, unavailable logits/weights, circular supervision, or hiding an observable state to manufacture difficulty. Replace such dependencies with a concrete workable design. An unknown cost or untested hypothesis is a condition to reason about, not a reason to withhold the idea. This is an internally consistent, literature-positioned proposal, not a claim that experiments have already succeeded. Detailed technical alternatives are explored next.
 """
 INSTRUCTIONS['paper_card'] += """
@@ -85,7 +85,7 @@ for _stage in ("develop", "refine"):
     INSTRUCTIONS[_stage] += """
 review_responses is empty for initial development. During refinement, address each previous issue exactly once with decision, concrete change, reason and any source IDs. A decline may preserve the current method; a test response states the missing distinguishing evidence without an experiment plan. Unknown resources should become a concise implementation condition rather than an approval gate."""
     INSTRUCTIONS[_stage] += """
-Write method.summary as a concise technical direction in about 100–180 Chinese characters. Use one or two design_decisions to name a borrowed technique, its source, why it fits the idea and the needed adaptation. Keep the remaining method fields brief: key inputs, operations and assumptions only, without state-machine specifications, exhaustive branches or invented numeric settings. The main scientific explanation remains in motivation. Do not replace a weak idea with a more detailed protocol.
+Write method.summary as a readable explanation in connected paragraphs: what the approach does, how its main actions fit together, and why they address this idea's problem. Use the space needed for the explanation instead of compressing it into a short abstract. Use one or two design_decisions to explain a borrowed technique, its source, why it fits the idea and the needed adaptation. Keep the remaining internal method fields brief: key inputs, operations and assumptions only, without state-machine specifications, exhaustive branches or invented numeric settings. The main scientific explanation remains in motivation. Do not replace a weak idea with a more detailed protocol.
 The retained validation fields serve compatibility with saved projects: leave summary, first_test, positive, negative, inconclusive and budget_estimate empty, and baselines and controls as empty arrays. weakest_assumption may contain one concise internal premise. Leave design_decisions.first_test empty. next_action should state the useful research decision, not prescribe experiment execution. No worked examples, sample sizes, thresholds, call counts or experiment matrices are requested.
 """
     INSTRUCTIONS[_stage] += """
@@ -124,6 +124,14 @@ INSTRUCTIONS['review'] += """
 Check whether the idea addresses a consequential research difficulty rather than a setup chosen merely for convenient testing. If the idea only solves its own artificial puzzle, revisit the research question and insight. Do not respond by adding experimental detail.
 When previous_review and previous_revision_record are supplied, compare the actual design changes and designer responses with the earlier concern before raising it again. Retain useful decisions across revisions. If an objection remains, explain precisely why the response did not resolve it; if resolved, concentrate on the next consequential choice. A prior review is a design opinion, not an experimental result. Cite current evidence records, since historical records may contain superseded IDs. Do not add modules merely to appease feedback or turn the discussion into repetitive approval rounds.
 """
+
+READABLE_RESEARCH_WRITING = """
+表达要求：面向了解 LLM/agent、但不熟悉相关专业概念的读者，像正常讨论一个研究想法那样讲清楚，不写成压缩的论文摘要。使用自然、专业但平实的中文。先说明谁遇到了什么事情、能够看到什么信息、要作出什么判断或操作，再解释为什么会有困难。必要术语先解释具体意思，再给名称；同一件事沿用同一种说法。比如，不能只说“优化处理机制”，还要说谁处理什么信息、改了哪一步、为什么能帮助它完成任务。这是表达方式要求，不限定研究内容。
+用数句完整的话展开每一个重要推理：已有办法怎样帮助解决问题，为什么仍有困难，困难可能由什么造成，我们准备怎样改变它。读者应能跟着前一段理解后一段，不需要自己补出省略的因果关系。每段围绕一个重点；篇幅用于解释事情和理由，不重复口号。论文名称要和它实际做了什么一起介绍，优先解释与本问题直接相关的进展。不要照搬输入材料中的概括句，也不要用另一个专业词解释一个专业词。让读者不查术语、不打开论文，也能复述问题和核心想法。
+标题和两个技术角度用简短、直接的问题表达；具体条件与原因放在正文展开。先说需要做到什么，再说哪类技术可以帮忙。保留来源的适用条件、归属和研究假设，语言简化不能把推测写成事实、补造论文结论或夸大创新性。不要为了解释而增加虚构场景、具体例子或实验计划。提交前按读者视角检查一次：每句话说的事情是否明确，有没有用一串抽象名词代替本应讲清的过程。
+"""
+for _stage in ('screen_papers', 'plan_search', 'map', 'propose', 'design_transfer', 'develop', 'refine', 'review'):
+    INSTRUCTIONS[_stage] += READABLE_RESEARCH_WRITING
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:
     guidance = ""
