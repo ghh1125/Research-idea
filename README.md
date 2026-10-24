@@ -59,39 +59,69 @@ flowchart TD
 
 ## 4. 安装与启动 CLI
 
-需要 **Python 3.11+**，推荐 Linux/macOS。使用 Codex 后端时，先在本机安装并登录 Codex CLI；Research-idea 沿用它的认证和账户配置。
+需要 **Python 3.11+ 和 Git**。使用 Codex 或 Claude 后端时，先在同一个系统环境中安装并登录对应 CLI。
 
-### 安装
+下面按系统选择一套步骤，安装一次，以后直接输入 `research-idea`。使用 [pipx](https://pipx.pypa.io/latest/how-to/install-pipx.html) 为命令管理独立环境，无需每次激活虚拟环境或进入仓库目录。
+
+### macOS（终端）
+
+先安装 Homebrew，然后执行：
 
 ```bash
+brew install pipx poppler
 git clone https://github.com/ghh1125/Research-idea.git
 cd Research-idea
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
+pipx install --editable .
+pipx ensurepath
+```
 
+### Linux（Ubuntu / Debian）
+
+先确认 `python3 --version` 为 3.11 或更高；Ubuntu 24.04+、Debian 12+ 可使用以下步骤：
+
+```bash
+sudo apt update
+sudo apt install git python3-venv pipx poppler-utils
+git clone https://github.com/ghh1125/Research-idea.git
+cd Research-idea
+pipx install --editable .
+pipx ensurepath
+```
+
+Fedora 可用 `sudo dnf install git pipx poppler-utils` 安装工具，再执行同样的克隆和 pipx 命令。Windows 的 **WSL2** 也按对应 Linux 发行版安装；研究项目与所选模型 CLI 都放在 WSL 环境中使用。
+
+### Windows（PowerShell）
+
+先安装 Python 3.11+（含 `py` 启动器）和 Git，然后在 PowerShell 中执行：
+
+```powershell
+py -3 -m pip install --user pipx
+git clone https://github.com/ghh1125/Research-idea.git
+cd Research-idea
+py -3 -m pipx install --editable .
+py -3 -m pipx ensurepath
+```
+
+读取 PDF 需要 Poppler 的 `pdftotext`。Windows 可通过 [WinGet 中的 Poppler 包](https://github.com/microsoft/winget-pkgs/tree/master/manifests/o/oschwartz10612/Poppler)安装：
+
+```powershell
+winget install --id oschwartz10612.Poppler --exact --source winget
+```
+
+macOS、Linux 步骤已包含 PDF 工具。Windows 原生模型调用和中断恢复尚未完成端到端实机验证；目前实跑覆盖 macOS，自动化测试运行于 Linux。
+
+### 安装后检查
+
+三种系统都在安装后**关闭并重新打开终端**，让命令路径生效，再运行：
+
+```bash
+research-idea --version
 research-idea doctor
 ```
 
-PDF 正文提取需要 Poppler 的 `pdftotext`。macOS 可运行 `brew install poppler`；Ubuntu/Debian 可运行 `sudo apt-get install poppler-utils`。`doctor` 会检查本地命令是否可用。
+`doctor` 会检查模型 CLI 与 `pdftotext` 是否可找到。如果仍提示找不到 `research-idea`，macOS/Linux 再运行 `pipx ensurepath`，Windows 再运行 `py -3 -m pipx ensurepath`，然后重新打开终端。
 
-### 安装一次，以后直接输入 `research-idea`
-
-完成上面的安装后，在仓库目录执行一次，把命令加入用户命令目录：
-
-```bash
-mkdir -p "$HOME/.local/bin"
-ln -s "$PWD/.venv/bin/research-idea" "$HOME/.local/bin/research-idea"
-```
-
-macOS 默认使用 zsh。执行下面两行，让当前窗口和以后新开的终端都能找到命令：
-
-```bash
-printf '\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$HOME/.zshrc"
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-使用 bash 时，将上面的 `.zshrc` 改为 `.bashrc`。命令连接到仓库里的虚拟环境，因此保留仓库目录和 `.venv` 即可；以后启动无需激活虚拟环境，也无需进入仓库目录。
+安装使用本地仓库的可编辑模式，请保留仓库目录。已有可用的虚拟环境或本地启动命令可以继续使用，无需重复安装。开发用的虚拟环境安装方式见 [进阶使用](docs/advanced-usage.md#虚拟环境安装)。
 
 ### 打开对话窗口
 
@@ -106,8 +136,7 @@ research-idea
 需要打开指定项目或在启动时指定模型，可以使用：
 
 ```bash
-research-idea chat --project ./research-projects/my-idea \
-  --backend codex --model gpt-6.1-sol --reasoning-effort high
+research-idea chat --project ./research-projects/my-idea --backend codex --model gpt-6.1-sol --reasoning-effort high
 ```
 
 再次运行相同的 `--project` 命令会打开原项目，保留对话、设置和进度；也可以在窗口内用 `/open 项目目录` 恢复已有研究。

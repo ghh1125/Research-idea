@@ -2,6 +2,29 @@
 
 [返回 README](../README.md)。首次使用请先看安装启动与 CLI 操作；本页保留文献来源、skill、后端协议、预算与报告的详细说明。
 
+## 虚拟环境安装
+
+如果需要开发源码或自行管理 Python 环境，可以在克隆后的仓库目录安装。
+
+macOS / Linux：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+research-idea
+```
+
+Windows PowerShell 可以直接调用虚拟环境中的可执行文件，无需修改脚本执行策略：
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\research-idea.exe
+```
+
+此方式的简短命令依赖已激活的虚拟环境；需要从任意终端直接启动时，使用 README 中对应平台的 pipx 安装步骤。PDF 阅读仍需安装 Poppler，模型后端仍需本机认证。
+
 ## 使用自己的主题和论文
 
 先建立独立项目，选择后端。CLI 后端需要用户已在本机完成安装和认证。
