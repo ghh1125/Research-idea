@@ -68,7 +68,11 @@ flowchart TD
 
 API key 读取、请求协议和超时都留在适配器。适配器不把失败转换成 demo，不把 refusal 或截断结果当成有效 JSON。每个原生协议的结构化输出要求可能随服务变化，应通过真实账户做兼容性验证。
 
+模型操作错误由适配器分类为 `ProviderError`，仅输出固定的错误类别和处理建议，原始错误正文不进入日志。研究与普通对话共用 `with_retries`：首次失败后等待 30 秒，最多再尝试 10 次。API 适配器自身只发一次请求，避免重试叠加。每次调用重新检查预算和剩余超时；失败尝试和等待时间也累计。输出/证据校验继续使用原有的一次修复，不进入服务重试循环。
+
 ## 状态与恢复
+
+`output_dir` 只配置结果的父目录，默认定位源码仓库；每个项目在 SQLite 中保存一个 `idea-时间戳` 文件夹名。恢复和重复导出沿用该名字，`last_output_dir` 记录最后成功导出的完整位置供 `/report` 读取。修改保存位置不改变研究任务缓存；旧报告保留，新项目生成新名字。
 
 - 任务：running / succeeded / failed。成功结果使用输入与后端配置散列缓存。
 - 项目：initialized / sources_changed / running / interrupted / completed / budget_exhausted / blocked。

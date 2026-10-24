@@ -17,6 +17,8 @@ from .schema import obj, STR, validate
 from .store import Store, now
 from .presentation import STAGE_LABELS, stage_label, activity_summary, skill_label, error_summary
 from .citations import Citations
+from .output_paths import saved_report
+from .retries import with_retries
 
 CHAT_SCHEMA = obj(answer=STR)
 LABELS = {
@@ -112,7 +114,11 @@ def progress(message, phase='ideation'):
 
 
 def idea_text(project):
-    path = project / 'outputs' / 'report.md'
+    store = Store(project, readonly=True)
+    try:
+        path = saved_report(store)
+    finally:
+        store.close()
     if not path.exists():
         return '尚无方案。使用 /run 开始研究。'
     text = path.read_text(encoding='utf-8').split('<details>', 1)[0].strip()
@@ -142,13 +148,45 @@ def chat_turn(project, message):
                       '\n材料：' + json.dumps(context, ensure_ascii=False) + '\n用户消息：' + message)
             history.append({'role': 'user', 'content': message, 'time': now()})
             store.set('chat_messages', history)
-            store.set('calls_used', store.get('calls_used', 0) + 1)
-            invoked = True
-            event('thinking', f"正在生成讨论答复 · {cfg['model'] or '继承模型'} · {cfg['reasoning_effort'] or '继承强度'}")
-            result = make_backend(cfg, project).generate(TaskSpec(
-                task_id='chat_' + str(time.time_ns()), stage='chat', prompt=prompt,
-                output_schema=CHAT_SCHEMA, workspace=project,
-                timeout_s=min(cfg['timeout_s'], cfg['max_seconds'] - elapsed), model=cfg['model'] or None))
+            backend = make_backend(cfg, project)
+            task_id = 'chat_' + str(time.time_ns())
+
+            def budget():
+                remaining = cfg['max_seconds'] - elapsed - (time.monotonic() - started)
+                if store.get('calls_used', 0) >= cfg['max_calls'] or remaining <= 0:
+                    raise BudgetExhausted('对话与研究共用调用/时间预算；使用 /budget 增加预算。')
+                return remaining
+
+            def invoke():
+                nonlocal invoked
+                remaining = budget()
+                store.set('calls_used', store.get('calls_used', 0) + 1)
+                invoked = True
+                event('thinking', f"正在生成讨论答复 · {cfg['model'] or '继承模型'} · {cfg['reasoning_effort'] or '继承强度'} · 模型调用 {store.get('calls_used')}/{cfg['max_calls']}")
+                try:
+                    response = backend.generate(TaskSpec(task_id=task_id, stage='chat', prompt=prompt,
+                        output_schema=CHAT_SCHEMA, workspace=project,
+                        timeout_s=min(cfg['timeout_s'], remaining), model=cfg['model'] or None))
+                except BackendError as error:
+                    attempts = getattr(error, 'transport_attempts', None)
+                    if isinstance(attempts, int):
+                        store.set('known_http_attempts', store.get('known_http_attempts', 0) + attempts)
+                    raise
+                attempts = response.usage.get('transport_attempts')
+                if isinstance(attempts, int):
+                    store.set('known_http_attempts', store.get('known_http_attempts', 0) + attempts)
+                return response
+
+            def failure(error, retry):
+                store.event('backend_failure', {'task_id': task_id, 'stage': 'chat',
+                    'category': error.category, 'http_status': error.status, 'retries_used': retry})
+                store.set('elapsed_s', elapsed + time.monotonic() - started)
+
+            def before_wait(delay):
+                if budget() <= delay:
+                    raise BudgetExhausted('剩余时间不足以等待 30 秒重试；使用 /budget 增加 max_seconds 后继续。')
+
+            result = with_retries(invoke, progress=progress, before_wait=before_wait, on_failure=failure)
             validate(result.output, CHAT_SCHEMA)
             answer = result.output['answer']
             history.append({'role': 'assistant', 'content': answer, 'time': now(),
@@ -200,9 +238,9 @@ def research(project):
             try:
                 controller.run()
             finally:
-                export_report(store)
+                report, _ = export_report(store)
             event('idea', idea_text(project))
-            event('saved', f"完整方案与证据已保存：{project / 'outputs'}")
+            event('saved', f"完整方案与证据已保存：{report.parent}")
         finally:
             store.close()
 

@@ -49,6 +49,10 @@ class Store:
                 kind TEXT NOT NULL, payload TEXT NOT NULL
             );
         """)
+        # Folder identity belongs to the project, not the launch working directory.
+        with self.db:
+            self.db.execute('INSERT OR IGNORE INTO meta VALUES (?, ?)',
+                ('output_folder', encode('idea-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))))
 
     def close(self):
         self.db.close()

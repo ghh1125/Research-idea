@@ -1,8 +1,8 @@
 """Direct API adapters with a hard end-to-end transport deadline.
 
-A generate() task may make up to three HTTP attempts. Controller max_calls counts
-backend tasks, not transport requests. Successful usage.transport_attempts and
-API BackendError.transport_attempts report the attempted request count. A worker
+A generate() task makes one HTTP attempt. The shared caller retries provider
+failures every 30 seconds, counting each attempt against max_calls. Successful
+usage.transport_attempts and errors report the attempted request count. A worker
 process owns each request and is killed/reaped on timeout: no daemon thread can
 continue an invisible HTTP request after this adapter returns.
 """
@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from research_idea.backend_types import BackendError, BackendResult, TaskSpec
+from research_idea.backend_errors import ProviderError, classify_provider_error
 from .common import MAX_RESPONSE_BYTES, parse_object, positive_timeout, run_cli
 
 
@@ -103,47 +104,42 @@ class APIBackend:
             headers = self._headers()
         except BackendError as exc:
             raise APITransportError(str(exc), 0) from None
-        attempts = 0
-        for attempt in range(1, 4):
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise APITransportError("API task exceeded its total timeout", attempts)
-            attempts = attempt
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProviderError('timeout', transport_attempts=0)
+        try:
+            transport = _request_once(self.url, body, headers, remaining)
+        except BackendError as exc:
+            category = getattr(exc, 'category', 'network')
+            raise ProviderError(category, transport_attempts=1,
+                                diagnostic='API transport failed or exceeded its total timeout') from None
+        kind = transport.get("kind")
+        if kind == "response":
             try:
-                transport = _request_once(self.url, body, headers, remaining)
-            except BackendError as exc:
-                # Cancellation is final. Do not retry after a worker timeout.
-                raise APITransportError("API transport failed or exceeded its total timeout", attempts) from None
-            kind = transport.get("kind")
-            if kind == "response":
-                try:
-                    payload = base64.b64decode(transport["body_base64"], validate=True)
-                    if len(payload) > MAX_RESPONSE_BYTES:
-                        raise ValueError("oversize")
-                    raw = payload.decode("utf-8")
-                    value = parse_object(raw, "API")
-                except (KeyError, ValueError, TypeError, BackendError):
-                    raise APITransportError("API returned an invalid, oversized, or non-JSON response", attempts) from None
-                return value, raw, attempts
-            if kind == "http_error":
-                status = transport.get("status")
-                retry = status in {429, 500, 502, 503, 504}
-                if not retry or attempt == 3:
-                    hint = ""
-                    if status in {400, 404, 422}:
-                        hint = "; verify model, endpoint and native strict JSON-schema support (no fallback was attempted)"
-                    raise APITransportError(f"API request failed with HTTP {status}{hint}", attempts)
-            elif kind == "connection_error":
-                if attempt == 3:
-                    raise APITransportError("API connection failed after bounded retries", attempts)
-            elif kind == "oversize":
-                raise APITransportError("API response exceeded the size limit", attempts)
-            else:
-                raise APITransportError("API HTTP worker failed", attempts)
-            delay = min(0.5 * (2 ** (attempt - 1)), max(0.0, deadline - time.monotonic()))
-            if delay:
-                time.sleep(delay)
-        raise APITransportError("API request failed", attempts)
+                payload = base64.b64decode(transport["body_base64"], validate=True)
+                if len(payload) > MAX_RESPONSE_BYTES:
+                    raise ValueError("oversize")
+                raw = payload.decode("utf-8")
+                value = parse_object(raw, "API")
+            except (KeyError, ValueError, TypeError, BackendError):
+                raise ProviderError('api', transport_attempts=1,
+                                    diagnostic='API 返回了无法解析的响应。') from None
+            return value, raw, 1
+        if kind == "http_error":
+            status = transport.get("status")
+            try:
+                detail = base64.b64decode(transport.get('body_base64', ''), validate=True).decode('utf-8', errors='replace')
+            except (ValueError, TypeError):
+                detail = ''
+            hint = ('Verify model, endpoint and native strict JSON-schema support (no fallback was attempted).'
+                    if status in {400, 404, 422} else '')
+            raise ProviderError(classify_provider_error(detail, status), status=status,
+                                transport_attempts=1, diagnostic=hint)
+        if kind == "connection_error":
+            raise ProviderError('network', transport_attempts=1)
+        if kind == "oversize":
+            raise APITransportError("API response exceeded the size limit", 1)
+        raise ProviderError('api', transport_attempts=1)
 
     def generate(self, task: TaskSpec) -> BackendResult:
         model = task.model or self.config.get("model")
@@ -170,6 +166,8 @@ class APIBackend:
                 }},
             }
         envelope, raw, attempts = self._post(body, task.timeout_s)
+        if envelope.get('error'):
+            raise ProviderError(classify_provider_error(envelope['error']), transport_attempts=attempts)
         try:
             result = self._decode(envelope)
         except BackendError as exc:

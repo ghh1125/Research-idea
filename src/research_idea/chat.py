@@ -20,6 +20,7 @@ from .locking import project_lock
 from .store import Store
 from .presentation import STATUS_LABELS
 from .citations import Citations, EVIDENCE_ID
+from .output_paths import output_parent, saved_report
 
 INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认成为正式研究主题。
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
@@ -31,7 +32,9 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 7. 最后 [idea] 显示核心想法、研究价值、工作差异与技术参考；/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
+10. /output 查看保存位置，/output 路径 修改父目录；文件夹固定为 idea-时间戳。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
+接口、网络、模型权限或额度出错时，每隔 30 秒重试，最多 10 次；Ctrl+C 可停止。
 /account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 
@@ -45,6 +48,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /status                 研究状态      /report       显示 idea 方案
 /details [on|off]        展开上一步分析；on/off 切换完整过程输出
 /config                 当前设置      /constraints [文字] 资源限制
+/output [目录|default]   保存位置；只改父目录，文件夹自动命名 idea-时间戳
 /budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
 /date                   时间窗口：动态技术/动机对照窗口，或固定日期
@@ -60,12 +64,13 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
-              concept='ansimagenta', design='ansicyan')
+              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen')
 TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
     'review': '方案讨论', 'idea': '研究 Idea', 'concept': 'Idea 构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
-    'error': '这一步未完成', 'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
+    'error': '这一步未完成', 'retry': '等待重试', 'recovered': '调用已恢复',
+    'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
 BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
     'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',
     'max_seconds': '累计时间（秒）', 'timeout_s': '单次调用超时（秒）'}
@@ -87,7 +92,7 @@ WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea�
 3. 最后得到核心想法、研究价值、与已有工作的差异，以及技术参考。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
-/intro 使用介绍 · /new 新研究 · /help 全部命令
+/output 保存位置 · /intro 使用介绍 · /new 新研究 · /help 全部命令
 
 专注研究 idea，附技术参考。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
@@ -236,9 +241,9 @@ class Chat:
         footer = (' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else
                   ' /intro 使用介绍 · /new 新研究 · ' + ('/report 看方案' if status == 'completed' else '/run 开始研究'))
         context = '' if self.busy else ' · ' + self.project.name
-        return [('bg:ansiblue ansiwhite', fit(f" {spinner}{self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state}{context}") + '\n'),
-                ('bg:ansiblack ansiwhite', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
-                ('bg:ansiblack ansicyan', fit(footer))]
+        return [('noreverse bg:#edf3f8 #36485e', fit(f" {spinner}{self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state}{context}") + '\n'),
+                ('noreverse bg:#f3f5f7 #5b6470', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
+                ('noreverse bg:#f3f5f7 #526e7a', fit(footer))]
 
     def idle_required(self):
         if self.busy:
@@ -338,7 +343,7 @@ class Chat:
                 event = json.loads(line)
                 if event['tag'] in {'error', 'budget'}:
                     reported_error = True
-                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking', 'concept', 'design'}:
+                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking', 'concept', 'design', 'retry', 'recovered'}:
                     heading = event['text'].split('\n', 1)[0]
                     state = (re.sub(r'\s*·\s*模型调用.*$', '', heading) if re.match(r'(?:\d/4|第[一二](?:轮|阶段)(?:完成)?) · ', heading)
                              else TAG_LABELS[event['tag']])
@@ -521,6 +526,39 @@ class Chat:
         elif command == '/report':
             from .chat_worker import idea_text
             self.show('idea', idea_text(self.project))
+        elif command == '/output':
+            if value:
+                self.idle_required()
+                # Preserve spaces and Windows backslashes; optional enclosing
+                # quotes are convenience only, this value is never a shell command.
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in {'\"', "'"}:
+                    value = value[1:-1]
+                if not value or '\x00' in value:
+                    raise ValueError('/output 需要一个有效的保存目录。')
+                with project_lock(self.project):
+                    cfg = load_config(self.project)
+                    cfg['output_dir'] = '' if value == 'default' else str(Path(value).expanduser().resolve())
+                    root = output_parent(self.project, cfg)
+                    root.mkdir(parents=True, exist_ok=True)
+                    store = Store(self.project)
+                    try:
+                        if saved_report(store).is_file():
+                            from .report import export_report
+                            export_report(store, root)
+                        write_config(self.project, cfg)
+                    finally:
+                        store.close()
+                    self.cfg = cfg
+            store = Store(self.project, readonly=True)
+            try:
+                root = output_parent(self.project, self.cfg)
+                destination = root / (store.get('output_folder') or 'idea-时间戳')
+                report = saved_report(store)
+                self.show('saved', f'输出目录：{destination}\n文件夹名自动生成并保持不变；/output 只修改父目录。'
+                          + ('\n当前结果已导出到这里，原目录中的文件保留。' if value and report.is_file() else '')
+                          + '\n/output 路径 修改位置 · /output default 恢复默认')
+            finally:
+                store.close()
         elif command == '/config':
             from .search_scope import config_scope
             cfg = load_config(self.project)
@@ -532,8 +570,10 @@ class Chat:
                 f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 全流程最多精读 {cfg['max_papers']} 篇",
                 f"产出：最多 {cfg['max_candidates']} 个 idea，讨论 {cfg['max_rounds']} 轮",
                 f"预算：{cfg['max_calls']} 次调用 / {cfg['max_seconds'] / 60:g} 分钟",
+                '输出父目录：' + str(output_parent(self.project, cfg)) + '（文件夹自动命名 idea-时间戳）',
+                '调用失败：每隔 30 秒重试，最多 10 次；每次尝试和等待均计入本项目预算。',
                 '资源条件：' + resource_text(cfg['constraints']),
-                '用 /model、/reasoning、/date、/venues、/budget 修改设置。']))
+                '用 /model、/reasoning、/date、/venues、/budget、/output 修改设置。']))
         elif command == '/constraints':
             if value:
                 self.settings(constraints=value)
@@ -547,7 +587,7 @@ class Chat:
                 self.settings(**{key: int(number)})
             else:
                 self.show('budget', '\n'.join(f'{BUDGET_LABELS[k]}：{self.cfg[k]}  ·  {k}' for k in BUDGET_KEYS)
-                          + '\n\n“调用”是模型请求次数，包含讨论、分析和格式修复；上限不必用满。\n例如 /budget max_calls 100 · /budget max_papers 6')
+                          + '\n\n“调用”包含讨论、分析、格式修复和失败重试；等待重试计入累计时间。上限不必用满。\n例如 /budget max_calls 100 · /budget max_papers 6')
         elif command == '/venues':
             from .venues import normalize_venues, supported_venues
             if value:
@@ -613,12 +653,14 @@ class Chat:
         from prompt_toolkit.completion import WordCompleter
         from prompt_toolkit.key_binding import KeyBindings
         from prompt_toolkit.patch_stdout import patch_stdout
+        from prompt_toolkit.styles import Style
         bindings = KeyBindings()
         @bindings.add('escape', 'enter')
         def newline(event):
             event.current_buffer.insert_text('\n')
         self.session = PromptSession(completer=WordCompleter(sorted(set(COMMANDS))),
                                      complete_while_typing=True, key_bindings=bindings,
+                                     style=Style.from_dict({'bottom-toolbar': 'noreverse bg:#f3f5f7 #526e7a'}),
                                      bottom_toolbar=self.toolbar, refresh_interval=1)
         with patch_stdout():
             self.show('brand', BRAND)
@@ -655,7 +697,8 @@ class Chat:
         @keys.add('c-d')
         def stop(event):
             event.app.exit(result='stop')
-        app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=3)),
+        app = Application(layout=Layout(Window(FormattedTextControl(self.toolbar), height=3,
+                                              style='noreverse bg:#f3f5f7 #526e7a')),
                           key_bindings=keys, full_screen=False, refresh_interval=0.2)
         async def finish():
             await asyncio.shield(self.job)

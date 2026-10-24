@@ -14,6 +14,7 @@ DEFAULTS = {
     "timeout_s": 180, "max_calls": 80, "max_seconds": 3600,
     "max_output_tokens": 8192, "api_max_tokens_field": "max_completion_tokens",
     "codex_bin": "codex", "codex_profile": "", "reasoning_effort": "",
+    "output_dir": "",
     "skill_paths": [], "skill_roots": [], "skill_max_chars": 48000, "builtin_skills": True,
     "max_candidates": 3, "max_rounds": 2, "max_papers": 6, "search_results_per_query": 20,
     "source_chars": 24000, "search_source": "arxiv", "auto_search": True,
@@ -57,13 +58,15 @@ def _validated_settings(supplied: dict) -> dict:
         raise ValueError('novelty_months must not exceed strategy_months')
     for key in ("backend", "model", "api_provider", "base_url", "api_key_env",
                 "api_max_tokens_field", "search_source", "search_api_key_env", "constraints",
-                "codex_bin", "codex_profile", "reasoning_effort"):
+                "codex_bin", "codex_profile", "reasoning_effort", "output_dir"):
         if not isinstance(data[key], str):
             raise ValueError(f"{key} must be a string")
     if not data["codex_bin"].strip() or "\x00" in data["codex_bin"]:
         raise ValueError("codex_bin must be a nonempty executable name or path")
     if "\x00" in data["codex_profile"]:
         raise ValueError("codex_profile must not contain a null character")
+    if '\x00' in data['output_dir']:
+        raise ValueError('output_dir must not contain a null character')
     for key in ("skill_paths", "skill_roots", "arxiv_categories"):
         if not isinstance(data[key], list) or any(
             not isinstance(value, str) or not value.strip() or "\x00" in value for value in data[key]

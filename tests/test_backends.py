@@ -267,16 +267,15 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(caught.exception.transport_attempts, 1)
         self.assertEqual(request.call_count, 1)
 
-    def test_retry_is_bounded_and_records_attempts(self):
-        with patch("research_idea.backends.api._request_once", side_effect=[
-            {"kind": "http_error", "status": 429}, transport(openai_response())]), patch("research_idea.backends.api.time.sleep"):
-            result = self.api().generate(task(self.root))
-        self.assertEqual(result.usage["transport_attempts"], 2)
-        with patch("research_idea.backends.api._request_once", return_value={"kind": "http_error", "status": 503}) as request, patch("research_idea.backends.api.time.sleep"):
-            with self.assertRaises(BackendError) as caught:
-                self.api().generate(task(self.root))
-        self.assertEqual(caught.exception.transport_attempts, 3)
-        self.assertEqual(request.call_count, 3)
+    def test_adapter_makes_one_attempt_so_shared_retries_do_not_multiply(self):
+        from research_idea.backend_errors import ProviderError
+        for status in (429, 503):
+            with self.subTest(status=status), patch('research_idea.backends.api._request_once',
+                    return_value={'kind': 'http_error', 'status': status}) as request:
+                with self.assertRaises(ProviderError) as caught:
+                    self.api().generate(task(self.root))
+                self.assertEqual(caught.exception.transport_attempts, 1)
+                self.assertEqual(request.call_count, 1)
 
     def test_no_api_key_or_model_fails_before_network(self):
         backend = APIBackend({"base_url": "https://example.org/v1", "api_key_env": "RESEARCH_TEST_UNSET"}, self.root)
@@ -292,6 +291,37 @@ class BackendTests(unittest.TestCase):
             with self.assertRaisesRegex(BackendError, "HTTP 307"):
                 self.api().generate(task(self.root))
         self.assertEqual(request.call_count, 1)
+
+    def test_error_body_identifies_cause_without_exposing_provider_text(self):
+        from research_idea.backend_errors import ProviderError
+        for status, code, expected in [(429, 'insufficient_quota', 'quota'),
+                (429, 'rate_limit_exceeded', 'rate_limit'), (404, 'model_not_found', 'model'),
+                (401, 'invalid_api_key', 'auth')]:
+            body = json.dumps({'error': {'code': code, 'message': 'SECRET_TOKEN account@example.org'}})
+            failure = {'kind': 'http_error', 'status': status,
+                       'body_base64': base64.b64encode(body.encode()).decode()}
+            with self.subTest(code=code), patch('research_idea.backends.api._request_once', return_value=failure):
+                with self.assertRaises(ProviderError) as caught:
+                    self.api().generate(task(self.root))
+                self.assertEqual(caught.exception.category, expected)
+                self.assertNotIn('SECRET_TOKEN', str(caught.exception))
+                self.assertNotIn('account@example.org', str(caught.exception))
+
+    def test_codex_error_event_is_classified_even_without_a_result_file(self):
+        from research_idea.backend_errors import ProviderError
+        with patch('research_idea.backends.cli.run_cli', side_effect=[
+                '[]', '{"type":"turn.failed","error":{"message":"model_not_found SECRET_TOKEN"}}']):
+            with self.assertRaises(ProviderError) as caught:
+                CodexBackend({}, self.root).generate(task(self.root))
+        self.assertEqual(caught.exception.category, 'model')
+        self.assertNotIn('SECRET_TOKEN', str(caught.exception))
+
+    def test_cli_failure_classifies_stderr_without_echoing_it(self):
+        from research_idea.backend_errors import ProviderError
+        with self.assertRaises(ProviderError) as caught:
+            run_cli([sys.executable, '-c', "import sys;sys.stderr.write('insufficient_quota SECRET_TOKEN');sys.exit(1)"], '', self.root, 2)
+        self.assertEqual(caught.exception.category, 'quota')
+        self.assertNotIn('SECRET_TOKEN', str(caught.exception))
 
     def test_total_deadline_cancels_slow_drip_body(self):
         body_started = threading.Event()

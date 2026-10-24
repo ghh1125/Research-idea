@@ -73,7 +73,7 @@ class RetrievalFlowTests(unittest.TestCase):
         self.assertNotIn("text", paper)
         self.assertEqual(paper["full_text_error"], "PDF unavailable")
         self.assertEqual(controller.context()["retrieval_gaps"][0]["status"], "failed")
-        md, js = export_report(self.store)
+        md, js = export_report(self.store, self.store.project)
         self.assertIn("PDF unavailable", md.read_text())
         self.assertIn("EMNLP", md.read_text())
         self.assertEqual(len(json.loads(js.read_text())["full_text_ledger"]), 1)
@@ -141,7 +141,7 @@ class RetrievalFlowTests(unittest.TestCase):
             "coverage": {"gaps": ["EMNLP source could not be resolved"]}}])
         context = self.controller().context()
         self.assertEqual(context["search_coverage"][0]["coverage"]["gaps"], ["EMNLP source could not be resolved"])
-        md, _ = export_report(self.store)
+        md, _ = export_report(self.store, self.store.project)
         self.assertIn("EMNLP source could not be resolved", md.read_text())
 
     def test_full_text_budget_exhaustion_is_not_swallowed(self):

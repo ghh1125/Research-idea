@@ -232,7 +232,7 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertEqual(audit["claims"][0]["warranted_conclusion"], RESULT)
         self.assertTrue(any("not global proof" in warning for warning in audit["warnings"]))
         controller.plan_search()
-        markdown, machine = export_report(self.store)
+        markdown, machine = export_report(self.store, self.store.project)
         report = json.loads(machine.read_text())
         self.assertEqual(report["paper_claim_audits"]["p1"], audit)
         self.assertIn("initial", report["search_plans"])
@@ -287,7 +287,7 @@ class PaperPipelineTests(unittest.TestCase):
     def test_export_does_not_present_source_changed_audit_as_current(self):
         self.audited_source()
         self.store.put("papers", paper(result="On Dataset A, Model B gains zero points with the matched-prompt control."))
-        _, machine = export_report(self.store)
+        _, machine = export_report(self.store, self.store.project)
         audit = json.loads(machine.read_text())["paper_claim_audits"].get("p1", {})
         self.assertNotEqual(audit.get("status"), "audited")
 
@@ -302,7 +302,7 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertEqual(audits["p1"]["status"], "audited")
         self.assertNotEqual(audits.get("p2", {}).get("status"), "audited")
         self.assertEqual(self.store.get("calls_used"), 3)
-        markdown, machine = export_report(self.store)
+        markdown, machine = export_report(self.store, self.store.project)
         pending = json.loads(machine.read_text())["paper_claim_audits"]["p2"]
         self.assertEqual(pending["status"], "pending")
         self.assertTrue(pending["warnings"])

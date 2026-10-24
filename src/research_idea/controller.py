@@ -20,6 +20,7 @@ from .search_planning import normalize_search_plan, normalize_design_axes, check
 from .search_scope import config_scope
 from .selection import rank_metadata
 from .paper_reading import read_paper, current_cards
+from .retries import with_retries
 
 
 class BudgetExhausted(RuntimeError):
@@ -177,6 +178,38 @@ class Controller:
             raise BudgetExhausted("Wall-time budget exhausted. Increase max_seconds in research.toml to continue.")
         return self.config["max_seconds"] - elapsed
 
+    def generate(self, task_id, stage, prompt, repair=False):
+        def invoke():
+            remaining = self.check_budget()
+            self.checkpoint_time()
+            self.store.begin_task(task_id, stage)
+            self.store.set('calls_used', self.store.get('calls_used', 0) + 1)
+            self.progress(f"{stage} (call {self.store.get('calls_used')}/{self.config['max_calls']})" +
+                          (' · 修正输出格式或引用' if repair else ''))
+            spec = TaskSpec(task_id=task_id, stage=stage, prompt=prompt,
+                            output_schema=SCHEMAS[stage], workspace=self.store.project,
+                            timeout_s=min(float(self.config['timeout_s']), remaining),
+                            model=self.config.get('model') or None)
+            try:
+                return self.backend.generate(spec)
+            except BackendError as error:
+                attempts = getattr(error, 'transport_attempts', None)
+                if isinstance(attempts, int):
+                    self.store.set('known_http_attempts', self.store.get('known_http_attempts', 0) + attempts)
+                raise
+
+        def failure(error, retry):
+            self.store.fail_task(task_id, str(error))
+            self.store.event('backend_failure', {'task_id': task_id, 'stage': stage,
+                'category': error.category, 'http_status': error.status, 'retries_used': retry})
+            self.checkpoint_time()
+
+        def before_wait(delay):
+            if self.check_budget() <= delay:
+                raise BudgetExhausted('Remaining time is insufficient for the 30s retry wait. Increase max_seconds, then resume.')
+
+        return with_retries(invoke, progress=self.progress, before_wait=before_wait, on_failure=failure)
+
     def task(self, stage, payload, checker=None):
         guidance = [s for s in self.skills if stage in s["stages"]]
         if stage == 'plan_search' and payload.get('purpose') != 'technical_design':
@@ -206,16 +239,9 @@ class Controller:
         prompt = make_prompt(stage, payload, guidance)
         # A single bounded repair for invalid structured outputs or citations.
         for attempt in range(2):
-            remaining = self.check_budget()
-            self.checkpoint_time()
-            self.store.begin_task(task_id, stage)
-            self.store.set("calls_used", self.store.get("calls_used", 0) + 1)
-            self.progress(f"{stage} (call {self.store.get('calls_used')}/{self.config['max_calls']})" + (' · 修正输出格式或引用' if attempt else ''))
-            spec = TaskSpec(task_id=task_id, stage=stage, prompt=prompt, output_schema=SCHEMAS[stage], workspace=self.store.project,
-                            timeout_s=min(float(self.config["timeout_s"]), remaining), model=self.config.get("model") or None)
             result = None
             try:
-                result = self.backend.generate(spec)
+                result = self.generate(task_id, stage, prompt, repair=bool(attempt))
                 attempts = result.usage.get("transport_attempts")
                 if isinstance(attempts, int):
                     self.store.set("known_http_attempts", self.store.get("known_http_attempts", 0) + attempts)
@@ -269,18 +295,16 @@ class Controller:
                     {'previous_output': getattr(result, 'output', None), 'diagnostic': str(exc)}, ensure_ascii=False) + \
                     '\nCorrect the named defects in this complete JSON result, retaining its valid content and real references.\n'
             except KeyboardInterrupt:
-                if self.store.task(task_id)['status'] != 'succeeded':
+                entry = self.store.task(task_id)
+                if entry and entry['status'] != 'succeeded':
                     self.store.fail_task(task_id, 'Interrupted: model task did not finish')
                 self.checkpoint_time()
                 raise
             except Exception as exc:
                 # Provider errors may contain request details: persist a coarse error only.
                 self.store.fail_task(task_id, f"{type(exc).__name__}: backend execution failed")
-                attempts = getattr(exc, "transport_attempts", None)
-                if isinstance(attempts, int):
-                    self.store.set("known_http_attempts", self.store.get("known_http_attempts", 0) + attempts)
                 self.checkpoint_time()
-                if (isinstance(exc, BackendError) and remaining < float(self.config["timeout_s"])
+                if (isinstance(exc, BackendError)
                         and self.store.get("elapsed_s", 0) >= self.config["max_seconds"]):
                     raise BudgetExhausted(
                         "Cumulative research time budget exhausted during the model call. "

@@ -72,7 +72,7 @@ class CitationTests(unittest.TestCase):
                 candidate = {'id': 'idea_1', 'proposal': {'title': 'A hypothesis', 'problem': 'Observed in ev_123.',
                               'closest_work_ids': ['p1']}, 'spec': {}}
                 store.put('candidates', candidate)
-                report, data = export_report(store)
+                report, data = export_report(store, store.project)
                 text = report.read_text()
                 self.assertNotIn('ev_123', text)
                 self.assertIn('[An agent study](https://example.org/paper)', text)
@@ -81,7 +81,7 @@ class CitationTests(unittest.TestCase):
                 saved = json.loads(data.read_text())
                 self.assertEqual(saved['evidence'], [self.evidence])
                 self.assertEqual(saved['candidates'], [candidate])
-                detail = (Path(tmp) / 'outputs/idea_1.md').read_text()
+                detail = (report.parent / 'idea_1.md').read_text()
                 self.assertNotIn('ev_123', detail)
             finally:
                 store.close()

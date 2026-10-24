@@ -240,7 +240,10 @@ def idea_markdown(candidate):
 def error_summary(error):
     """Turn operational failures into a next action in the terminal."""
     import re
+    from .backend_errors import RetryExhausted
     message = str(error)
+    if isinstance(error, RetryExhausted):
+        return message
     timeout = re.search(r'exceeded the ([0-9.]+)s task timeout', message)
     if timeout:
         seconds = float(timeout.group(1))

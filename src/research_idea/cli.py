@@ -185,6 +185,9 @@ def apply_scope_options(args, cfg):
 def execution_config(args, project):
     cfg = load_config(project)
     changed = apply_scope_options(args, cfg)
+    if getattr(args, 'output_dir', None) is not None:
+        cfg['output_dir'] = str(args.output_dir.expanduser().resolve())
+        changed = True
     for key in ("backend", "model", "codex_bin", "codex_profile", "reasoning_effort", "constraints",
                 "search_results_per_query", "max_papers", "max_candidates", "max_rounds", "max_calls", "max_seconds", "timeout_s", "auto_search"):
         value = getattr(args, key, None)
@@ -359,6 +362,8 @@ def build_parser():
         scope_args(p)
         p.add_argument("--backend", choices=["codex", "claude", "api"], default=None)
         p.add_argument("--model", default=None)
+        p.add_argument('--output', dest='output_dir', type=Path,
+                       help='Output parent directory; folder name is always idea-TIMESTAMP')
         p.add_argument("--reasoning-effort", choices=["inherit", *REASONING_EFFORTS], default=None,
                        help="Codex thinking effort; inherit uses its existing configuration")
         p.add_argument("--constraints", default=None, help="Available resources and research constraints")
@@ -438,7 +443,7 @@ def build_parser():
     p.add_argument("--paper-card", action="store_true", help="Show the structured analysis card for the supplied paper ID")
     p = sub.add_parser("export", help="Export Markdown and JSON reports")
     project_arg(p)
-    p.add_argument("--output", type=Path)
+    p.add_argument("--output", type=Path, help='Output parent directory; preserves the idea-TIMESTAMP folder name')
     p = sub.add_parser("doctor", help="Check local executables and configuration without sending requests")
     p.add_argument("--project", type=Path)
     p = sub.add_parser("skills", help="发现、查看和选择本地研究 skills")
@@ -455,6 +460,7 @@ def build_parser():
             sp.add_argument("selectors", nargs="+")
     p = sub.add_parser("demo", help="Run an explicitly synthetic offline demonstration")
     project_arg(p)
+    p.add_argument('--output', type=Path, help='Output parent directory')
     return parser
 
 
@@ -538,6 +544,10 @@ def execute(args):
                 store = ensure_project(project, getattr(args, "topic", None), cfg)
             else:
                 store = require_project(project, readonly=readonly)
+            if command in {'demo', 'export'} and args.output is not None:
+                cfg = load_config(project)
+                cfg['output_dir'] = str(args.output.expanduser().resolve())
+                config_changed = True
             if config_changed:
                 write_config(project, cfg)
             if command == "start" and start_records:
@@ -582,7 +592,10 @@ def execute(args):
                 execute_manual_search(store, args, cfg, project)
             elif command == "status":
                 cfg = load_config(project)
+                from .output_paths import output_parent, saved_report
                 emit({"topic": store.get("topic"), "status": store.get("status"), "demo": store.get("demo", False),
+                    "output_dir": str(output_parent(project, cfg)), "output_folder": store.get('output_folder'),
+                    "report": str(saved_report(store)),
                     "papers": len(store.rows("papers")), "evidence": len(store.rows("evidence")), "candidates": len(store.rows("candidates")),
                     "calls_used": store.get("calls_used", 0), "max_calls": cfg["max_calls"], "elapsed_s": round(store.get("elapsed_s", 0), 2),
                     "known_http_attempts": store.get("known_http_attempts", 0), "cli_internal_http_attempts": "unknown",
@@ -628,7 +641,8 @@ def main(argv=None):
         print(f"Budget stopped: {exc}", file=sys.stderr)
         return 3
     except (BackendError, LiteratureError, ValueError, RuntimeError, OSError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        from .presentation import error_summary
+        print(f"[error] {error_summary(exc)}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("Interrupted. Resume with the same project directory.", file=sys.stderr)

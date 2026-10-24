@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from research_idea.backend_types import BackendError
+from research_idea.backend_errors import ProviderError, classify_provider_error
 
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 
@@ -77,17 +78,20 @@ def run_cli(argv: list[str], prompt: str, cwd: Path, timeout_s: float) -> str:
             process.communicate(input=prompt.encode("utf-8"), timeout=max(0.0, deadline - time.monotonic()))
         except subprocess.TimeoutExpired as exc:
             _terminate_process_group(process)
-            raise BackendError(f"{argv[0]} exceeded the {timeout_s:g}s task timeout") from exc
+            raise ProviderError('timeout', diagnostic=f"exceeded the {timeout_s:g}s task timeout") from exc
         except BaseException:
             _terminate_process_group(process)
             raise
         if process.returncode != 0:
-            # CLI stderr may contain credentials or full prompts. Keep it out of
-            # project logs and user-facing exception messages.
-            raise BackendError(
-                f"{argv[0]} exited with code {process.returncode}; check its installation, "
-                "authentication, selected model, and supported CLI options directly"
-            )
+            # Read only a bounded tail for classification. No raw stream enters
+            # exception messages, terminal events or persisted research state.
+            parts = []
+            for stream in (stderr, stdout):
+                stream.seek(0, 2)
+                stream.seek(max(0, stream.tell() - 65536))
+                parts.append(stream.read(65536).decode('utf-8', errors='replace'))
+            raise ProviderError(classify_provider_error('\n'.join(parts)),
+                                diagnostic=f'CLI exited with code {process.returncode}.')
         stdout.seek(0)
         raw = stdout.read(MAX_RESPONSE_BYTES + 1)
         if len(raw) > MAX_RESPONSE_BYTES:

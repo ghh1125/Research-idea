@@ -24,7 +24,7 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.project = Path(self.tmp.name) / 'project'
-        args = build_parser().parse_args(['chat', '--project', str(self.project)])
+        args = build_parser().parse_args(['chat', '--project', str(self.project), '--output', str(self.project.parent / 'results')])
         initialize(args)
         self.events = []
         self.chat = Chat(self.project, lambda tag, text: self.events.append((tag, text)))
@@ -252,7 +252,7 @@ class ChatTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_non_tty_chat_rejected(self):
         with patch('sys.stdin.isatty', return_value=False):
-            self.assertEqual(main(['chat', '--project', str(self.project)]), 1)
+            self.assertEqual(main(['chat', '--project', str(self.project), '--output', str(self.project.parent / 'results')]), 1)
 
     async def test_intro_is_always_in_toolbar_and_does_not_call_model(self):
         self.assertIn('/intro 使用介绍', ''.join(text for _, text in self.chat.toolbar()))

@@ -67,13 +67,13 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(second_review['method_spec']['review_responses'][0]['issue'],
                          second_review['previous_review']['issues'][0]['issue'])
         self.assertIn('previous_revision_record', second_review)
-        export_report(self.store)
-        front = (self.project / 'outputs/report.md').read_text().split('<details>')[0]
+        export_report(self.store, self.store.project)
+        front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
         for label in ('Problem · 剩余问题及其原因', 'Motivation · 由局限推导研究动机', 'Idea · 基于动机提出核心想法', '参考路线'):
             self.assertIn(label, front)
         for label in ('第一步验证', '资源与规模', '值得继续的结果'):
             self.assertNotIn(label, front)
-        self.assertIn('执行步骤', (self.project / ('outputs/' + candidate['id'] + '.md')).read_text())
+        self.assertIn('执行步骤', (self.project / self.store.get('output_folder') / (candidate['id'] + '.md')).read_text())
         for internal in ('prerequisites_unverified', 'motivation_unresolved', '待补证', 'blocked', 'pending'):
             self.assertNotIn(internal, front)
         self.assertTrue(candidate['spec']['validation']['first_test'])
@@ -102,8 +102,8 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertTrue(chosen['derivation'])
         self.assertTrue(chosen['prior_art_delta'])
         self.assertTrue(candidate['proposal']['selection_reason'])
-        export_report(self.store)
-        saved = json.loads((self.project / 'outputs/report.json').read_text())
+        export_report(self.store, self.store.project)
+        saved = json.loads((self.project / self.store.get('output_folder') / 'report.json').read_text())
         self.assertEqual(saved['problem_model']['opportunities'], problem['opportunities'])
         self.assertEqual(sum(t.stage == 'map' for t in backend.calls), 1)
         self.assertEqual(sum(t.stage == 'propose' for t in backend.calls), 1)
@@ -205,8 +205,8 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(sum(t.stage == 'develop' for t in backend.calls), 1)
         self.assertEqual(sum(t.stage == 'refine' for t in backend.calls), 1)
         self.assertTrue(candidate['spec']['feasibility']['required_signals'])
-        export_report(self.store)
-        front = (self.project / 'outputs/report.md').read_text().split('<details>')[0]
+        export_report(self.store, self.store.project)
+        front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
         self.assertIn('技术参考', front)
         self.assertNotIn('第一步验证', front)
         self.assertNotIn('完整首测', front)
@@ -301,8 +301,8 @@ class IdeaWorkflowTests(unittest.TestCase):
         with self.assertRaises(BudgetExhausted):
             Controller(self.store, backend, dict(self.config, max_calls=4)).run()
         self.assertTrue(self.store.rows('candidates')[0]['spec']['method']['changes'])
-        export_report(self.store)
-        self.assertIn('参考路线', (self.project / 'outputs/report.md').read_text())
+        export_report(self.store, self.store.project)
+        self.assertIn('参考路线', (self.project / self.store.get('output_folder') / 'report.md').read_text())
         Controller(self.store, backend, self.config).run()
         self.assertEqual(sum(t.stage == 'develop' for t in backend.calls), 1)
         self.assertEqual(self.store.get('status'), 'completed')

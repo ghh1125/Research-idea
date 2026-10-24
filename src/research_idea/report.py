@@ -195,7 +195,8 @@ def paper_card_markdown(card, citations=None):
 
 def export_report(store: Store, output_dir: Path | None = None):
     from .evidence_matching import current_quote_gaps
-    target = output_dir or store.project / "outputs"
+    from .output_paths import output_directory
+    target = output_directory(store, output_dir)
     target.mkdir(parents=True, exist_ok=True)
     candidates = store.rows("candidates")
     papers = store.rows("papers")
@@ -312,4 +313,5 @@ def export_report(store: Store, output_dir: Path | None = None):
     md_path = target / "report.md"
     lines.extend(["", "</details>"])
     md_path.write_text(citations.text("\n".join(lines)) + "\n", encoding="utf-8")
+    store.set('last_output_dir', str(target))
     return md_path, json_path

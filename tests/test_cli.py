@@ -32,6 +32,8 @@ class CLIIntegrationTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def call(self, *args):
+        if args[0] in {'demo', 'run', 'resume', 'start', 'init', 'export'} and '--output' not in args:
+            args = (*args, '--output', self.project.parent / 'results')
         env = dict(os.environ, PYTHONPATH=str(ROOT / "src"))
         return subprocess.run([sys.executable, "-m", "research_idea", *map(str, args)], env=env,
                               capture_output=True, text=True, timeout=20)
@@ -39,14 +41,15 @@ class CLIIntegrationTests(unittest.TestCase):
     def test_demo_and_resume_are_explicit_and_do_not_repeat_calls(self):
         first = self.call("demo", "--project", self.project)
         self.assertEqual(first.returncode, 0, first.stderr)
-        report = json.loads((self.project / "outputs/report.json").read_text())
+        report = json.loads(Path(json.loads(first.stdout)["json"]).read_text())
         self.assertTrue(report["demo"])
         self.assertEqual(len(report["candidates"]), 2)
         self.assertTrue(all(c["empirical_status"] == "untested" for c in report["candidates"]))
-        self.assertIn("合成演示", (self.project / "outputs/report.md").read_text())
+        self.assertIn("合成演示", Path(json.loads(first.stdout)["report"]).read_text())
         second = self.call("resume", "--project", self.project)
         self.assertEqual(second.returncode, 0, second.stderr)
-        resumed = json.loads((self.project / "outputs/report.json").read_text())
+        resumed = json.loads(Path(json.loads(second.stdout)["json"]).read_text())
+        self.assertEqual(json.loads(first.stdout)["report"], json.loads(second.stdout)["report"])
         self.assertEqual(resumed["calls_used"], report["calls_used"])
         self.assertEqual([c["id"] for c in resumed["candidates"]], [c["id"] for c in report["candidates"]])
 
@@ -297,7 +300,7 @@ class SetupAndSkillsTests(unittest.TestCase):
 
     def call(self, *args):
         stdout, stderr = io.StringIO(), io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with redirect_stdout(stdout), redirect_stderr(stderr), patch('research_idea.output_paths.default_output_root', return_value=self.project.parent / 'results'):
             result = main([str(arg) for arg in args])
         return result, stdout.getvalue(), stderr.getvalue()
 
@@ -485,7 +488,7 @@ class SearchCLITests(unittest.TestCase):
 
     def call(self, *args):
         stdout, stderr = io.StringIO(), io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with redirect_stdout(stdout), redirect_stderr(stderr), patch('research_idea.output_paths.default_output_root', return_value=self.project.parent / 'results'):
             result = main([str(arg) for arg in args])
         return result, stdout.getvalue(), stderr.getvalue()
 

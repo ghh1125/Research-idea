@@ -1,7 +1,8 @@
 """One cancellable HTTP attempt; parent owns the wall-clock deadline.
 
 This file is executed directly in a child Python process. Credentials enter only
-through stdin, never argv or a temporary file. Error bodies are not returned.
+through stdin, never argv or a temporary file. Bounded error bodies are used
+only by the parent to classify the failure; they are never displayed or saved.
 """
 from __future__ import annotations
 
@@ -32,8 +33,14 @@ def request_once(spec: dict) -> dict:
         return {"kind": "response", "body_base64": base64.b64encode(payload).decode("ascii")}
     except urllib.error.HTTPError as exc:
         status = exc.code
-        exc.close()
-        return {"kind": "http_error", "status": status}
+        try:
+            payload = exc.read(65536)
+        except (OSError, TimeoutError):
+            payload = b''
+        finally:
+            exc.close()
+        return {"kind": "http_error", "status": status,
+                "body_base64": base64.b64encode(payload).decode('ascii')}
     except (urllib.error.URLError, TimeoutError, OSError):
         return {"kind": "connection_error"}
 

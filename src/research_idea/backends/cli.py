@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from research_idea.backend_types import BackendError, BackendResult, TaskSpec
+from research_idea.backend_errors import ProviderError, classify_provider_error
 from research_idea.config import REASONING_EFFORTS
 from .common import MAX_RESPONSE_BYTES, parse_object, positive_timeout, run_cli
 
@@ -112,18 +113,11 @@ class CodexBackend:
                 argv += ["--model", str(model)]
             argv.append("-")
             raw = run_cli(argv, task.prompt, cwd, remaining)
-            if not output.is_file():
-                raise BackendError("Codex did not produce its structured result file")
-            if output.stat().st_size > MAX_RESPONSE_BYTES:
-                raise BackendError("Codex structured result exceeded the size limit")
-            try:
-                result = parse_object(output.read_text(encoding="utf-8"), "Codex")
-            except (OSError, UnicodeDecodeError) as exc:
-                raise BackendError("Could not read Codex structured result") from exc
             usage: dict[str, Any] = {}
             session_id = None
             completed = False
             pending_error = False
+            last_error = ''
             for line in raw.splitlines():
                 try:
                     event = json.loads(line)
@@ -132,11 +126,12 @@ class CodexBackend:
                 if not isinstance(event, dict):
                     continue
                 if event.get("type") == "turn.failed":
-                    raise BackendError("Codex reported a failed execution; result was not accepted")
+                    raise ProviderError(classify_provider_error(event.get('error') or last_error))
                 if event.get("type") == "error":
                     # Codex also emits error events while reconnecting a stream.
                     # A later successful terminal event confirms recovery.
                     pending_error = True
+                    last_error = event.get('message') or event.get('error') or ''
                 if event.get("type") == "thread.started":
                     session_id = event.get("thread_id")
                 if event.get("type") == "turn.completed":
@@ -145,7 +140,15 @@ class CodexBackend:
                     if isinstance(event.get("usage"), dict):
                         usage.update(event["usage"])
             if not completed or pending_error:
-                raise BackendError("Codex did not confirm successful completion; result was not accepted")
+                raise ProviderError(classify_provider_error(last_error))
+            if not output.is_file():
+                raise BackendError("Codex did not produce its structured result file")
+            if output.stat().st_size > MAX_RESPONSE_BYTES:
+                raise BackendError("Codex structured result exceeded the size limit")
+            try:
+                result = parse_object(output.read_text(encoding="utf-8"), "Codex")
+            except (OSError, UnicodeDecodeError) as exc:
+                raise BackendError("Could not read Codex structured result") from exc
             return BackendResult(result, usage, session_id, raw)
 
 
@@ -174,7 +177,7 @@ class ClaudeBackend:
             raw = run_cli(argv, task.prompt, cwd, task.timeout_s)
             envelope = parse_object(raw, "Claude Code")
             if envelope.get("is_error") or envelope.get("subtype", "success") != "success":
-                raise BackendError("Claude Code reported a failed execution; result was not accepted")
+                raise ProviderError(classify_provider_error({key: envelope.get(key) for key in ('error', 'errors', 'result')}))
             result = envelope.get("structured_output")
             if not isinstance(result, dict):
                 raise BackendError("Claude Code response is missing structured_output")

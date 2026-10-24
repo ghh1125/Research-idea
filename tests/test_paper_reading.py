@@ -241,7 +241,7 @@ class PaperReadingIntegrationTests(unittest.TestCase):
     def test_budget_stop_after_new_evidence_does_not_export_old_card(self):
         with self.assertRaises(BudgetExhausted):
             self.run_read(max_calls=3)
-        _, report_file = export_report(self.store)
+        _, report_file = export_report(self.store, self.store.project)
         report = json.loads(report_file.read_text())
         self.assertEqual(report["paper_cards"]["p1"]["status"], "pending")
         self.assertEqual(report["paper_cards"]["p1"]["inventory"]["characters_supplied"], 1024)
@@ -285,7 +285,7 @@ class PaperReadingIntegrationTests(unittest.TestCase):
 
     def test_export_and_cli_inspect_show_same_framework_and_coverage(self):
         self.run_read()
-        _, machine = export_report(self.store)
+        _, machine = export_report(self.store, self.store.project)
         report = json.loads(machine.read_text())
         self.assertEqual(report["schema_version"], 6)
         card_path = machine.parent / report["paper_card_files"]["p1"]
