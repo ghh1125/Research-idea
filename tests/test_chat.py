@@ -204,7 +204,7 @@ raise SystemExit(worker.main())
             def generate(self, spec):
                 self.calls += 1
                 return BackendResult({'answer': '保留跨任务目标。', 'memory_updates': [dict(
-                    action='add', entry_id='', content='保留跨任务目标。',
+                    action='add', scope='research', entry_id='', content='保留跨任务目标。',
                     source_message_id='invented' if self.calls == 1 else 'msg_000001')]})
         backend = Backend()
         with patch('research_idea.chat_worker.make_backend', return_value=backend), redirect_stdout(io.StringIO()):

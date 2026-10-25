@@ -6,11 +6,13 @@ import json
 from .idea_instructions import (MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES,
                                 EXPLORE_PROBLEMS_INSTRUCTIONS, DEEPEN_PROBLEM_INSTRUCTIONS)
 
-PROMPT_VERSION = "40"
+PROMPT_VERSION = "41"
 
 
 def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
+    if stage == 'discuss_problem':
+        return '42'
     if stage == 'inspect_source':
         return '10'
     if stage == 'paper_card':

@@ -67,3 +67,5 @@ explore_problems 整理的 approach_landscape 会传给每次问题深入和比�
 ## Discuss the problem with the researcher
 
 在交互 CLI 中，map 后暂停。discuss_problem 根据用户反馈解释或修改问题，不提前设计方案。保留其他候选的原论证，并说明重点为何改变。追问不是同意，助手建议不是用户决定。当前问题的版本、完整原始对话、带用户消息出处的现行要点分别保存。只有 /continue 后才进入 propose；后续使用确认版本及现行要点，不能重新选题把纠正挤掉。确认的是研究方向，可以大胆提出原因猜想，并不声称其科学结论已证实。
+
+记忆中的每个要点只表达一个可独立修改的要求；区分持续的 research 范围、资源与表达要求和仅本次 discussion 的暂停要求。/continue 结束临时讨论要求，保留持续的研究要求，不把“先别提出方案”带成永久限制。

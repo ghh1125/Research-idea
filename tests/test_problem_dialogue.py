@@ -84,7 +84,7 @@ class ProblemDialogueTests(unittest.TestCase):
             return dict(answer='改为第二个问题，保留跨任务目标。',
                 updated_problems=[case], selected_problems=[dict(opportunity_id=case['id'],
                     selection_reason='用户选择第二个问题，研究目标跨任务。')],
-                memory_updates=[dict(action='add', entry_id='', content='保留跨任务范围。',
+                memory_updates=[dict(action='add', scope='research', entry_id='', content='保留跨任务范围。',
                     source_message_id=data['current_user_message']['id'])])
         self.backend.discussion = correction
         discuss(self.controller(), message)
@@ -152,7 +152,7 @@ class ProblemDialogueTests(unittest.TestCase):
 
     def test_memories_outlive_recent_window_and_can_be_replaced(self):
         first = append_message(self.store, 'user', '只考虑有公开权重的模型。')
-        finish_turn(self.store, dict(answer='已记录。', memory_updates=[dict(action='add', entry_id='',
+        finish_turn(self.store, dict(answer='已记录。', memory_updates=[dict(action='add', scope='research', entry_id='',
             content='仅考虑公开权重模型。', source_message_id=first['id'])]), {first['id']})
         for i in range(15):
             user = append_message(self.store, 'user', f'讨论细节 {i}')
@@ -160,26 +160,43 @@ class ProblemDialogueTests(unittest.TestCase):
         self.assertNotIn(first['id'], str(memory_context(self.store)['recent_history']))
         self.assertIn('公开权重', str(self.controller().context()['user_notes']))
         latest = append_message(self.store, 'user', '改成允许 API 模型。')
-        finish_turn(self.store, dict(answer='已替换。', memory_updates=[dict(action='replace',
+        finish_turn(self.store, dict(answer='已替换。', memory_updates=[dict(action='replace', scope='research',
             entry_id='memory_000001', content='允许 API 模型。', source_message_id=latest['id'])]), {latest['id']})
         self.assertNotIn('仅考虑公开权重', str(research_notes(self.store)))
         self.assertIn('允许 API 模型', str(research_notes(self.store)))
         self.assertFalse(self.store.get('conversation_memory')[0]['active'])
         self.assertEqual(transcript(self.store)[0]['content'], first['content'])
 
+    def test_continue_ends_temporary_instructions_but_keeps_research_constraints(self):
+        self.pause()
+        user = append_message(self.store, 'user', '先别提出方案；保持跨任务目标，不展开实验计划。')
+        finish_turn(self.store, dict(answer='先讨论问题。', memory_updates=[
+            dict(action='add', scope='discussion', entry_id='', content='先别提出方案。', source_message_id=user['id']),
+            dict(action='add', scope='research', entry_id='', content='保持跨任务目标。', source_message_id=user['id']),
+            dict(action='add', scope='research', entry_id='', content='不展开实验计划。', source_message_id=user['id']),
+        ]), {user['id']})
+        self.assertIn('先别提出方案', str(research_notes(self.store)))
+        self.controller().run(continue_problem=True)
+        draft = next(payload(t) for t in self.backend.calls if t.stage == 'propose')
+        self.assertNotIn('先别提出方案', str(draft['user_notes']))
+        self.assertIn('跨任务目标', str(draft['user_notes']))
+        self.assertIn('不展开实验计划', str(draft['user_notes']))
+        self.assertEqual(self.store.get('conversation_memory')[0]['retired_by_command'], '/continue')
+        self.assertIn('先别提出方案', transcript(self.store)[0]['content'])
+
     def test_memory_cannot_cite_assistant_and_bad_patch_is_atomic(self):
         user = append_message(self.store, 'user', '保持大方向')
         assistant = append_message(self.store, 'assistant', '建议只做单任务')
         with self.assertRaisesRegex(ValueError, 'user message'):
-            revised_memory(self.store, [dict(action='add', entry_id='', content='只做单任务',
+            revised_memory(self.store, [dict(action='add', scope='research', entry_id='', content='只做单任务',
                 source_message_id=assistant['id'])], {user['id']})
         self.assertEqual(self.store.get('conversation_memory', []), [])
-        finish_turn(self.store, dict(answer='好', memory_updates=[dict(action='add', entry_id='',
+        finish_turn(self.store, dict(answer='好', memory_updates=[dict(action='add', scope='research', entry_id='',
             content='保持大方向', source_message_id=user['id'])]), {user['id']})
         before = copy.deepcopy(self.store.get('conversation_memory'))
         with self.assertRaises(ValueError):
-            revised_memory(self.store, [dict(action='remove', entry_id='memory_000001', content='',
-                source_message_id=user['id']), dict(action='replace', entry_id='missing', content='错',
+            revised_memory(self.store, [dict(action='remove', scope='research', entry_id='memory_000001', content='',
+                source_message_id=user['id']), dict(action='replace', scope='research', entry_id='missing', content='错',
                 source_message_id=user['id'])], {user['id']})
         self.assertEqual(self.store.get('conversation_memory'), before)
 
@@ -188,6 +205,23 @@ class ProblemDialogueTests(unittest.TestCase):
         self.assertEqual(len(memory_context(self.store)['unreviewed_user_messages']), 20)
         self.assertIn('原始要求 0', self.controller().user_notes())
         self.assertEqual(transcript(self.store)[0]['id'], transcript(self.store)[0]['id'])
+
+    def test_unscoped_legacy_memory_brings_back_original_source_for_migration(self):
+        user = append_message(self.store, 'user', '先别写方案，保留跨任务范围。')
+        self.store.set('conversation_memory', [dict(id='old', active=True,
+            content='先别写方案，保留跨任务范围。', source_message_id=user['id'])])
+        self.store.set('memory_reviewed_messages', [user['id']])
+        for _ in range(15):
+            append_message(self.store, 'assistant', '讨论')
+        context = memory_context(self.store)
+        self.assertNotIn(user['id'], str(context['recent_history']))
+        self.assertIn(user, context['unreviewed_user_messages'])
+        with self.assertRaisesRegex(ValueError, 'scope'):
+            revised_memory(self.store, [], {user['id']})
+        ledger = revised_memory(self.store, [dict(action='replace', entry_id='old', scope='discussion',
+            content='先别写方案。', source_message_id=user['id']), dict(action='add', entry_id='', scope='research',
+            content='保留跨任务范围。', source_message_id=user['id'])], {user['id']})
+        self.assertEqual([m['scope'] for m in ledger if m['active']], ['discussion', 'research'])
 
     def test_worker_routes_paused_message_to_research_discussion(self):
         from research_idea.chat_worker import chat_turn

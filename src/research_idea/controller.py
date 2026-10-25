@@ -1210,7 +1210,9 @@ class Controller:
                 raise ValueError('论文或研究范围已变化，请 /run 更新问题后再讨论。原对话和要点已保留。')
             checkpoint.update(state='confirmed', confirmed_revision=checkpoint['revision'], confirmed_at=now(),
                               confirmed_by='/continue')
-            self.store.set_many({'problem_checkpoint': checkpoint, 'problem_model': checkpoint['current']})
+            from .conversation import after_continue
+            self.store.set_many({'problem_checkpoint': checkpoint, 'problem_model': checkpoint['current'],
+                                 'conversation_memory': after_continue(self.store)})
         # A confirmed checkpoint remains the starting point after interruption.
         using_checkpoint = checkpoint_valid and checkpoint['state'] == 'confirmed'
         if checkpoint and not checkpoint_valid:

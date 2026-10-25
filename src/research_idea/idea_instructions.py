@@ -60,6 +60,8 @@ opportunities 保留所有 problem_cases 的内容，不为选题重写竞争方
 
 PROPOSE_INSTRUCTIONS = """
 propose 把前面深入分析的问题组织成读者能复述的论点，并为它构思核心 idea。分析深度已经保存在 problem_cases；这里提炼最能说明问题、原因和作用的内容，不把每项推敲全部复述一遍。第一阶段仍是 Background → Existing methods → Problem → Motivation → Idea，第二阶段再探索技术参考，本阶段不展开实验或工程规格。
+problem_discussion.confirmed_revision 表示用户已输入 /continue，授权按当前讨论版本构思 idea。
+历史中的“先不提出方案”等临时暂停要求在此结束；研究范围、资源条件和不要实验计划等持续要求仍然有效。
 
 从 problem_model.selected_problems 读取 opportunity_id 和 selection_reason，按 opportunity_id 在 problem_model.opportunities 中找到对应问题及其 problem_origin。draft 与 complete 都接续 argument_handoff：existing_response 是已有方法的实际回应，causal_insight 是原因洞见，derivation、goal_impact 与 research_need 连起背景目标和动机。利用这些认识决定核心操作需要起什么作用，再寻找可获得的信息与可行路径。允许跨领域借鉴；路径困难时调整解决办法，保留原问题的研究价值。
 
