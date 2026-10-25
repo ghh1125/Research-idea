@@ -27,8 +27,12 @@ def demo_design_plan(*, technical=True):
     ] if technical else []
     return {'research_question': 'How can supplied evidence support conditional reasoning?',
             'scope': 'Synthetic planning example, not a scientific finding.', 'design_axes': axes,
+            'research_routes': [] if technical else [
+                {'id': 'information', 'question': 'Is necessary information available?', 'why_relevant': 'Information access can limit the goal.'},
+                {'id': 'use', 'question': 'Can available information be used reliably?', 'why_relevant': 'Information use is a different possible obstacle.'}],
             'queries': [{'query': query, 'purpose': 'mechanism', 'rationale': reason,
-                         'axis_ids': [axis] if technical else []}
+                         'axis_ids': [axis] if technical else [],
+                         'route_ids': [] if technical else ['information' if axis == 'relations' else 'use']}
                         for query, axis, reason in [
                             ('text evidence relation representation', 'relations', 'Find relation representations.'),
                             ('conditional evidence reasoning generation', 'use', 'Find ways to use conditional evidence.')]],
@@ -47,7 +51,8 @@ class DemoBackend:
         elif task.stage == "screen_papers":
             output = {'selection_summary': 'Synthetic selection for workflow demonstration.',
                 'selected': [{'paper_id': p['id'], 'reason': 'Synthetic topic-related source.',
-                              'reading_question': 'Which synthetic statement illustrates the workflow?'}
+                              'reading_question': 'Which synthetic statement illustrates the workflow?',
+                              'route_ids': [r['id'] for r in payload.get('discovery_plan', {}).get('research_routes', [])]}
                              for p in payload['papers'][:payload['max_papers']]]}
         elif task.stage == "extract":
             lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
@@ -62,6 +67,7 @@ class DemoBackend:
             output['opportunities'] = [
                 {'id': key, 'question': question, 'basis': 'research_hypothesis',
                  'problem_origin': 'unresolved_need' if key == 'conflict' else 'emerging_problem',
+                 'research_route_ids': [],
                  'derivation': ('合成场景希望回答可靠；检索已经能提供相关信息，但冲突材料仍可能使模型选错依据，继续增加信息不能解决如何使用它的问题。'
                      if key == 'conflict' else '合成场景为扩大信息覆盖而拼接更多来源，但拼接顺序可能改变回答，使完整资料仍无法稳定使用；单纯扩大覆盖没有消除这种顺序影响。'),
                  'bottleneck_hypothesis': bottleneck, 'why_it_matters': '若实际存在，可帮助解释已有证据为什么未被有效使用。',

@@ -41,8 +41,8 @@ class ClaimAuditTests(unittest.TestCase):
     def test_schema_registered_and_valid(self):
         audit, _, _ = example()
         validate(audit, SCHEMAS["audit_claims"])
-        validate({"research_question": "Which routing target improves fixed-budget QA?", "scope": "Inference routing", "design_axes": [],
-                  "queries": [{"query": "adaptive routing matched compute", "purpose": "counterevidence", "rationale": "Find negative controls", "axis_ids": []}],
+        validate({"research_question": "Which routing target improves fixed-budget QA?", "scope": "Inference routing", "research_routes": [], "design_axes": [],
+                  "queries": [{"query": "adaptive routing matched compute", "purpose": "counterevidence", "rationale": "Find negative controls", "route_ids": [], "axis_ids": []}],
                   "assumptions": []}, SCHEMAS["plan_search"])
 
     def test_claim_only_cannot_establish_empirical_support(self):

@@ -60,6 +60,51 @@ class PreprintFallbackTests(unittest.TestCase):
              patch('research_idea.proceedings.match_preprint', side_effect=LiteratureError('HTTP 429')):
             self.assertEqual(fetch_full_text(self.paper), failed)
 
+    def test_openalex_and_other_metadata_sources_use_the_full_title_fallback(self):
+        for metadata in ({'source': 'openalex'}, {'source': 'local', 'venue': None}):
+            paper = dict(self.paper, **metadata)
+            failed = dict(paper, full_text_error='HTTP 404')
+            full = dict(paper, content_kind='full_text', text='Actual public preprint text.')
+            with self.subTest(metadata=metadata), \
+                 patch('research_idea.fulltext.fetch_full_text', side_effect=[failed, full]), \
+                 patch('research_idea.literature.discover', return_value=[self.preprint]) as search:
+                result = fetch_full_text(paper)
+            self.assertEqual(search.call_args.args[0], 'ti:"Changing Worlds: Agent Transfer"')
+            self.assertEqual(search.call_args.kwargs['source'], 'arxiv')
+            self.assertEqual(result['id'], paper['id'])
+            self.assertEqual(result.get('venue'), paper.get('venue'))
+            self.assertEqual(result['content_kind'], 'full_text')
+
+    def test_empty_title_lookup_preserves_primary_error(self):
+        failed = dict(self.paper, full_text_error='Official PDF returned HTTP 404')
+        with patch('research_idea.fulltext.fetch_full_text', return_value=failed) as fetch, \
+             patch('research_idea.literature.discover', return_value=[]):
+            self.assertEqual(fetch_full_text(self.paper), failed)
+        fetch.assert_called_once()
+
+    def test_similar_title_is_not_downloaded_after_primary_failure(self):
+        failed = dict(self.paper, full_text_error='Official PDF returned HTTP 404')
+        other = dict(self.preprint, title='Changing Worlds: Unrelated Study')
+        with patch('research_idea.fulltext.fetch_full_text', return_value=failed) as fetch, \
+             patch('research_idea.literature.discover', return_value=[other]):
+            self.assertEqual(fetch_full_text(self.paper), failed)
+        fetch.assert_called_once()
+
+    def test_matched_preprint_download_failure_preserves_primary_error(self):
+        failed = dict(self.paper, full_text_error='Official PDF returned HTTP 404')
+        unavailable = dict(self.preprint, full_text_error='Preprint download timed out')
+        with patch('research_idea.fulltext.fetch_full_text', side_effect=[failed, unavailable]), \
+             patch('research_idea.literature.discover', return_value=[self.preprint]):
+            self.assertEqual(fetch_full_text(self.paper), failed)
+
+    def test_arxiv_source_url_does_not_trigger_identical_title_lookup(self):
+        paper = {'title': 'A preprint', 'url': 'https://arxiv.org/abs/2601.12345'}
+        failed = dict(paper, full_text_error='arXiv is temporarily unavailable')
+        with patch('research_idea.fulltext.fetch_full_text', return_value=failed), \
+             patch('research_idea.proceedings.match_preprint') as match:
+            self.assertEqual(fetch_full_text(paper), failed)
+        match.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

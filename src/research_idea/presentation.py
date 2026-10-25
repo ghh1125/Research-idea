@@ -109,6 +109,9 @@ def activity_summary(stage, result, citations=None):
         if not lines:
             lines.append('这段没有新增引用，继续分析其他材料。')
     elif stage == 'plan_search':
+        for route in result.get('research_routes', []):
+            section('探索路线 · ' + route['question'])
+            add('为什么看这条路线', route['why_relevant'])
         add('研究问题', result.get('research_question'))
         if result.get('design_axes'):
             lines.append(design_axes_markdown(result['design_axes']))

@@ -407,7 +407,7 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertTrue(motive['problem_derivation'].strip())
                 expected = {field: chosen[field] for field in
                      ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta',
-                      'why_it_matters', 'bottleneck_hypothesis', 'research_need')}
+                      'why_it_matters', 'bottleneck_hypothesis', 'research_need', 'research_route_ids')}
                 expected['selection_reason'] = selections[chosen['id']]
                 self.assertEqual(candidate['selected_opportunity'], expected)
                 summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
@@ -465,7 +465,7 @@ class IdeaWorkflowTests(unittest.TestCase):
                 original = directions[selected['id']]
                 expected = {key: original[key] for key in
                     ('id', 'question', 'problem_origin', 'derivation', 'basis', 'prior_art_delta',
-                     'why_it_matters', 'bottleneck_hypothesis', 'research_need')}
+                     'why_it_matters', 'bottleneck_hypothesis', 'research_need', 'research_route_ids')}
                 expected['selection_reason'] = selections[original['id']]
                 self.assertEqual(selected, expected)
                 current = payload.get('method_spec') or payload.get('previous_spec') or payload['candidate']

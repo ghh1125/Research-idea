@@ -175,7 +175,7 @@ class TechnicalDesignTests(unittest.TestCase):
                                   'abstract': 'A source for belief updates.', 'url': 'https://example.org/borrowed'})
         screen = {'selection_summary': 'This source answers the update question.',
                   'selected': [{'paper_id': source['id'], 'reason': 'Shared partial-observation structure.',
-                                'reading_question': 'How does the belief update use observations?'}]}
+                                'reading_question': 'How does the belief update use observations?', 'route_ids': []}]}
         backend = FakeBackend([plan, screen])
         controller = Controller(self.store, backend, config)
         with patch('research_idea.literature.discover', return_value=[source]), \

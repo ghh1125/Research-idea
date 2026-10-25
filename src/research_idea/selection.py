@@ -1,6 +1,7 @@
 """Cheap, inspectable metadata screening before any full-text/model reading."""
 from __future__ import annotations
 
+from collections import deque
 from datetime import date
 import re
 
@@ -43,3 +44,70 @@ def rank_metadata(records, queries):
         ranked.append(dict(paper, selection=selection))
     return sorted(ranked, key=lambda p: (-p['selection']['relevance_band'],
         tuple(-ord(c) for c in p['selection']['date']), -p['selection']['relevance'], p['id']))
+
+
+def discovery_pool(records, entries, plan, limit=40):
+    """Interleave actual route retrievals before bounded semantic screening.
+
+    ``records`` are already deduplicated papers; ``entries`` are the search
+    ledger entries containing query and metadata. Alias matches recover every
+    query that actually returned a paper, independently of lexical ranking.
+    Returned records add discovery_provenance and normal selection scores;
+    inputs are unchanged. Legacy plans use the same global ranking as before.
+    """
+    if limit <= 0:
+        return []
+    routes = plan.get('research_routes', [])
+    route_ids = {route['id'] for route in routes}
+    query_key = lambda query: ' '.join(query.split()).casefold()
+    planned_links = {}
+    for query in plan.get('queries', []):
+        linked = planned_links.setdefault(query_key(query['query']), [])
+        linked.extend(route for route in query.get('route_ids', [])
+                      if route in route_ids and route not in linked)
+    provenance, alias_queries = {}, {}
+    for entry in entries:
+        query = entry.get('query', '')
+        key = query_key(query)
+        provenance.setdefault(key, {'query': query, 'route_ids': list(planned_links.get(key, []))})
+        for paper in entry.get('metadata', []):
+            aliases = set(paper.get('aliases', [])) | {paper['id']}
+            for alias in aliases:
+                alias_queries.setdefault(alias, set()).add(key)
+    enriched = []
+    for paper in records:
+        aliases = set(paper.get('aliases', [])) | {paper['id']}
+        found = set().union(*(alias_queries.get(alias, set()) for alias in aliases))
+        hits = [{'query': item['query'], 'route_ids': list(item['route_ids'])}
+                for key, item in provenance.items() if key in found]
+        enriched.append(dict(paper, discovery_provenance=hits))
+    all_queries = [entry.get('query', '') for entry in entries]
+    ranked = rank_metadata(enriched, all_queries)
+    pools = []
+    for route in routes:
+        own_queries = [item['query'] for item in provenance.values() if route['id'] in item['route_ids']]
+        own_records = [paper for paper in enriched if any(
+            route['id'] in hit['route_ids'] for hit in paper['discovery_provenance'])]
+        pools.append(deque(rank_metadata(own_records, own_queries)))
+    selected, seen = [], set()
+    while len(selected) < limit:
+        added = False
+        for pool in pools:
+            while pool and pool[0]['id'] in seen:
+                pool.popleft()
+            if pool:
+                paper = pool.popleft()
+                selected.append(paper)
+                seen.add(paper['id'])
+                added = True
+                if len(selected) == limit:
+                    break
+        if not added:
+            break
+    for paper in ranked:
+        if len(selected) >= limit:
+            break
+        if paper['id'] not in seen:
+            selected.append(paper)
+            seen.add(paper['id'])
+    return selected

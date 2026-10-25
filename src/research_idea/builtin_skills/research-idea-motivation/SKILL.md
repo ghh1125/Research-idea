@@ -11,6 +11,9 @@ The first phase uses two existing calls. **map chooses a problem and explains wh
 
 ## Form the problem before the solution
 
+Use discovery_plan and discovery_coverage to see which different approaches were actually explored. Read the supplied papers' selection questions and route provenance, but let full-text findings correct the planned routes. Compare the important problems these different lines expose; do not build every alternative around one favorite relation. For each problem, explain how the strongest existing responses work and precisely where their information, objective, assumptions or interactions may leave a consequential obstacle. This can be a reasoned hypothesis; naming methods and saying they do not guarantee a solution is not the explanation. Link opportunities through research_route_ids where applicable. These records guide synthesis without adding a score or a new review call.
+
+
 把用户原目标与我们提出的研究聚焦分开。research_frame.user_goal 保留原始 topic，明确补充以 user_notes 为准；选中的能力写入 research_question，在 scope_connection 解释它为何推进原目标。不能先把候选能力说成用户需要，再用符合需要证明其重要性。按解决思路综合已有工作：它们依靠什么原理，已经帮助我们走到了哪里。阅读者为某篇论文预制的改法不是出发点；保留论文的方法、实际结果、条件、疑点和证据，用它们形成更大的认识。
 
 只沿两个角度引出问题：

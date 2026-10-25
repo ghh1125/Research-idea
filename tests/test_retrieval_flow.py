@@ -22,7 +22,7 @@ class ScreeningBackend:
         data = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
         return BackendResult({'selection_summary': 'Read the conflict study.',
             'selected': [{'paper_id': p['id'], 'reason': 'Relevant conflict problem.',
-                          'reading_question': 'How is conflicting evidence controlled?'}
+                          'reading_question': 'How is conflicting evidence controlled?', 'route_ids': []}
                          for p in data['papers'][:data['max_papers']]]})
 
 

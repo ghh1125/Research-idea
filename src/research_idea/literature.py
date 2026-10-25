@@ -820,10 +820,29 @@ def fetch_full_text(paper: dict, destination: Path | None = None,
             or not math.isfinite(timeout_s) or timeout_s <= 0):
         return fetch(paper, destination=destination, timeout_s=timeout_s)
     deadline = time.monotonic() + timeout_s
-    fallback = bool(paper.get('venue') and paper.get('source') == 'official_proceedings'
-                    and not paper.get('arxiv_id'))
-    result = fetch(paper, destination=destination, timeout_s=timeout_s / 2 if fallback else timeout_s)
-    if result.get('content_kind') == 'full_text' or not fallback:
+    from .proceedings import pmlr_landing_page, resolve_pmlr_pdf
+    pmlr_page = pmlr_landing_page(paper)
+    fallback = bool(paper.get('title') and not paper.get('arxiv_id')
+                    and not _arxiv(paper.get('url')) and not _arxiv(paper.get('pdf_url')))
+    result = fetch(paper, destination=destination, timeout_s=timeout_s / 2 if fallback or pmlr_page else timeout_s)
+    if result.get('content_kind') == 'full_text':
+        return result
+    if pmlr_page:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return result
+        try:
+            official = resolve_pmlr_pdf(paper, timeout_s=min(5, remaining / 3))
+            remaining = deadline - time.monotonic()
+            if official and remaining > 0:
+                recovered = fetch(official, destination=destination,
+                                  timeout_s=remaining / 2 if fallback else remaining)
+                if recovered.get('content_kind') == 'full_text':
+                    recovered['primary_full_text_error'] = result.get('full_text_error')
+                    return recovered
+        except (LiteratureError, OSError, ValueError):
+            pass
+    if not fallback:
         return result
     remaining = deadline - time.monotonic()
     if remaining <= 0:
@@ -834,8 +853,9 @@ def fetch_full_text(paper: dict, destination: Path | None = None,
         remaining = deadline - time.monotonic()
         if alternate and remaining > 0:
             recovered = fetch(alternate, destination=destination, timeout_s=remaining)
-            recovered['primary_full_text_error'] = result.get('full_text_error')
-            return recovered
+            if recovered.get('content_kind') == 'full_text':
+                recovered['primary_full_text_error'] = result.get('full_text_error')
+                return recovered
     except (LiteratureError, OSError, ValueError):
         # Preserve the primary source's diagnostic if the bounded lookup fails.
         pass

@@ -125,7 +125,9 @@
 
 综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`map` 先说明原目标需要什么实质进展、什么困难阻碍它、为什么该障碍关键；再推演最强已有回应在同样条件下实际如何工作、为何仍可能留下困难，据此形成动机并选择问题。`propose` 才为已选问题构思 idea 与基本可行路径。问题来自现有办法解决原问题时产生的新困难，或背景中提出、现有主要思路难以解决的新问题。允许大胆猜想与单篇启发，不要求共同缺陷或先证明全领域无解。
 
-为落实分工，[research_context.py](../src/research_idea/research_context.py) 为第一阶段建立材料副本，暂不带入论文卡里的预制改法与实验建议；源论文的方法、实验、结果、条件、疑点和原文证据仍保留。控制器保留用户原始目标，系统在 `research_question` 中聚焦，并用 `scope_connection` 解释为什么这个聚焦值得研究。`map` 比较原目标未实现的不同解释，保存全部问题池及 `selected_problems` 的理由；`propose` 只收到已选子集，后续通过 `selected_opportunity` 继续保留问题与选择依据。这是本项目的两次调用分工，不增加评分或审查轮次，也不是上述框架统一规定的流程。
+为落实分工，初期检索先围绕原目标的不同原因与已有思路建立 `research_routes`，查询、实际召回、互补选文和正文阅读沿同一路线关联，优先把约三分之二阅读额度用于第一阶段。[research_context.py](../src/research_idea/research_context.py) 为构思建立材料副本，控制器限定初期来源，暂不带入旧候选解释、论文卡里的预制改法与实验建议；源论文的方法、实验、结果、条件、疑点和原文引用仍保留，完整记录供第二阶段参考。路线不是预设技术角度，也不要求各路线凑足论文。
+
+控制器保留用户原始目标，系统在 `research_question` 中聚焦，并用 `scope_connection` 解释为什么这个聚焦值得研究。`map` 结合检索计划、实际路线覆盖与阅读内容，比较原目标未实现的不同解释，以 `bottleneck_hypothesis` 和 `research_need` 保存原因猜想与动机，保留全部问题池、路线关联及 `selected_problems` 的理由；`propose` 只收到已选子集，后续通过 `selected_opportunity` 继续保留问题与选择依据。相比直接把单篇论文建议当成候选，这一分工让问题推导先于方案构思。它是本项目的综合设计，不增加模型评分或审查轮次，也不是上述框架统一规定的流程。
 
 这是面向本项目的综合设计，不固定示例中的领域、困难数量或方法模块，也不引入上述框架的评分、额外审查或实验执行。第二阶段继续由 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个技术问题，借助 `design_axes` 连接检索、迁移与方法选择；一种技术可以服务两个问题。测试检查阶段衔接和材料传递，实际论证是否更好仍应通过产出判断。
 

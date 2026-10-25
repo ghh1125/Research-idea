@@ -46,14 +46,14 @@ class PipelineBackend:
             queries = ["candidate routing matched budget", "candidate routing simpler controls", "candidate routing counterexamples"] if "candidate" in payload else QUERIES
             output = {"research_question": "When can observable feedback improve adaptive routing?",
                       "scope": "Inference-time routing with matched evaluation budgets.",
-                      "design_axes": demo_design_plan()["design_axes"] if "candidate" in payload else [],
-                      "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion.", "axis_ids": ["relations", "use"] if "candidate" in payload else []}
+                      "research_routes": [], "design_axes": demo_design_plan()["design_axes"] if "candidate" in payload else [],
+                      "queries": [{"query": query, "purpose": purpose, "rationale": "Find the corresponding evidence before drawing a conclusion.", "route_ids": [], "axis_ids": ["relations", "use"] if "candidate" in payload else []}
                                   for query, purpose in zip(queries, ("background", "mechanism", "counterevidence"))],
                       "assumptions": ["Resource access remains unspecified."]}
         elif task.stage == "screen_papers":
             output = {'selection_summary': 'Read the synthetic routing sources.',
                 'selected': [{'paper_id': p['id'], 'reason': 'Direct routing study.',
-                              'reading_question': 'Which controls isolate the routing signal?'}
+                              'reading_question': 'Which controls isolate the routing signal?', 'route_ids': []}
                              for p in payload['papers'][:payload['max_papers']]]}
         elif task.stage in {"extract", "inspect_source", "read_section"}:
             observations = []
@@ -148,11 +148,11 @@ class PaperPipelineTests(unittest.TestCase):
         self.assertLess(first_extract, first_audit)
         self.assertLess(first_audit, first_map)
         self.assertLess(first_map, trace.index(("model", "propose")))
-        self.assertEqual(len(self.store.rows("papers")), 5)
+        self.assertEqual(len(self.store.rows("papers")), 7)
         self.assertEqual(sum(call.kwargs["limit"] for call in search.call_args_list), 60)
         map_payload = next(payload for stage, payload in backend.calls if stage == "map")
-        self.assertEqual(len(map_payload["paper_claim_audits"]), 5)
-        self.assertEqual(len(map_payload["paper_cards"]), 5)
+        self.assertEqual(len(map_payload["paper_claim_audits"]), 7)
+        self.assertEqual(len(map_payload["paper_cards"]), 7)
         self.assertTrue(all(item["status"] == "analyzed" for item in map_payload["paper_cards"]))
         self.assertTrue(all(item["status"] == "audited" for item in map_payload["paper_claim_audits"]))
 
@@ -168,10 +168,10 @@ class PaperPipelineTests(unittest.TestCase):
         controller = self.controller(backend)
         with patch("research_idea.literature.discover", side_effect=discover) as search:
             controller.initial_search()
-            self.assertEqual(len(self.store.rows("papers")), 5)
+            self.assertEqual(len(self.store.rows("papers")), 7)
             candidate = {"id": "candidate-1", "proposal": {"title": "Matched feedback routing", "closest_work_ids": ["batch1-0"]}}
             controller.search_for_candidate(candidate)
-        self.assertEqual(len(self.store.rows("papers")), 7)
+        self.assertEqual(len(self.store.rows("papers")), 9)
         self.assertEqual(search.call_args_list[-1].args[0], "candidate routing counterexamples")
         self.assertEqual(search.call_args_list[-1].kwargs["limit"], 20)
         self.assertIn("candidate", [payload for stage, payload in backend.calls if stage == "plan_search"][-1])

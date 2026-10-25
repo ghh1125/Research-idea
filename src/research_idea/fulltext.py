@@ -29,6 +29,7 @@ ALLOWED_HOSTS = frozenset({
     "proceedings.mlr.press", "proceedings.neurips.cc", "papers.nips.cc", "papers.neurips.cc",
     "ojs.aaai.org", "ijcai.org", "www.ijcai.org", "openaccess.thecvf.com",
     "vldb.org", "www.vldb.org", "dl.acm.org", "ieeexplore.ieee.org",
+    "raw.githubusercontent.com",
 })
 
 
@@ -49,6 +50,11 @@ def validate_pdf_url(url: str) -> str:
             or parsed.username is not None or parsed.password is not None
             or port not in {None, 443} or parsed.fragment):
         raise ValueError("PDF URL must use HTTPS on a supported official host without credentials or custom ports")
+    if parsed.hostname == 'raw.githubusercontent.com' and (
+            parsed.query or not re.fullmatch(
+                r'/mlresearch/v\d+/(?:main|master|gh-pages)/(?:assets/)?[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.pdf',
+                parsed.path)):
+        raise ValueError("GitHub PDF URLs must point to a PMLR mlresearch volume")
     return urlunsplit(("https", parsed.hostname, parsed.path or "/", parsed.query, ""))
 
 

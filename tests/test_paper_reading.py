@@ -190,6 +190,50 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.assertEqual(card_payload['citation_groups']['reported_result_ids'], [])
         self.assertEqual(card_payload['citation_groups']['author_limitation_ids'], [])
 
+    def test_selection_question_and_research_routes_reach_initial_reading(self):
+        paper = source()
+        paper['selection'] = {'reading_question': 'Which information does the router actually use?',
+                              'reason': 'Understand the source mechanism.', 'route_ids': ['information']}
+        self.store.put('papers', paper)
+        route = {'id': 'information', 'question': 'What information is available to the decision?'}
+        self.store.set('search_plans', {'initial': {'research_routes': [route,
+            {'id': 'optimization', 'question': 'How is optimization affected?'}]},
+            'candidate-old': {'research_routes': [{'id': 'information', 'question': 'An old candidate route.'}]}})
+        self.store.set('chat_messages', [{'role': 'user', 'content': 'Keep the original broad research goal.'}])
+        _, backend = self.run_read()
+        reads = [data for stage, data in backend.calls if stage == 'read_section']
+        self.assertEqual(reads[0]['question'], paper['selection']['reading_question'])
+        self.assertEqual(reads[1]['question'], 'What experimental scope is stated in the appendix?')
+        for stage, payload in backend.calls:
+            if stage in {'read_section', 'paper_card'}:
+                self.assertEqual(payload['reading_intent'], {**paper['selection'], 'research_routes': [route]})
+            if stage == 'paper_card':
+                self.assertEqual(payload['user_notes'], ['Keep the original broad research goal.'])
+        # Observations still come from the original source, not the route or user notes.
+        self.assertTrue(all(e['quote'] in paper['text'] for e in self.store.rows('evidence')))
+
+    def test_legacy_paper_without_selection_keeps_neutral_reading(self):
+        _, backend = self.run_read(ReadingBackend(followup=False))
+        read = next(payload for stage, payload in backend.calls if stage == 'read_section')
+        card = next(payload for stage, payload in backend.calls if stage == 'paper_card')
+        self.assertEqual(read['question'], '')
+        self.assertEqual(card['reading_intent'], {'reading_question': '', 'reason': '',
+                                                 'route_ids': [], 'research_routes': []})
+        self.assertEqual(card['user_notes'], [])
+
+    def test_old_selection_keeps_its_route_meaning_after_replanning(self):
+        paper = source()
+        old_route = {'id': 'R1', 'question': 'The earlier source reading question.'}
+        paper['selection'] = {'reading_question': 'Understand the earlier mechanism.',
+                              'route_ids': ['R1'], 'research_routes': [old_route]}
+        self.store.put('papers', paper)
+        self.store.set('search_plans', {'initial': {'research_routes': [
+            {'id': 'R1', 'question': 'A different route that happens to reuse the ID.'}]}})
+        _, backend = self.run_read(ReadingBackend(followup=False))
+        for stage, payload in backend.calls:
+            if stage in {'read_section', 'paper_card'}:
+                self.assertEqual(payload['reading_intent']['research_routes'], [old_route])
+
     def test_resume_replays_followup_without_new_backend_calls(self):
         self.run_read()
         before = self.store.get("paper_cards")
@@ -287,7 +331,7 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.run_read()
         _, machine = export_report(self.store, self.store.project)
         report = json.loads(machine.read_text())
-        self.assertEqual(report["schema_version"], 10)
+        self.assertEqual(report["schema_version"], 11)
         card_path = machine.parent / report["paper_card_files"]["p1"]
         markdown = card_path.read_text()
         self.assertIn("九维分析框架", markdown)

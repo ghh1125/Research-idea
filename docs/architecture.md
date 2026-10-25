@@ -19,9 +19,9 @@ CLI 使用单进程控制器，SQLite 保存项目状态，文件保存 idea 报
 
 ```mermaid
 flowchart TD
-    A["研究意图与约束"] --> S["英文检索规划与搜索"]
-    S --> T["标题/摘要语义筛选，选择精读对象"]
-    T --> B["正文读取与论文分析卡"]
+    A["研究意图与约束"] --> S["按不同原因与已有思路规划研究路线和查询"]
+    S --> T["按路线组织候选池，语义筛选互补论文"]
+    T --> B["带着路线与阅读问题读取正文，形成分析卡"]
     B --> Q["主张与实验支持审计"]
     Q --> C["map：推导问题与动机，选择并保存理由"]
     C --> D["propose：围绕已选问题构思 idea、贡献与可行路径"]
@@ -44,7 +44,7 @@ flowchart TD
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 10`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 11`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -64,15 +64,15 @@ flowchart TD
 
 第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；仍是两次调用。
 
-`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要的新问题，说明现有主要思路难以跨过的障碍；`emerging_problem` 从已有方法解决原问题的过程、使用或发展中，推导新产生的重要困难。两类均允许大胆合理猜想，`basis` 记录依据性质。`map` 形成问题、`bottleneck_hypothesis`、意义、已有回应和 `research_need`，并输出 `selected_problems[{opportunity_id, selection_reason}]`。完整问题池保存在 `problem_model`；交给 `propose` 的副本只含已选子集及其选择理由。方法与基本可行路径在 `propose` 才形成，不让容易实现的操作反过来决定选题。程序检查结构和引用，不用评分判定价值，也不要求固定论文数或全领域无解。
+`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要的新问题，说明现有主要思路难以跨过的障碍；`emerging_problem` 从已有方法解决原问题的过程、使用或发展中，推导新产生的重要困难。两类均允许大胆合理猜想，`basis` 记录依据性质。`map` 接收 `discovery_plan` 与各路线实际覆盖，形成问题、`bottleneck_hypothesis`、意义、已有回应和 `research_need`，以 `research_route_ids` 保留路线关联，并输出 `selected_problems[{opportunity_id, selection_reason}]`。完整问题池保存在 `problem_model`；交给 `propose` 的副本只含已选子集及其选择理由。方法与基本可行路径在 `propose` 才形成，不让容易实现的操作反过来决定选题。程序检查结构和引用，不用评分判定价值，也不要求固定论文数或全领域无解。
 
-共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器将切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need` 加上选择理由保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
+共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器将切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、`research_route_ids` 及选择理由保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择或路线，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
 
 `propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 
 推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
 
-第一阶段的 `Controller.ideation_context()` 在完整上下文的副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns.discriminating_test`。方法、原论文实验、结果、条件、疑点和全部原文证据保留；原卡存储不变。`map/propose` 使用同一视图，避免单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
+第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns.discriminating_test`。这些来源的方法、原论文实验、结果、条件、疑点和原文引用保留；原卡与证据存储不变。`map/propose` 使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
 
 `TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
 
@@ -133,7 +133,9 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 ## 主张审计与检索规划
 
-`plan_search` 将中文/英文意图转成最多三条英文关键词查询，包含目的与理由；`search_planning.py` 校验结构、长度、重复和容量，计划不是检索证据。初始检索保留约一半文献容量用于候选后的机制定向查询，所有调用计入统一预算。
+初期 `plan_search` 先输出 `research_routes[{id, question, why_relevant}]`，从用户原目标的不同可能原因或已有思路探索问题，通常三条、最多四条；最多六条英文查询通过 `route_ids` 关联路线。检索账本保存真实查询与路线的召回出处，候选元数据按路线交错取最多四十篇，再由原有 `screen_papers` 调用按相关性选择互补代表。选读项保存 `reading_question` 与 `route_ids`，两者进入 `read_section`、`paper_card`，路线覆盖进入后续问题建模。没有召回或未选读的路线按实际记录，不强行填满，也不据此断言文献不存在。
+
+初期阅读优先使用约三分之二的总文献额度，剩余额度供第二阶段补充。第二阶段仍先推导两个 `design_axes`，再用最多三条查询探索实现；它们与初期研究路线的职责分开。`search_planning.py` 校验结构、关联、长度、重复和容量，所有调用计入统一预算；这些改动沿用现有规划、选文、阅读和构思任务，不增加模型评分或流程调用。
 
 `audit_claims` 每篇全文最多审计四项主张，保存作者主张、测试范围、结果证据、可支持结论、限制、混杂、缺少的对照和下一步阅读。`claims.py` 重新检查同篇来源哈希和引文位置；摘要、作者主张、无实验条件的引用不能算实验证据。不支持的判断降为 `insufficient_evidence`。结果的来源分类和语义支持仍由模型判断，因此不能把结构校验当作科学证明。
 
@@ -160,7 +162,7 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 | conclusion_boundary | 能支持多强的结论，哪些范围未测试？ |
 | idea_relevance | 对当前问题有什么启发，如何证伪？ |
 
-细节列表区分核心模块、实验—主张链、作者局限、分析疑点和研究机会。模型提出最多三个具体阅读问题，必须引用已有章节或图表 ID；控制器默认最多补读两片未读文本，再综合一次，之后保留未解决问题。不执行无限阅读、代码检查或实验。
+细节列表区分核心模块、实验—主张链、作者局限、分析疑点和研究机会。选文时的具体阅读问题与路线随正文片段和分析卡任务传递；模型可另外提出最多三个定向补读问题，必须引用已有章节或图表 ID。控制器默认最多补读两片未读文本，再综合一次，之后保留未解决问题。不执行无限阅读、代码检查或实验。
 
 读取后新增证据会使旧分析卡失效；来源和 skill 变化会改变缓存身份。预算中断时，报告只展示已完成的阅读范围与当前有效分析，恢复时复用成功任务。全部文本提供给模型也不等于全面理解；图表标题的文本覆盖不等于视觉验证。
 

@@ -18,7 +18,7 @@ from .local_skills import load_selected_skills, builtin_skill_paths, BUILTIN_NAM
 from .claims import assess_claims, current_claim_audits
 from .search_planning import normalize_search_plan, normalize_design_axes, check_axis_links
 from .search_scope import config_scope
-from .selection import rank_metadata
+from .selection import rank_metadata, discovery_pool
 from .paper_reading import read_paper, current_cards
 from .retries import with_retries
 from .research_context import compact_research_context, problem_discovery_context
@@ -331,7 +331,7 @@ class Controller:
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
                 "paper_cards": list(current_cards(papers, evidence, self.store.get("paper_cards", {}), self.store.get("paper_readings", {})).values()),
                 "paper_claim_audits": list(current_claim_audits(papers, evidence, self.store.get("paper_claim_audits", {})).values()),
-                "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "conference_year", "edition_basis", "conference_url", "content_kind", "full_text_error", "full_text_url", "full_text_origin")} for p in papers],
+                "papers": [{k: p.get(k) for k in ("id", "title", "url", "year", "venue", "conference_year", "edition_basis", "conference_url", "content_kind", "full_text_error", "full_text_url", "full_text_origin", "selection", "discovery_provenance")} for p in papers],
                 "retrieval_gaps": [entry for entry in self.store.get("full_text_ledger", {}).values()
                                    if entry.get("status") != "completed" and entry.get('paper_id') in unresolved_sources],
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
@@ -341,9 +341,40 @@ class Controller:
         return [m['content'][:3000] for m in self.store.get('chat_messages', [])
                 if m.get('role') == 'user'][-8:]
 
+    def initial_paper_ids(self):
+        """Recover discovery sources without adopting a previous idea's design corpus."""
+        saved = self.store.get('initial_selection_paper_ids')
+        if saved is None:
+            saved = (self.store.get('cohort') or {}).get('initial_paper_ids', [])
+        design_ids = set(self.store.get('design_paper_ids', [])) | {
+            pid for candidate in self.store.rows('candidates')
+            for pid in candidate.get('retrieved_work_ids', [])}
+        papers = self.store.rows('papers')
+        manual_or_discovery = [paper['id'] for paper in papers
+            if paper['id'] not in design_ids and paper.get('selection', {}).get('phase') != 'design']
+        present = {paper['id'] for paper in papers}
+        return list(dict.fromkeys(pid for pid in list(saved) + manual_or_discovery if pid in present))
+
     def ideation_context(self):
-        """Start both first-phase tasks from the agenda and source analyses."""
-        return problem_discovery_context(self.context())
+        """Use discovery readings, not explanations generated for an older idea."""
+        context = problem_discovery_context(self.context(), selected_ids=self.initial_paper_ids())
+        context['discovery_plan'] = self.store.get('search_plans', {}).get('initial', {})
+        queries = {item['query'] for item in context['discovery_plan'].get('queries', [])}
+        context['search_coverage'] = [entry for entry in context.get('search_coverage', [])
+                                      if entry.get('query') in queries]
+        papers = {paper['id']: paper for paper in context['papers']}
+        full_text_ids = {pid for pid, paper in papers.items() if paper.get('content_kind') == 'full_text'}
+        read_ids = {item['paper_id'] for item in context['evidence']
+                    if item.get('source_kind') == 'full_text'}
+        context['discovery_coverage'] = []
+        for coverage in self.store.get('discovery_coverage', []):
+            selected = coverage['selected_paper_ids']
+            context['discovery_coverage'].append({**coverage,
+                'full_text_paper_ids': [pid for pid in selected if pid in full_text_ids],
+                'full_text_read_paper_ids': [pid for pid in selected if pid in full_text_ids & read_ids],
+                'abstract_only_paper_ids': [pid for pid in selected if pid in papers and pid not in full_text_ids],
+                'retrieval_failed_paper_ids': [pid for pid in selected if papers.get(pid, {}).get('full_text_error')]})
+        return context
 
     def reading_papers(self):
         papers = self.store.rows('papers')
@@ -470,7 +501,7 @@ class Controller:
         self.store.set("paper_claim_audits", audits)
 
     def plan_search(self, candidate=None):
-        payload = {"topic": self.store.get("topic"), "constraints": self.config["constraints"],
+        payload = {"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
                    "venues": self.config.get("search_venues", []), "source": self.config["search_source"],
                    "filters": config_scope(self.config, 'design' if candidate else 'strategy'),
                    "search_windows": {p: config_scope(self.config, p) for p in ('strategy', 'novelty')},
@@ -490,6 +521,40 @@ class Controller:
         plan = normalizer(result)
         key = candidate["id"] if candidate else "initial"
         plans = self.store.get("search_plans", {})
+        if candidate is None:
+            previous = plans.get('initial')
+            previous_key = digest(previous) if previous else None
+            query_key = lambda value: ' '.join(value.split()).casefold()
+            current_links = {query_key(query['query']): list(query.get('route_ids', []))
+                             for query in plan.get('queries', [])}
+            for paper in self.store.rows('papers'):
+                changed = False
+                selection = paper.get('selection')
+                if selection and selection.get('phase') != 'design' and previous:
+                    if not selection.get('discovery_plan_key'):
+                        selection['discovery_plan_key'] = previous_key
+                        selection['research_routes'] = [dict(route) for route in previous.get('research_routes', [])]
+                        changed = True
+                    elif selection['discovery_plan_key'] == previous_key and 'research_routes' not in selection:
+                        selection['research_routes'] = [dict(route) for route in previous.get('research_routes', [])]
+                        changed = True
+                # Queries remain a retrieval history. Their route links describe
+                # the current plan; historical reading roles live in selection.
+                if paper.get('discovery_provenance'):
+                    origins = {query_key(origin['query']): {'query': origin['query'],
+                        'route_ids': list(current_links.get(query_key(origin['query']), []))}
+                        for origin in paper['discovery_provenance']}
+                    current = list(origins.values())
+                    if current != paper['discovery_provenance']:
+                        paper['discovery_provenance'] = current
+                        changed = True
+                if changed:
+                    self.store.put('papers', paper)
+            if previous:
+                coverage = self.store.get('discovery_coverage', [])
+                for entry in coverage:
+                    entry.setdefault('discovery_plan_key', previous_key)
+                self.store.set('discovery_coverage', coverage)
         plans[key] = plan
         self.store.set("search_plans", plans)
         return plan
@@ -498,17 +563,63 @@ class Controller:
         if not self.config["auto_search"] or self.config["backend"] == "demo":
             return
         scope = config_scope(self.config)
-        self.progress(f"[strategy] 寻找方法与值得研究的问题 · {scope['since']} → {scope['until']}")
-        # Reserve corpus capacity for hypothesis-specific searches after brainstorming.
-        target = max(1, self.config["max_papers"] // 2)
-        if len(self.store.rows("papers")) >= target:
+        guidance = [{key: skill[key] for key in ('path', 'sha256', 'stages')}
+                    for skill in self.skills if 'plan_search' in skill['stages']
+                    and skill['name'] != 'research-idea-build-mechanism']
+        input_key = digest({
+            'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
+            'constraints': self.config['constraints'], 'source': self.config['search_source'],
+            'venues': self.config.get('search_venues', []), 'strategy_scope': scope,
+            'novelty_scope': config_scope(self.config, 'novelty'),
+            'plan_version': stage_version('plan_search'), 'guidance': guidance,
+            'backend': {key: self.config.get(key) for key in (
+                'backend', 'model', 'reasoning_effort', 'api_provider', 'base_url', 'codex_bin', 'codex_profile')},
+            'recall': self.config.get('search_results_per_query', 20),
+            # An explicitly increased reading limit can use the newly available
+            # allowance; consumed calls/time never make an input look new.
+            'reading_limit': self.config['max_papers'],
+        })
+        if self.store.get('discovery_input_key') == input_key:
             return
+        self.progress(f"[strategy] 按当前研究要求探索文献 · {scope['since']} → {scope['until']}")
+        # The main deliverable is the idea: give discovery about two thirds
+        # of the reading budget, leaving the rest for technical references.
+        target = min(self.config['max_papers'], (2 * self.config['max_papers'] + 2) // 3)
+        initial_ids = self.initial_paper_ids()
+        self.store.set('initial_selection_paper_ids', initial_ids)
+        paper_ids = {paper['id'] for paper in self.store.rows('papers')}
+        pending = self.store.get('discovery_refresh') or {}
+        if pending.get('input_key') != input_key:
+            pending = {'input_key': input_key, 'starting_paper_ids': sorted(paper_ids),
+                       'max_new': min(target, max(0, self.config['max_papers'] - len(paper_ids)))}
+            self.store.set('discovery_refresh', pending)
         plan = self.plan_search()
         keys = []
         for query in plan["queries"]:
             purpose = 'novelty' if query['purpose'] == 'motivation' else 'strategy'
             keys.append(self.search_once(query["query"], query["rationale"], max_new=0, purpose=purpose))
-        self.select_search_results(keys, target - len(self.store.rows("papers")))
+        paper_ids = {paper['id'] for paper in self.store.rows('papers')}
+        added = len(paper_ids - set(pending['starting_paper_ids']))
+        limit = min(max(0, pending['max_new'] - added), max(0, self.config['max_papers'] - len(paper_ids)))
+        if not limit:
+            self.progress('[search] 本次继续发现标题与摘要线索，不增加精读。'
+                          f"本项目已纳入 {len(paper_ids)}/{self.config['max_papers']} 篇；"
+                          '如需增加阅读，可调整 /budget max_papers，或 /new 开始新研究。')
+        previous_audit = self.store.get('paper_selections', [])[-1:]
+        selected = False
+        try:
+            self.select_search_results(keys, limit)
+            selected = True
+        finally:
+            # Selection is journaled before full-text downloads. An interrupted
+            # download should resume those sources, not allocate another batch.
+            audit = self.store.get('paper_selections', [])[-1:]
+            selected = selected or bool(audit != previous_audit and audit
+                and audit[0].get('phase') == 'ideation'
+                and audit[0].get('queries') == [query['query'] for query in plan['queries']])
+            if selected:
+                self.store.set('discovery_input_key', input_key)
+                self.store.set('discovery_refresh', None)
 
     def search_for_candidate(self, candidate):
         if not self.config["auto_search"] or self.config["backend"] == "demo":
@@ -645,7 +756,20 @@ class Controller:
         known_aliases = {alias for paper in papers for alias in paper.get('aliases', [paper['id']])}
         # Cheap lexical recall bounds the context; one semantic pass avoids
         # spending several full-text calls on a recent but tangential match.
-        pool = [paper for paper in ranked if not known_aliases.intersection(paper['aliases'])][:40]
+        plan = self.store.get('search_plans', {}).get('initial', {}) if candidate is None else {}
+        plan_key = digest(plan) if candidate is None else None
+        query_key = lambda value: ' '.join(value.split()).casefold()
+        current_links = {query_key(query['query']): list(query.get('route_ids', []))
+                         for query in plan.get('queries', [])}
+        if candidate is None:
+            # Recall provenance applies to already-read sources too; only the
+            # new full-text selection is restricted to unseen papers.
+            recalled = {paper['id']: paper for paper in discovery_pool(ranked, entries, plan, limit=len(ranked))}
+            ranked = [recalled[paper['id']] for paper in ranked]
+        available = [paper for paper in ranked if not known_aliases.intersection(paper['aliases'])]
+        pool = discovery_pool(available, entries, plan, limit=40) if candidate is None else available[:40]
+        pooled = {paper['id']: paper for paper in pool}
+        ranked = [pooled.get(paper['id'], paper) for paper in ranked]
         choices = {}
         limit = max(0, min(limit, self.config['max_papers'] - len(papers)))
         metadata_audit = {'attempted': 0, 'enriched': 0, 'pages': []}
@@ -677,7 +801,8 @@ class Controller:
                 'purpose': 'technical_design' if candidate else 'strategy_discovery',
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
-                'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'conference_year', 'publication_date', 'venue')}
+                'discovery_plan': plan,
+                'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'conference_year', 'publication_date', 'venue', 'discovery_provenance')}
                     | {'abstract': (paper.get('abstract') or '')[:1800]} for paper in pool]}
             if candidate and candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
@@ -685,12 +810,16 @@ class Controller:
                 payload['design_search_plan'] = candidate.get('design_search_plan', {})
                 payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
             allowed = {paper['id'] for paper in pool}
+            route_ids = {route['id'] for route in plan.get('research_routes', [])}
             def check_selection(value):
                 selected_ids = [item['paper_id'] for item in value['selected']]
                 if len(selected_ids) > limit or len(set(selected_ids)) != len(selected_ids):
                     raise ValueError('Select unique papers within the reading limit')
                 if not set(selected_ids) <= allowed:
                     raise ValueError('Select only paper IDs from the supplied metadata pool')
+                if any(len(set(item['route_ids'])) != len(item['route_ids']) or not set(item['route_ids']) <= route_ids
+                       for item in value['selected']):
+                    raise ValueError('Link selected papers only to supplied research routes')
                 if any(not item['reason'].strip() or not item['reading_question'].strip()
                        for item in value['selected']):
                     raise ValueError('Each selection needs a relevance reason and reading question')
@@ -703,12 +832,28 @@ class Controller:
         for paper in prioritized:
             if paper['id'] in choices:
                 paper = dict(paper, selection={**paper['selection'], **choices[paper['id']],
-                    'basis': 'model title/abstract screening; full-text question still to be read'})
+                    'basis': 'model title/abstract screening; full-text question still to be read',
+                    'phase': 'design' if candidate else 'ideation'})
+                if candidate is None:
+                    paper['selection'].update(discovery_plan_key=plan_key,
+                        research_routes=[dict(route) for route in plan.get('research_routes', [])])
             aliases = set(paper['aliases'])
             existing = next((p for p in papers if aliases.intersection(p.get('aliases', [p['id']]))), None)
             if existing:
                 merged = deduplicate([existing, paper])[0]
                 merged['id'] = existing['id']
+                # A metadata refresh must not erase why an already selected
+                # source was read or change its discovery/design provenance.
+                merged['selection'] = {**paper.get('selection', {}), **existing.get('selection', {})}
+                origins = existing.get('discovery_provenance', []) + paper.get('discovery_provenance', [])
+                if origins:
+                    if candidate is None:
+                        merged['discovery_provenance'] = list({query_key(origin['query']): {
+                            'query': origin['query'],
+                            'route_ids': list(current_links.get(query_key(origin['query']), []))}
+                            for origin in origins}.values())
+                    else:
+                        merged['discovery_provenance'] = list({digest(origin): origin for origin in origins}.values())
                 selected.add(existing['id'])
                 if merged != existing:
                     self.store.put('papers', merged)
@@ -718,7 +863,25 @@ class Controller:
                 papers.append(paper)
                 selected.add(paper['id'])
                 added += 1
-        audit = {'time': now(), 'queries': [entry['query'] for entry in entries],
+        previous_coverage = {entry['route_id']: entry for entry in self.store.get('discovery_coverage', [])
+                             if entry.get('discovery_plan_key') == plan_key}
+        initial_ids = set(self.initial_paper_ids()) if candidate is None else set()
+        initial_papers = [paper for paper in self.store.rows('papers') if paper['id'] in initial_ids]
+        route_coverage = [
+            {'route_id': route['id'], 'question': route['question'], 'discovery_plan_key': plan_key,
+             'recalled_paper_ids': list(dict.fromkeys(previous_coverage.get(route['id'], {}).get('recalled_paper_ids', []) +
+                 [paper['id'] for paper in ranked
+                 if any(route['id'] in origin.get('route_ids', []) for origin in paper.get('discovery_provenance', []))])),
+             'selected_paper_ids': [paper['id'] for paper in initial_papers
+                 if paper.get('selection', {}).get('discovery_plan_key') == plan_key
+                 and route['id'] in paper.get('selection', {}).get('route_ids', [])]}
+            for route in plan.get('research_routes', [])]
+        if candidate is None:
+            self.store.set('initial_selection_paper_ids', list(dict.fromkeys(
+                self.initial_paper_ids() + [pid for pid in choices if pid in selected])))
+            self.store.set('discovery_coverage', route_coverage)
+        audit = {'time': now(), 'phase': 'design' if candidate else 'ideation',
+                 'route_coverage': route_coverage, 'queries': [entry['query'] for entry in entries],
                  'screened': len(ranked), 'selected_ids': sorted(selected), 'limit': limit,
                  'metadata_enrichment': metadata_audit,
                  'semantic_pool_ids': [paper['id'] for paper in pool], 'choices': list(choices.values()),
@@ -732,7 +895,7 @@ class Controller:
             if checkpoint_design:
                 candidate['design_search_complete'] = True
             self.store.put('candidates', candidate)
-        self.progress(f"[search] 标题/摘要池 {len(ranked)} 篇；围绕研究问题筛选，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
+        self.progress(f"[search] 检索候选 {len(ranked)} 篇；本次比较标题/摘要 {len(pool) if limit else 0} 篇，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
         for paper in papers:
             if paper['id'] in selected:
                 self.progress(f"[paper] {paper_heading(paper)}\n{paper.get('url', '')}")
@@ -804,6 +967,7 @@ class Controller:
             if any(not part.strip() for part in value['research_frame'].values()):
                 raise ValueError('Connect the user goal, synthesized literature logic, research question and source scope')
             opportunities = value['opportunities']
+            route_ids = {route['id'] for route in context.get('discovery_plan', {}).get('research_routes', [])}
             if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:
                 raise ValueError('Problem origins must match the unresolved needs or emerging problems in the research directions')
             if len(opportunities) > 4:
@@ -811,8 +975,10 @@ class Controller:
             ids = set()
             for opportunity in opportunities:
                 if any(not item.strip() for key, item in opportunity.items()
-                       if key not in {'evidence_ids', 'closest_work_ids'}):
+                       if key not in {'evidence_ids', 'closest_work_ids', 'research_route_ids'}):
                     raise ValueError('Explain how the literature leads to each research direction, its value and plausible path')
+                if not set(opportunity['research_route_ids']) <= route_ids:
+                    raise ValueError('Research questions must link to actual discovery routes or leave the link empty')
                 if opportunity['id'] in ids:
                     raise ValueError('Research direction IDs must be unique')
                 ids.add(opportunity['id'])
@@ -887,13 +1053,16 @@ class Controller:
             cohort = self.store.get("cohort")
             cohort_key = digest([PROMPT_VERSION, self.skill_key, self.reading_settings, self.store.get("topic"), self.user_notes(), self.config["constraints"], self.config["max_candidates"]])
             cohort_key = digest([cohort_key, config_scope(self.config), config_scope(self.config, 'novelty')])
+            cohort_key = digest([cohort_key, {key: self.config.get(key) for key in (
+                'max_papers', 'search_results_per_query', 'search_source', 'search_venues',
+                'backend', 'model', 'api_provider', 'base_url', 'codex_bin', 'codex_profile')}])
             if self.config.get("reasoning_effort"):
                 cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
             continuing = bool(cohort and cohort.get('key') == cohort_key)
             if not continuing:
                 self.progress('[concept] 第一阶段 · 文献构思：理解背景与问题，比较已有动机和贡献，提出 idea。')
                 self.initial_search()
-            initial_ids = cohort.get('initial_paper_ids') if continuing else None
+            initial_ids = self.initial_paper_ids()
             if not self.store.rows("papers"):
                 self.progress('[analysis] 先提出可检验的问题与基本思路，第二阶段围绕它提供技术参考。')
             self.retrieve_full_texts(initial_ids)
@@ -908,9 +1077,15 @@ class Controller:
             if not cohort or cohort.get("key") != cohort_key:
                 proposed = self.form_ideas()
                 if self.store.rows("candidates"):
+                    # Older papers lack selection.phase. Preserve their design
+                    # provenance before archiving the only records that know it.
+                    design_ids = set(self.store.get('design_paper_ids', [])) | {
+                        pid for candidate in self.store.rows('candidates')
+                        for pid in candidate.get('retrieved_work_ids', [])}
+                    self.store.set('design_paper_ids', sorted(design_ids))
                     self.store.event("cohort_archived", {"candidates": self.store.rows("candidates")})
                 cohort = {"key": cohort_key, "proposed": proposed, "created_at": now(),
-                          'initial_paper_ids': [p['id'] for p in self.reading_papers()]}
+                          'initial_paper_ids': self.initial_paper_ids()}
                 self.store.set("cohort", cohort)
                 self.store.set("no_candidate_reason", proposed["no_candidate_reason"])
                 cohort_created = True
@@ -928,7 +1103,7 @@ class Controller:
                 if selected and 'selected_opportunity' not in candidate:
                     candidate['selected_opportunity'] = {key: selected[key]
                         for key in ('id', 'question', 'problem_origin', 'basis', 'derivation',
-                                    'prior_art_delta', 'why_it_matters', 'bottleneck_hypothesis', 'research_need')
+                                    'prior_art_delta', 'why_it_matters', 'bottleneck_hypothesis', 'research_need', 'research_route_ids')
                         if key in selected}
                     decision = next((decision for decision in self.store.get('problem_model', {}).get('selected_problems', [])
                                      if decision['opportunity_id'] == item['opportunity_id']), None)

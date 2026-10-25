@@ -56,14 +56,55 @@ def compact_research_context(context):
     return result
 
 
-def problem_discovery_context(context):
+def _references_removed_evidence(value, removed_ids):
+    if isinstance(value, dict):
+        return any(_references_removed_evidence(child, removed_ids) for child in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_references_removed_evidence(child, removed_ids) for child in value)
+    return isinstance(value, str) and value in removed_ids
+
+
+def problem_discovery_context(context, selected_ids=None):
     """Give ideation source analysis without the reader's ready-made proposals.
 
     Paper-local suggestions remain in the stored cards and technical-design
     context. Removing them here changes the starting point of map/propose, not
     the underlying evidence or the user's explicitly chosen research scope.
+    An explicit cohort also excludes candidate-directed readings and analyses
+    that depend on them. Neutral source quotes remain available independently.
     """
     result = deepcopy(context)
+    if selected_ids is not None:
+        selected_ids = set(selected_ids)
+        original_evidence = result.get('evidence', [])
+        result['evidence'] = [item for item in original_evidence
+                              if item.get('paper_id') in selected_ids
+                              and item.get('extraction_stage') != 'inspect_source']
+        retained_refs = {item['id'] for item in result['evidence']}
+        removed_refs = {item['id'] for item in original_evidence} - retained_refs
+        result['papers'] = [paper for paper in result.get('papers', [])
+                            if paper.get('id') in selected_ids]
+        for field in ('paper_cards', 'paper_claim_audits'):
+            # A derived analysis can blend neutral and candidate-directed
+            # interpretations. Do not silently relabel that analysis or remove
+            # only its citations; leave it intact in storage, outside this view.
+            result[field] = [item for item in result.get(field, [])
+                             if item.get('paper_id') in selected_ids
+                             and not _references_removed_evidence(item, removed_refs)]
+        if isinstance(result.get('quote_gaps'), dict):
+            result['quote_gaps'] = {key: gap for key, gap in result['quote_gaps'].items()
+                                    if gap.get('paper_id') in selected_ids}
+        elif 'quote_gaps' in result:
+            result['quote_gaps'] = [gap for gap in result['quote_gaps']
+                                    if gap.get('paper_id') in selected_ids]
+        if 'retrieval_gaps' in result:
+            result['retrieval_gaps'] = [gap for gap in result['retrieval_gaps']
+                                        if gap.get('paper_id') in selected_ids]
+        result.setdefault('context_summary', {})['discovery_sources'] = {
+            'paper_ids': sorted(selected_ids),
+            'evidence_records': len(result['evidence']),
+            'scope': 'Initial discovery cohort; candidate-directed readings remain in storage for technical design.',
+        }
     for card in result.get('paper_cards', []):
         card.pop('opportunities', None)
         if 'framework' in card:

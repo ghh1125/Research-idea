@@ -97,11 +97,9 @@ def parse_index(html, url, venue, year):
             href = next((urljoin(url, n.attrs['href']) for n in contents if n.tag == 'a' and n.text().strip() == 'abs'), '')
             pdf = next((urljoin(url, n.attrs['href']) for n in contents if n.tag == 'a' and n.text().strip() == 'Download PDF'), '')
             if name and href and urlparse(href).hostname == 'proceedings.mlr.press':
-                # PMLR sometimes links GitHub mirrors; its own PDF path is also
-                # a public official distribution and works with the downloader.
-                if urlparse(pdf).hostname == 'raw.githubusercontent.com':
-                    slug = urlparse(href).path.rsplit('/', 1)[-1].removesuffix('.html')
-                    pdf = urljoin(url, slug + '/' + slug + '.pdf')
+                # Keep the publisher's actual download link. Recent volumes
+                # host PDFs in mlresearch repositories, not at a mirrored path
+                # under proceedings.mlr.press.
                 records.append({'id': href, 'url': href, 'title': name, 'pdf_url': pdf})
     elif venue == 'NeurIPS':
         if 'Main Conference' not in html and ('Creative AI' in html or 'Datasets and Benchmarks' in title):
@@ -227,6 +225,48 @@ def discover_proceedings(query, venues, limit, deadline, scope, coverage):
     records = [p for p in records if exclusion_reason(p, scope, 'official_proceedings', verified_venue=True) is None]
     ranked = rank_metadata(deduplicate(records), [query])
     return [p for venue in requested for p in [r for r in ranked if r['venue'] == venue and r['selection']['relevance'] > 0][:limit]]
+
+
+def pmlr_landing_page(paper):
+    """Find a supplied single-paper PMLR page without inventing a URL."""
+    urls = [paper.get('url'), paper.get('conference_url')]
+    urls.extend(location.get('landing_page_url') for location in paper.get('locations') or []
+                if isinstance(location, dict))
+    for url in urls:
+        if not isinstance(url, str):
+            continue
+        try:
+            parsed = urlparse(url)
+        except ValueError:
+            continue
+        if (parsed.scheme == 'https' and parsed.netloc == 'proceedings.mlr.press'
+                and not parsed.query and not parsed.fragment
+                and re.fullmatch(r'/v\d+/[A-Za-z0-9_-]+\.html', parsed.path)):
+            return url
+    return None
+
+
+def resolve_pmlr_pdf(paper, timeout_s=5):
+    """Recover stale metadata from the official page, without changing identity."""
+    from .fulltext import validate_pdf_url
+    from .literature import _request_bytes
+    page = pmlr_landing_page(paper)
+    if not page:
+        return None
+    html = _request_bytes(page, timeout_s).decode('utf-8')
+    nodes = list(Document(html).root.walk())
+    links = [node.attrs.get('content', '') for node in nodes
+             if node.tag == 'meta' and node.attrs.get('name', '').lower() == 'citation_pdf_url']
+    links.extend(node.attrs.get('href', '') for node in nodes if node.tag == 'a'
+                 and node.text().strip().lower() == 'download pdf')
+    for link in links:
+        try:
+            pdf = validate_pdf_url(urljoin(page, link))
+        except ValueError:
+            continue
+        if pdf.lower().endswith('.pdf') and pdf != paper.get('pdf_url'):
+            return dict(paper, pdf_url=pdf, pdf_url_source=page)
+    return None
 
 
 def enrich_selected(paper, timeout_s=15):

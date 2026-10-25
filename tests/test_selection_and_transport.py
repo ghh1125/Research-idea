@@ -1,3 +1,4 @@
+import copy
 import json
 from datetime import date
 from pathlib import Path
@@ -5,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from research_idea.selection import rank_metadata
+from research_idea.selection import discovery_pool, rank_metadata
 from research_idea.retrieval_transport import SESSION, request_with_policy, retry_seconds
-from research_idea.literature import LiteratureError, normalize_paper
+from research_idea.literature import LiteratureError, deduplicate, normalize_paper
 from research_idea.proceedings import parse_index, enrich_selected
 from research_idea.search_scope import config_scope, months_before, exclusion_reason, AI_VENUES
 from research_idea.config import _validated_settings
@@ -30,6 +31,66 @@ class SelectionTests(unittest.TestCase):
         rows = rank_metadata([self.paper('p', 'Existing method', '')], ['existing method'])
         self.assertNotIn('novelty', rows[0]['selection'])
         self.assertIn('metadata only', rows[0]['selection']['basis'])
+
+    def test_discovery_pool_keeps_other_routes_when_one_has_many_new_matches(self):
+        routes = [{'id': name, 'question': name, 'why_relevant': 'A separate line of inquiry.'}
+                  for name in ('common', 'alternative', 'boundary')]
+        queries = [{'query': name + ' model', 'route_ids': [name]} for name in ('common', 'alternative', 'boundary')]
+        entries = [{'query': query['query'], 'metadata': [
+            self.paper(f'{index}-{number}', query['query'], '2026-10-20' if index == 0 else '2026-01-01')
+            for number in range(50 if index == 0 else 2)]}
+            for index, query in enumerate(queries)]
+        records = deduplicate([paper for entry in entries for paper in entry['metadata']])
+        before = copy.deepcopy((records, entries))
+        pool = discovery_pool(records, entries, {'research_routes': routes, 'queries': queries})
+        self.assertEqual(len(pool), 40)
+        self.assertEqual([paper['discovery_provenance'][0]['route_ids'] for paper in pool[:3]],
+                         [['common'], ['alternative'], ['boundary']])
+        self.assertEqual(sum(p['id'].startswith('1-') for p in pool), 2)
+        self.assertEqual(sum(p['id'].startswith('2-') for p in pool), 2)
+        self.assertTrue(all('relevance' in paper['selection'] for paper in pool))
+        self.assertEqual((records, entries), before)
+
+    def test_discovery_provenance_joins_aliases_and_keeps_all_actual_queries(self):
+        first = dict(self.paper('preprint', 'Shared method', '2026-01-01'), aliases=['preprint', 'shared-doi'])
+        second = dict(self.paper('conference', 'Shared method', '2026-09-01'), aliases=['conference', 'shared-doi'])
+        records = deduplicate([first, second])
+        entries = [{'query': 'first question', 'metadata': [first]},
+                   {'query': 'second question', 'metadata': [second]}]
+        plan = {'research_routes': [{'id': 'a'}, {'id': 'b'}],
+                'queries': [{'query': 'first question', 'route_ids': ['a']},
+                            {'query': 'second question', 'route_ids': ['b']}]}
+        pool = discovery_pool(records, entries, plan)
+        self.assertEqual(len(pool), 1)
+        self.assertEqual(pool[0]['discovery_provenance'], [
+            {'query': 'first question', 'route_ids': ['a']},
+            {'query': 'second question', 'route_ids': ['b']}])
+
+    def test_lexical_match_does_not_invent_query_or_route_provenance(self):
+        paper = self.paper('p', 'beta retrieval', '2026-10-01')
+        entries = [{'query': 'alpha inquiry', 'metadata': [paper]},
+                   {'query': 'beta retrieval', 'metadata': []}]
+        plan = {'research_routes': [{'id': 'a'}, {'id': 'b'}],
+                'queries': [{'query': 'alpha inquiry', 'route_ids': ['a']},
+                            {'query': 'beta retrieval', 'route_ids': ['b']}]}
+        self.assertEqual(rank_metadata([paper], [entry['query'] for entry in entries])[0]['selection']['matched_query'],
+                         'beta retrieval')
+        pool = discovery_pool([paper], entries, plan)
+        self.assertEqual(pool[0]['discovery_provenance'], [{'query': 'alpha inquiry', 'route_ids': ['a']}])
+
+    def test_discovery_pool_handles_empty_routes_legacy_plans_and_unmapped_records(self):
+        routed = self.paper('routed', 'alpha inquiry', '2026-01-01')
+        unmapped = self.paper('unmapped', 'alpha inquiry', '2026-10-01')
+        entries = [{'query': 'alpha inquiry', 'metadata': [routed]}]
+        plan = {'research_routes': [{'id': 'empty'}, {'id': 'a'}],
+                'queries': [{'query': 'no results', 'route_ids': ['empty']},
+                            {'query': 'alpha inquiry', 'route_ids': ['a']}]}
+        pool = discovery_pool([routed, unmapped], entries, plan, limit=2)
+        self.assertEqual([p['id'] for p in pool], ['routed', 'unmapped'])
+        self.assertEqual(pool[1]['discovery_provenance'], [])
+        legacy = discovery_pool([routed, unmapped], entries, {'queries': [{'query': 'alpha inquiry'}]})
+        self.assertEqual([p['id'] for p in legacy], ['unmapped', 'routed'])
+        self.assertEqual(discovery_pool([routed], entries, plan, limit=0), [])
 
     def test_windows_follow_calendar_and_handle_month_ends(self):
         self.assertEqual(months_before(date(2024, 8, 31), 6), date(2024, 2, 29))

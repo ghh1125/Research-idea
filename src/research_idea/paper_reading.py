@@ -191,6 +191,17 @@ def read_paper(controller, paper):
     """Replay cached reading, synthesize a card, then perform bounded gap-driven reads."""
     from .controller import make_evidence
     from .evidence_matching import current_quote_gaps
+    selection = paper.get("selection") or {}
+    route_ids = list(selection.get("route_ids") or [])
+    initial_plan = controller.store.get("search_plans", {}).get("initial", {})
+    routes = selection.get("research_routes", initial_plan.get("research_routes", []))
+    reading_intent = {
+        "reading_question": selection.get("reading_question", ""),
+        "reason": selection.get("reason", ""),
+        "route_ids": route_ids,
+        "research_routes": [route for route in routes
+                            if route.get("id") in route_ids],
+    }
     text = source_text(paper)
     source_inventory = inventory(paper)
     parts = chunks(text, controller.config["source_chars"])
@@ -221,7 +232,8 @@ def read_paper(controller, paper):
             "excerpt": excerpt, "source_span": part,
             "sections": [s for s in source_inventory["sections"] if s["start"] < part["end"] and s["end"] > part["start"]],
             "assets": [a for a in source_inventory["assets"] if a["start"] < part["end"] and a["end"] > part["start"]],
-            "question": question, "target_id": target_id, "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
+            "question": question, "reading_intent": reading_intent, "target_id": target_id,
+            "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
         def records(value):
             records = make_evidence(paper, value["observations"], excerpt)
             # Match within this exact span, even when identical wording recurs elsewhere.
@@ -242,13 +254,14 @@ def read_paper(controller, paper):
         save()
 
     for part in initial_chunks(parts, source_inventory, controller.config["max_paper_read_chunks"]):
-        read(part)
+        read(part, reading_intent["reading_question"])
 
     def synthesize():
         if not collected:
             return None
         coverage = with_coverage(source_inventory, read_parts)
         payload = {"paper_id": paper["id"], "title": paper["title"], "topic": controller.store.get("topic"),
+                   "user_notes": controller.user_notes(), "reading_intent": reading_intent,
                    "quote_gaps": [g for g in current_quote_gaps(controller.store).values() if g['paper_id'] == paper['id']],
                    "inventory": coverage, "evidence": list(collected.values()), "followup_attempts": attempts}
         payload['citation_groups'] = {

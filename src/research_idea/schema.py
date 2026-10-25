@@ -20,12 +20,13 @@ def obj(**properties):
 STR = string()
 STRINGS = array(STR)
 DESIGN_AXIS = obj(id=STR, question=STR, why_needed=STR, required_function=STR, search_directions=STRINGS)
+RESEARCH_ROUTE = obj(id=STR, question=STR, why_relevant=STR)
 PLAN_SEARCH = obj(research_question=STR, scope=STR,
-    design_axes=array(DESIGN_AXIS),
-    queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR, axis_ids=STRINGS)),
+    research_routes=array(RESEARCH_ROUTE), design_axes=array(DESIGN_AXIS),
+    queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR, route_ids=STRINGS, axis_ids=STRINGS)),
     assumptions=STRINGS)
 SCREEN_PAPERS = obj(selection_summary=STR,
-    selected=array(obj(paper_id=STR, reason=STR, reading_question=STR)))
+    selected=array(obj(paper_id=STR, reason=STR, reading_question=STR, route_ids=STRINGS)))
 EVIDENCE = obj(observations=array(obj(statement=STR, quote=STR, kind=string(["reported_result", "author_claim", "limitation"]), conditions=STR, source_section=STR)))
 CLAIM_AUDIT = obj(
     paper_id=STR,
@@ -41,7 +42,7 @@ CLAIM_AUDIT = obj(
 PROBLEM_ORIGINS = ('unresolved_need', 'emerging_problem')
 OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), basis=string(["source_observation", "research_hypothesis"]),
     derivation=STR, bottleneck_hypothesis=STR, why_it_matters=STR, prior_art_delta=STR, research_need=STR,
-    evidence_ids=STRINGS, closest_work_ids=STRINGS)
+    evidence_ids=STRINGS, closest_work_ids=STRINGS, research_route_ids=STRINGS)
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
