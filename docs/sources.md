@@ -152,3 +152,16 @@
 
 - [IdeaScientist：独立论文读取上下文](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/runner.py)：读取全文使用独立上下文和输入预算，返回聚焦摘要供后续角色使用。借鉴阶段材料分离；本项目保留原文证据及实验结果，继续用已有分块读取。
 - [ARIS：会话恢复与 Research Contract](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/docs/SESSION_RECOVERY_GUIDE_CN.md)：保存精简项目状态与当前 idea 的聚焦文档，用于恢复工作。借鉴明确研究主线与持久化交接，本项目通过 SQLite 和 `research_frame` 实现，不引入额外审批或角色。
+
+
+## 问题讨论与记忆（2026-10-25）
+
+阅读以下实际实现后，本项目在现有 SQLite 控制器中实现暂停、增量要点和版本衔接，没有增加框架依赖或复制其代码：
+
+- [ARIS run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) 与 [resumable-runs](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/shared-references/resumable-runs.md)：持久记录阶段与产物，从明确的位置恢复。我们借鉴阶段恢复，暂停的确认来自用户 `/continue`，没有引入它的跨模型验收规则。
+- [ARIS idea-creator 的研究 Wiki 写入](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md)：通过程序写入 idea 与论文/缺口的联系，保留已有结果。对应本项目由程序保存问题版本、选择理由与消息出处，而不只提示模型记住。
+- [OpenHands condenser](https://github.com/OpenHands/software-agent-sdk/blob/main/openhands-sdk/openhands/sdk/context/condenser/README.md)：追加事件日志与供模型使用的压缩视图分离。对应完整对话保留，模型使用现行要点、近期对话和待整理原话。
+- [Mem0 prompts.py](https://github.com/mem0ai/mem0/blob/main/mem0/configs/prompts.py)：用户消息提取与 ADD/UPDATE/DELETE/NONE 更新操作。对应带来源消息 ID 的 add/replace/remove；无更新保留原要点，替换项保留历史，不将助手建议当用户决定。
+- [LangGraph interrupts](https://github.com/langchain-ai/docs/blob/main/src/oss/langgraph/interrupts.mdx)：持久暂停并以同一会话恢复。对应问题讨论前后的明确阶段边界；恢复不会重复已完成的研究阶段。
+
+这些工程机制用于避免对话遗忘和重复运行，不是研究结论正确或 idea 有创新性的证明。

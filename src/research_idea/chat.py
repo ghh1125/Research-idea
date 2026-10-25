@@ -19,6 +19,8 @@ from .interactive import read_topic_file
 from .locking import project_lock
 from .store import Store
 from .presentation import STATUS_LABELS
+from .problem_dialogue import WAITING, problem_text
+from .conversation import memory_text
 from .citations import Citations, EVIDENCE_ID
 from .output_paths import output_parent, saved_report
 
@@ -27,7 +29,8 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
 4. /scope ai-recent 使用各会议最新公开一届 + 近期 CS arXiv；/date 调整范围，/papers 路径 导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
-6. 第一阶段 [concept]：背景 → 问题 → 动机 → Idea；完成贡献对照和基本可行性判断。
+6. 调研并比较问题后自动暂停。直接输入意见，/problems 查看当前问题，/memory 查看保留的用户要点。
+   输入 /continue：接着讨论结果构思动机与 Idea，完成贡献对照和基本可行性判断。
    第二阶段 [design]：Idea → Method；提供可借鉴技术、适用理由与改造建议。
 7. 最后 [idea] 显示核心想法、研究价值、工作差异与技术参考；/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
@@ -43,7 +46,9 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /model [模型ID|inherit]  选择模型       /models       本地模型目录
 /reasoning [强度]        选择思考强度   /account      登录方式
 /topic [研究方向]        查看/设置主题  /input 路径   读取多行输入
-/run                    开始/恢复研究  /stop         停止当前任务
+/run                    开始调研/恢复  /stop         停止当前任务
+/continue               按讨论后的问题继续构思 idea
+/problems               查看当前问题  /memory       查看用户要点及出处
 /papers [路径…]          列表/导入论文  /evidence [序号] 查看原文依据
 /status                 研究状态      /report       显示 idea 方案
 /details [on|off]        展开上一步分析；on/off 切换完整过程输出
@@ -57,15 +62,15 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /help                   命令说明      /exit         退出
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 COMMANDS = [line.split()[0] for line in HELP.splitlines() if line.startswith('/')]
-COMMANDS += ['/models', '/account', '/input', '/stop', '/evidence', '/report', '/constraints', '/scope', '/history', '/exit']
+COMMANDS += ['/models', '/account', '/input', '/stop', '/evidence', '/report', '/constraints', '/scope', '/history', '/exit', '/memory']
 COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta',
           'search': 'ansicyan', 'paper': 'ansiblue', 'read': 'ansiblue',
           'evidence': 'ansigreen', 'analysis': 'ansiyellow', 'thinking': 'ansiyellow',
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
-              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan')
-TAG_LABELS = {'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
+              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan', problem='ansicyan')
+TAG_LABELS = {'problem': '问题讨论', 'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
     'review': '方案讨论', 'idea': '研究 Idea', 'concept': 'Idea 构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
@@ -88,7 +93,8 @@ BRAND = r'''             R E S E A R C H
 WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea。
 
 1. 输入方向和补充想法，直接与模型讨论。
-2. 输入 /run：第一阶段 背景 → 问题 → 动机 → Idea；第二阶段 Idea → Method。
+2. 输入 /run：调研文献、比较重要问题后暂停，可以直接讨论和纠正。
+   输入 /continue：按讨论后的问题构思动机与 Idea，再提供技术参考。
 3. 最后得到核心想法、研究价值、与已有工作的差异，以及技术参考。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
@@ -239,7 +245,7 @@ class Chat:
         if not self.busy and status == 'running':
             state = '已有进度'
         footer = (' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else
-                  ' /intro 使用介绍 · /new 新研究 · ' + ('/report 看方案' if status == 'completed' else '/run 开始研究'))
+                  ' /intro 使用介绍 · /new 新研究 · ' + ('/continue 继续构思 · 直接输入可讨论' if status == WAITING else '/report 看方案' if status == 'completed' else '/run 开始研究'))
         context = '' if self.busy else ' · ' + self.project.name
         return [('noreverse bg:#edf3f8 #36485e', fit(f" {spinner}{self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state}{context}") + '\n'),
                 ('noreverse bg:#f3f5f7 #5b6470', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
@@ -321,7 +327,7 @@ class Chat:
             self.base_elapsed = store.get('elapsed_s', 0)
         finally:
             store.close()
-        self.started, self.state = time.monotonic(), '研究中' if mode == 'run' else '答复中'
+        self.started, self.state = time.monotonic(), '研究中' if mode in {'run', 'continue'} else '答复中'
         self.step_started = self.started
         self.job = asyncio.create_task(self.work(mode, message))
         # Let process creation begin before the next prompt or /stop.
@@ -482,6 +488,25 @@ class Chat:
             self.show('system', self.topic(value) or '尚未设置研究主题')
         elif command == '/input':
             return await self.send(read_topic_file(value))
+        elif command == '/continue':
+            self.idle_required()
+            if value:
+                raise ValueError('请先直接发送要补充的意见，再单独输入 /continue。')
+            store = Store(self.project, readonly=True)
+            try:
+                checkpoint = store.get('problem_checkpoint') or {}
+                if checkpoint.get('state') != 'discussing':
+                    raise ValueError('当前没有待讨论的问题。使用 /run 开始或恢复研究。')
+            finally:
+                store.close()
+            await self.start('continue')
+        elif command in {'/problems', '/memory'}:
+            store = Store(self.project, readonly=True)
+            try:
+                self.show('problem' if command == '/problems' else 'system',
+                          problem_text(store) if command == '/problems' else memory_text(store))
+            finally:
+                store.close()
         elif command == '/run':
             if value:
                 self.topic(value)

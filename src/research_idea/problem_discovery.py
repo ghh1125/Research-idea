@@ -58,6 +58,8 @@ def develop_problem_pool(controller, context, check_refs):
     pool = controller.task('explore_problems', context, check_pool)
     controller.store.set('problem_exploration', pool)
     cases = []
+    responses = {}
+    controller.store.set('problem_response_analyses', responses)
     controller.store.set('problem_cases', cases)
     # Every direction gets the same neutral source context. Other cases and any
     # preferred candidate are deliberately absent, including on resume.
@@ -79,10 +81,13 @@ def develop_problem_pool(controller, context, check_refs):
                 raise ValueError('Source observations must cite supplied evidence')
 
         controller.progress(f"[analysis] 深入问题 {index}/{len(pool['problem_seeds'])} · {seed['question']}")
-        case = controller.task('deepen_problem', {
+        result = controller.task('deepen_problem', {
             **context, 'background_logic': pool['background_logic'],
             'approach_landscape': pool['approach_landscape'], 'problem_seed': deepcopy(seed),
-        }, check_case)['opportunity']
+        }, check_case)
+        case = result['opportunity']
+        responses[case['id']] = result['response_analysis']
+        controller.store.set('problem_response_analyses', dict(responses))
         cases.append(case)
         controller.store.set('problem_cases', list(cases))
     return pool, cases

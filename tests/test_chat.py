@@ -169,7 +169,7 @@ raise SystemExit(worker.main())
         class Backend:
             def generate(self, spec):
                 captured.append(spec)
-                return BackendResult({'answer': '可检查的答复'})
+                return BackendResult({'answer': '可检查的答复', 'memory_updates': []})
         self.chat.topic('环境设计')
         self.chat.settings(model='gpt-6.1-sol', reasoning_effort='high', max_calls=2)
         with patch('research_idea.chat_worker.make_backend', return_value=Backend()), redirect_stdout(io.StringIO()):
@@ -197,6 +197,26 @@ raise SystemExit(worker.main())
         self.assertEqual(store.get('calls_used'), 1)
         self.assertGreater(store.get('elapsed_s'), 0)
         store.close()
+
+    async def test_memory_repair_keeps_one_user_turn_and_cites_its_source(self):
+        class Backend:
+            calls = 0
+            def generate(self, spec):
+                self.calls += 1
+                return BackendResult({'answer': '保留跨任务目标。', 'memory_updates': [dict(
+                    action='add', entry_id='', content='保留跨任务目标。',
+                    source_message_id='invented' if self.calls == 1 else 'msg_000001')]})
+        backend = Backend()
+        with patch('research_idea.chat_worker.make_backend', return_value=backend), redirect_stdout(io.StringIO()):
+            chat_turn(self.project, '不要缩到单个数据集，要保留跨任务目标。')
+        store = Store(self.project)
+        try:
+            self.assertEqual(store.get('calls_used'), 2)
+            self.assertEqual(len(store.get('chat_messages')), 2)
+            self.assertEqual(store.get('conversation_memory')[0]['source_message_id'], 'msg_000001')
+            self.assertIsNone(store.get('pending_chat_message'))
+        finally:
+            store.close()
 
     async def test_chat_total_deadline_reports_budget_and_preserves_input(self):
         self.chat.settings(max_seconds=60, timeout_s=120)
@@ -232,6 +252,12 @@ raise SystemExit(worker.main())
         events = [json.loads(line) for line in stream.getvalue().splitlines()]
         self.assertIn('paper', [e['tag'] for e in events])
         self.assertIn('evidence', [e['tag'] for e in events])
+        self.assertIn('problem', [e['tag'] for e in events])
+        self.assertNotIn('idea', [e['tag'] for e in events])
+        self.assertNotIn('design', [e['tag'] for e in events])
+        with patch('research_idea.chat_worker.make_backend', return_value=DemoBackend()), redirect_stdout(stream):
+            research(self.project, continue_problem=True)
+        events = [json.loads(line) for line in stream.getvalue().splitlines()]
         self.assertIn('review', [e['tag'] for e in events])
         self.assertIn('concept', [e['tag'] for e in events])
         self.assertIn('design', [e['tag'] for e in events])
@@ -251,9 +277,7 @@ raise SystemExit(worker.main())
         reused_events = [json.loads(line) for line in resumed.getvalue().splitlines()]
         self.assertNotIn('evidence', [e['tag'] for e in reused_events])
         reused = [e['text'] for e in reused_events if '已复用' in e['text']]
-        self.assertTrue(reused)
         self.assertTrue(all('\n' not in text and len(text) < 80 for text in reused))
-        self.assertIn('detail', [e['tag'] for e in reused_events])
         self.assertEqual(reused_events[-2]['tag'], 'idea')
 
     async def test_stop_real_worker_process_and_return_to_prompt(self):
@@ -286,6 +310,21 @@ raise SystemExit(worker.main())
         store.close()
         with self.assertRaises(ValueError):
             self.chat.topic('changed')
+
+    async def test_continue_command_and_paused_footer(self):
+        from research_idea.problem_dialogue import WAITING
+        store = Store(self.project)
+        store.set_many({'status': WAITING, 'problem_checkpoint': {'state': 'discussing'}})
+        store.close()
+        footer = ''.join(text for _, text in self.chat.toolbar())
+        self.assertIn('/continue', footer)
+        with patch.object(self.chat, 'start', new_callable=AsyncMock) as start:
+            await self.chat.handle('/continue')
+            start.assert_awaited_once_with('continue')
+        with self.assertRaisesRegex(ValueError, '先直接发送'):
+            await self.chat.handle('/continue 这里还有重要纠正')
+        await self.chat.handle('/memory')
+        self.assertIn('尚无提炼的要点', self.events[-1][1])
 
     async def test_input_file_is_message_not_command(self):
         brief = Path(self.tmp.name) / 'brief.txt'

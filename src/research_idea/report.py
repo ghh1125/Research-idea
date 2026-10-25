@@ -216,8 +216,12 @@ def export_report(store: Store, output_dir: Path | None = None):
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 14, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 15, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+        "problem_response_analyses": store.get("problem_response_analyses", {}),
         "problem_exploration": store.get("problem_exploration", {}), "problem_cases": store.get("problem_cases", []),
+        "problem_checkpoint": store.get("problem_checkpoint"),
+        "conversation_memory": store.get("conversation_memory", []),
+        "chat_messages": store.get("chat_messages", []),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
@@ -237,13 +241,18 @@ def export_report(store: Store, output_dir: Path | None = None):
     json_path = target / "report.json"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     title = '研究方案' if data['status'] == 'completed' else '当前构思与方法草稿'
+    if (data['problem_checkpoint'] or {}).get('state') == 'discussing':
+        title = '研究问题与讨论'
     lines = ["# Research-idea — " + title, "", store.get("topic", ""), ""]
     if demo:
         lines.extend(["> **合成演示：所有资料和候选仅用于验证软件流程。没有调用真实模型，没有完成科学实验，不构成创新或效果结论。**", ""])
 
     # Keep the main deliverable focused on the idea and supporting techniques. Existing
     # evidence, paper cards and audit details remain accessible below.
-    if candidates:
+    if (data['problem_checkpoint'] or {}).get('state') == 'discussing':
+        from .problem_dialogue import problem_text
+        lines.extend([problem_text(store), ''])
+    elif candidates:
         lines.extend(["## 研究 Idea", ""])
         for candidate in candidates:
             lines.extend([citations.text(idea_markdown(candidate), compact=True), ''])

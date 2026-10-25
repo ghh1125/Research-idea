@@ -43,12 +43,19 @@ PROBLEM_ORIGINS = ('unresolved_need', 'emerging_problem')
 OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), basis=string(["source_observation", "research_hypothesis"]),
     derivation=STR, bottleneck_hypothesis=STR, why_it_matters=STR, prior_art_delta=STR, research_need=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS, research_route_ids=STRINGS)
+MEMORY_UPDATES = array(obj(action=string(['add', 'replace', 'remove']),
+    entry_id=STR, content=STR, source_message_id=STR))
+CHAT = obj(answer=STR, memory_updates=MEMORY_UPDATES)
+DISCUSS_PROBLEM = obj(answer=STR, memory_updates=MEMORY_UPDATES,
+    updated_problems=array(OPPORTUNITY),
+    selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 APPROACH = obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS, evidence_ids=STRINGS)
 PROBLEM_POOL = obj(background_logic=STR, approach_landscape=array(APPROACH),
     problem_seeds=array(obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS),
         entry_reason=STR, research_route_ids=STRINGS)))
-PROBLEM_CASE = obj(opportunity=OPPORTUNITY)
+PROBLEM_CASE = obj(opportunity=OPPORTUNITY, response_analysis=array(obj(
+    approach=STR, effective_response=STR, remaining_difficulty=STR, why_it_remains=STR)))
 PROBLEM_COMPARISON = obj(opportunity_id=STR, strongest_case=STR, remaining_obstacle=STR, priority_reason=STR)
 MAP = obj(approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
@@ -124,7 +131,8 @@ PAPER_CARD = obj(paper_id=STR, paper_type=string(["method", "empirical", "theory
     followup_requests=array(obj(target_id=STR, question=STR, decision_impact=STR)))
 SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD, "design_transfer": DESIGN_TRANSFER,
     "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "explore_problems": PROBLEM_POOL,
-    "deepen_problem": PROBLEM_CASE, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
+    "deepen_problem": PROBLEM_CASE, "discuss_problem": DISCUSS_PROBLEM,
+    "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 
 
 def validate(value, schema, path="$", depth=0):

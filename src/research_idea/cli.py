@@ -79,6 +79,7 @@ def import_papers(store, records, kind=None):
         # Evidence is reconstructed via cached extraction tasks on next run.
         store.db.execute("DELETE FROM evidence")
     store.set("cohort", None)
+    store.set("source_revision", store.get("source_revision", 0) + 1)
     store.set("status", "sources_changed")
     store.event("sources_imported", {"before": len(previous), "after": len(merged), "imported": len(normalized)})
     return max(0, len(merged) - len(previous))

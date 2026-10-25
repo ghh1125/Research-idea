@@ -390,6 +390,7 @@ class Controller:
         unresolved_sources = {alias for paper in papers if paper.get('content_kind') != 'full_text'
                               for alias in [paper['id'], *paper.get('aliases', [])]}
         return compact_research_context({"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
+                "problem_discussion": self.discussion_handoff(),
                 "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
@@ -401,9 +402,17 @@ class Controller:
                 "search_coverage": [{k: entry.get(k) for k in ("query", "source", "venues", "status", "coverage")}
                                     for entry in searches], "evidence": evidence})
 
+    def discussion_handoff(self):
+        checkpoint = self.store.get('problem_checkpoint') or {}
+        if checkpoint.get('state') != 'confirmed':
+            return {}
+        return {'confirmed_revision': checkpoint['confirmed_revision'],
+                'selected_problems': checkpoint['current']['selected_problems'],
+                'user_decisions': self.user_notes()}
+
     def user_notes(self):
-        return [m['content'][:3000] for m in self.store.get('chat_messages', [])
-                if m.get('role') == 'user'][-8:]
+        from .conversation import research_notes
+        return research_notes(self.store)
 
     def initial_paper_ids(self):
         """Recover discovery sources without adopting a previous idea's design corpus."""
@@ -1063,15 +1072,14 @@ class Controller:
         room = self.config['max_papers'] - len(self.store.rows('papers'))
         return self.select_search_results([key], min(room, max_new if max_new is not None else 3), candidate=candidate)
 
-    def form_ideas(self):
-        """Develop each problem independently, compare, then construct ideas."""
-        from .idea_neighborhood import read_neighborhoods
+    def discover_problems(self):
+        """Deepen and compare problems before committing to a method."""
         context = self.ideation_context()
         # Keep the user's agenda separate from the model's proposed narrowing.
         # User follow-ups remain in the context, including any explicit narrowing.
         user_goal = context.get('topic') or ''
         refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
-        from .problem_discovery import argument_handoff, develop_problem_pool
+        from .problem_discovery import develop_problem_pool
         pool, cases = develop_problem_pool(self, context, refs)
         def validate_problem(value):
             refs(value)
@@ -1122,9 +1130,19 @@ class Controller:
             if any(not item['selection_reason'].strip() for item in decisions):
                 raise ValueError('Explain the research value of the problem choice before constructing a method')
         problem = self.task("map", {**context, "problem_cases": cases,
+            "response_analyses": self.store.get("problem_response_analyses", {}),
             "background_logic": pool['background_logic'], "approach_landscape": pool['approach_landscape'],
             "max_candidates": self.config["max_candidates"]}, validate_problem)
         self.store.set("problem_model", problem)
+        return problem
+
+    def form_ideas(self):
+        return self.propose_from_problems(self.discover_problems())
+
+    def propose_from_problems(self, problem):
+        from .idea_neighborhood import read_neighborhoods
+        from .problem_discovery import argument_handoff
+        context = self.ideation_context()
         # Commit the research choice before any method is generated. Keep the full
         # pool in storage, but give the constructor only the selected problems.
         decisions = {item['opportunity_id']: item for item in problem['selected_problems']}
@@ -1133,6 +1151,7 @@ class Controller:
         handoff = argument_handoff(selected_problem)
         proposal_payload = {**context, "problem_model": selected_problem,
                             "argument_handoff": handoff,
+                            "problem_discussion": self.discussion_handoff(),
                             "proposal_mode": "draft", "max_candidates": self.config["max_candidates"]}
         validate_proposal = lambda value: validate_idea_proposal(
             value, context, problem, self.config['max_candidates'])
@@ -1166,15 +1185,37 @@ class Controller:
         self.phase = 'ideation'
         return self.task('propose', {**context, 'problem_model': selected_problem,
             'argument_handoff': argument_handoff(selected_problem),
+            'problem_discussion': self.discussion_handoff(),
             'proposal_mode': 'complete', 'draft_proposals': draft['candidates'],
             'max_candidates': self.config['max_candidates']},
             lambda value: validate_idea_proposal(value, context, problem, self.config['max_candidates']),
             publish=False)
 
-    def run(self):
+    def run(self, *, interactive=False, continue_problem=False):
         recovered = self.store.interrupt_running_tasks()
         if recovered:
             self.store.event('interrupted_tasks_recovered', {'count': recovered})
+        from .problem_dialogue import WAITING, source_key, open_checkpoint
+        checkpoint = self.store.get('problem_checkpoint')
+        checkpoint_valid = bool(checkpoint and checkpoint.get('source_key') == source_key(self))
+        if checkpoint_valid and checkpoint['state'] == 'discussing' and not continue_problem:
+            self.store.set('status', WAITING)
+            return
+        if continue_problem:
+            if not checkpoint or checkpoint['state'] != 'discussing':
+                raise ValueError('当前没有待讨论的问题。使用 /run 开始或恢复研究。')
+            if self.store.get('pending_chat_message'):
+                raise ValueError('上一条讨论尚未成功处理，请重新发送或补充意见，再 /continue；原消息已保存。')
+            if not checkpoint_valid:
+                raise ValueError('论文或研究范围已变化，请 /run 更新问题后再讨论。原对话和要点已保留。')
+            checkpoint.update(state='confirmed', confirmed_revision=checkpoint['revision'], confirmed_at=now(),
+                              confirmed_by='/continue')
+            self.store.set_many({'problem_checkpoint': checkpoint, 'problem_model': checkpoint['current']})
+        # A confirmed checkpoint remains the starting point after interruption.
+        using_checkpoint = checkpoint_valid and checkpoint['state'] == 'confirmed'
+        if checkpoint and not checkpoint_valid:
+            self.store.event('problem_checkpoint_invalidated', checkpoint)
+            self.store.set_many({'problem_checkpoint': None, 'cohort': None})
         self.store.set("status", "running")
         try:
             self.phase = 'ideation'
@@ -1186,16 +1227,19 @@ class Controller:
                 'backend', 'model', 'api_provider', 'base_url', 'codex_bin', 'codex_profile')}])
             if self.config.get("reasoning_effort"):
                 cohort_key = digest([cohort_key, self.config["reasoning_effort"]])
+            if using_checkpoint:
+                cohort_key = digest([cohort_key, checkpoint['current'], checkpoint['confirmed_revision']])
             continuing = bool(cohort and cohort.get('key') == cohort_key)
-            if not continuing:
+            if not continuing and not using_checkpoint:
                 self.progress('[concept] 第一阶段 · 文献构思：理解背景与问题，比较已有动机和贡献，提出 idea。')
                 self.initial_search()
             initial_ids = self.initial_paper_ids()
             if not self.store.rows("papers"):
                 self.progress('[analysis] 先提出可检验的问题与基本思路，第二阶段围绕它提供技术参考。')
-            self.retrieve_full_texts(initial_ids)
-            self.read_papers(initial_ids)
-            self.audit_papers(initial_ids)
+            if not using_checkpoint:
+                self.retrieve_full_texts(initial_ids)
+                self.read_papers(initial_ids)
+                self.audit_papers(initial_ids)
             if cohort:
                 try:
                     check_references(cohort["proposed"], {e["id"] for e in self.store.rows("evidence")}, {p["id"] for p in self.store.rows("papers")})
@@ -1203,7 +1247,14 @@ class Controller:
                     cohort = None
             cohort_created = False
             if not cohort or cohort.get("key") != cohort_key:
-                proposed = self.form_ideas()
+                if using_checkpoint:
+                    proposed = self.propose_from_problems(checkpoint['current'])
+                elif interactive or checkpoint:
+                    problem = self.discover_problems()
+                    open_checkpoint(self, problem)
+                    return
+                else:
+                    proposed = self.form_ideas()
                 if self.store.rows("candidates"):
                     # Older papers lack selection.phase. Preserve their design
                     # provenance before archiving the only records that know it.

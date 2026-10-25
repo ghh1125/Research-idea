@@ -13,6 +13,7 @@ STAGE_LABELS = {
     'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
     'explore_problems': ('analysis', '第一阶段 · 探索不同的重要问题'),
     'deepen_problem': ('analysis', '第一阶段 · 深入问题与已有回应'),
+    'discuss_problem': ('problem', '讨论并更新研究问题'),
     'map': ('analysis', '第一阶段 · 比较问题，说明优先研究什么'),
     'propose': ('concept', '第一阶段 · 背景 → 现有方法 → 可能的问题 → 动机 → Idea'),
     'develop': ('design', '第二阶段 · 技术参考 · 寻找适合 idea 的路线'),
@@ -42,7 +43,7 @@ SKILL_LABELS = {
     'research-idea-check-feasibility': '安排实施路径',
     'research-idea-design-falsification': '检视核心解释',
 }
-STATUS_LABELS = {'initialized': '准备开始', 'running': '研究中', 'completed': '方案已生成',
+STATUS_LABELS = {'awaiting_problem_discussion': '问题讨论中 · 等待 /continue', 'initialized': '准备开始', 'running': '研究中', 'completed': '方案已生成',
                  'budget_exhausted': '本轮预算用完，可增加预算后继续', 'blocked': '运行中断，可继续',
                  'interrupted': '已停止，可继续'}
 
@@ -223,7 +224,7 @@ def activity_summary(stage, result, citations=None):
             section('先选定问题 · ' + question)
             add('为什么优先研究它', choice['selection_reason'])
         if choices:
-            lines.append('问题与选择理由已保存。接下来围绕这个障碍构思 idea。')
+            lines.append('问题与选择理由已保存，可据此讨论和构思 idea。')
     elif stage == 'propose':
         for item in result.get('candidates', []):
             section('Idea · ' + item['title'])

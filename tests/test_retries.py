@@ -118,7 +118,7 @@ class RetryTests(unittest.TestCase):
 
     def test_chat_uses_the_same_policy_without_duplicating_history(self):
         self.backend.generate.side_effect = [ProviderError('model', status=404, transport_attempts=1),
-            BackendResult({'answer': '继续讨论研究方向'}, {'transport_attempts': 1})]
+            BackendResult({'answer': '继续讨论研究方向', 'memory_updates': []}, {'transport_attempts': 1})]
         output = io.StringIO()
         with patch('research_idea.chat_worker.make_backend', return_value=self.backend), \
                 patch('research_idea.retries.time.sleep') as sleep, redirect_stdout(output):

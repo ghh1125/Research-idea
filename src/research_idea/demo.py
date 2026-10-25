@@ -72,7 +72,9 @@ class DemoBackend:
                 case = deepcopy(next((item for item in base['opportunities'] if item['id'] == seed['id']),
                                      base['opportunities'][0]))
                 case.update({key: seed[key] for key in ('id', 'question', 'problem_origin', 'research_route_ids')})
-                output = {'opportunity': case}
+                output = {'opportunity': case, 'response_analysis': [dict(approach='合成资料获取方法',
+                    effective_response='补充最初缺少的资料', remaining_difficulty='怎样使用相互冲突的内容',
+                    why_it_remains='获取内容本身不决定冲突时采用哪个条件；这里只演示数据流。')]}
         elif task.stage == "map":
             output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["unresolved_need", "emerging_problem"], "evidence_ids": refs}
             output['approach_landscape'] = [dict(name='获取资料', principle='检索相关内容', achieved_progress='提供原先缺少的资料', paper_ids=papers, evidence_ids=refs), dict(name='使用资料', principle='比较条件与证据关系', achieved_progress='合成笔记提供研究思路，没有真实测量', paper_ids=papers, evidence_ids=refs)]

@@ -62,8 +62,13 @@ class Store:
         return json.loads(row[0]) if row else default
 
     def set(self, key, value):
+        self.set_many({key: value})
+
+    def set_many(self, values):
+        """Commit a dialogue revision and its provenance together."""
         with self.db:
-            self.db.execute("INSERT INTO meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, encode(value)))
+            self.db.executemany("INSERT INTO meta VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                                [(key, encode(value)) for key, value in values.items()])
 
     def event(self, kind, payload):
         with self.db:

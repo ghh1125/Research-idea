@@ -53,6 +53,8 @@ class ProblemDiscoveryTests(unittest.TestCase):
                 self.assertEqual(len(self.store.get('problem_cases')), 3)
                 self.assertIsNone(self.store.get('problem_model'))
                 self.assertEqual(payload(task)['problem_cases'], self.store.get('problem_cases'))
+                self.assertEqual(payload(task)['response_analyses'], self.store.get('problem_response_analyses'))
+                self.assertEqual(len(payload(task)['response_analyses']), 3)
         backend = Backend(observe)
         result = Controller(self.store, backend, self.config).form_ideas()
         self.assertEqual([t.stage for t in backend.calls],

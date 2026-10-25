@@ -180,3 +180,12 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。
 
 `idea_neighborhood.py` 执行第一阶段具体知识缺口的检索与定向阅读。内部草案通过 `task(..., publish=False)` 缓存；近邻来源标为 `selection.phase=neighbor`，不倒灌成下一次大背景选题的初始材料。`idea_neighborhoods` 保存检索、选文和证据检查点；下载中断后继续同一批来源。完成版 `propose` 只接收该草案范围内的定向证据，随后才发布一次构思内容。报告 JSON schema 14 包含这份记录与关键输入获取路径，旧报告继续可读。
+
+
+## Interactive problem checkpoint
+
+`Controller.discover_problems()` separates exploration/deepening/comparison from `propose_from_problems()`. The interactive worker passes `interactive=True`; batch runs keep their automatic path. A saved discussing checkpoint is respected by both paths. `/continue` records the confirmed revision, then executes the proposal and design stages using that problem and the current user decisions. Source revision/scope changes invalidate the checkpoint basis, while model changes preserve the human choice.
+
+`problem_dialogue.py` owns the current problem and revision ledger. `conversation.py` owns stable transcript IDs, the active memory view and source-linked add/replace/remove operations. A single `Store.set_many()` transaction commits the revised problem, memory and answer. User input is saved before the call so interrupted corrections remain available. Confirmation is a workflow action, not an assertion that a research hypothesis is proven. No new memory/vector-store dependency is required.
+
+`deepen_problem.response_analysis` records effective prior responses and the reasons a difficulty could remain after them; `map` receives these records alongside independently developed cases. This changes the data handed into selection, without adding review calls or numeric quality thresholds.

@@ -6,7 +6,7 @@ import json
 from .idea_instructions import (MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES,
                                 EXPLORE_PROBLEMS_INSTRUCTIONS, DEEPEN_PROBLEM_INSTRUCTIONS)
 
-PROMPT_VERSION = "39"
+PROMPT_VERSION = "40"
 
 
 def stage_version(stage):
@@ -28,7 +28,10 @@ Distinguish observations, author claims, your hypotheses, and unknowns. Similar 
 Evidence IDs and paper IDs must refer exactly to supplied records. Proposals and expected results are not experimental observations. A full-text source may be only partly excerpted; never claim exhaustive reading. Review opinions are not independent empirical verification or a novelty guarantee.
 """
 
+from .problem_dialogue import DISCUSSION_INSTRUCTIONS
+
 INSTRUCTIONS = {
+    "discuss_problem": DISCUSSION_INSTRUCTIONS,
     "screen_papers": """Select up to max_papers sources worth reading from the supplied metadata. For purpose=closest_work, prioritize the closest actual operation, learning objective and information acquisition route described in comparison_search, including work in other CS areas. Do not choose more broad background papers merely for topical similarity or recency. Use abstracts to choose what to inspect, not to pronounce overlap; put the precise comparison and input-acquisition question in reading_question. In strategy_discovery, use discovery_plan.research_routes to build a complementary reading set. Start with a relevant representative for each materially different route when the pool supports it, then use remaining slots for the strongest response, conflicting explanation or important missing condition. One paper can inform several routes. Do not use all slots for similar methods just because they closely match the same query. Do not fill slots with irrelevant sources when a route has no suitable result; explain the actual coverage in selection_summary. discovery_provenance records where a paper was retrieved, not proof that it addresses that question; read its title and abstract before assigning route_ids.
 For each selected paper provide paper_id, route_ids, reason, reading_question and reading_role. Use landscape for a survey, systematic comparison or a paper whose introduction/related work is needed to understand the main approach families; use method for a concrete mechanism and result. Choose a complementary set, including landscape reading when the broad topic needs it; the reader uses this role to select actual source chunks. The question should first establish what the method actually solves, how it achieves that contribution and the conditions of its successful use. It may then explore important needs arising after that progress; do not require every paper to supply a defect or doubt about its own contribution. Do not phrase it as confirming a favorite candidate or assume an advertised limitation is already established. These questions will be passed to the full-text reader. Return only supplied paper and route IDs. With no discovery routes, including technical_design, use route_ids=[].
 For technical_design select techniques answering the supplied design questions, including other CS fields with a relevant shared structure. Rank substantive relevance first, then recency among comparable papers. Titles and abstracts locate reading targets, not novelty verdicts or proof that a method cannot work. Do not infer that an idea is duplicated from a title. Explain the choice without fabricating missing metadata or findings.""",
