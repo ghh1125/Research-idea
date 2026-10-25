@@ -5,6 +5,7 @@ import re
 from urllib.parse import quote, urlsplit, urlunsplit
 
 EVIDENCE_ID = re.compile(r'(?<![A-Za-z0-9_])ev_[A-Za-z0-9_]+(?![A-Za-z0-9_])')
+EVIDENCE_GROUP = re.compile(EVIDENCE_ID.pattern + r'(?:[ \t]*[、,，;；][ \t]*' + EVIDENCE_ID.pattern + r')*')
 KINDS = {'reported_result': '论文报告的实验结果', 'author_claim': '作者主张',
          'author_limitation': '作者说明的局限', 'method_detail': '方法细节'}
 
@@ -70,10 +71,19 @@ class Citations:
             return '原文来源未找到'
         return self.paper(evidence['paper_id']) + ' · ' + self.location(evidence)
 
-    def text(self, text):
+    def text(self, text, *, compact=False):
         # Models sometimes format keys as inline code; remove that wrapper so
         # the resulting paper link remains clickable in Markdown reports.
         text = re.sub(r'`(' + EVIDENCE_ID.pattern + r')`', r'\1', str(text))
+        if compact:
+            def papers_for_group(match):
+                papers = {}
+                for evidence_id in EVIDENCE_ID.findall(match[0]):
+                    evidence = self.evidence.get(evidence_id)
+                    paper_id = evidence.get('paper_id') if evidence else None
+                    papers.setdefault(paper_id, self.paper(paper_id) if evidence else '原文来源未找到')
+                return '、'.join(papers.values())
+            return EVIDENCE_GROUP.sub(papers_for_group, text)
         return EVIDENCE_ID.sub(lambda match: self.reference(match[0]), text)
 
     def block(self, evidence, *, markdown=False):

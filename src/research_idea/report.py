@@ -1,7 +1,7 @@
 """Human-readable reports alongside machine-readable evidence and versions."""
 from __future__ import annotations
 
-from .presentation import activity_summary, idea_markdown
+from .presentation import activity_summary, idea_markdown, argument_details_markdown
 from .citations import Citations
 
 import json
@@ -63,7 +63,20 @@ def feasibility_markdown(candidate, spec):
 
 
 def candidate_markdown(candidate, citations=None):
-    lines = [idea_markdown(candidate), '']
+    main = idea_markdown(candidate)
+    lines = [citations.text(main, compact=True) if citations else main, '']
+    proposal = candidate['proposal']
+    spec = candidate.get('spec') or {}
+    details = argument_details_markdown(spec.get('motivation', proposal.get('motivation', {})),
+        proposal, idea_core=spec.get('idea_core', proposal.get('idea_core', {})))
+    if details:
+        lines.extend(['### 研究价值与关键信息的详细推演', '', details, ''])
+    if proposal.get('feasibility_sketch'):
+        lines.extend(['### 构思时的可行路径', ''])
+        for key, label in (('inputs', '可用输入'), ('available_path', '可行路径'),
+                           ('key_assumption', '关键假设'), ('first_check', '需要弄清的依据')):
+            if proposal['feasibility_sketch'].get(key):
+                lines.extend(['**' + label + '：** ' + proposal['feasibility_sketch'][key], ''])
     if candidate['proposal'].get('selection_reason'):
         lines.extend(['### 构思时的选择理由', '', candidate['proposal']['selection_reason'], ''])
     if candidate['proposal'].get('positioning'):
@@ -73,7 +86,6 @@ def candidate_markdown(candidate, citations=None):
             lines.extend([paper, '', '**已有工作回答了：** ' + item['addressed_problem'], '',
                           '**我们继续回答：** ' + item['remaining_question'], '',
                           '**为什么是实质进展：** ' + item['contribution'], '', ', '.join(item['evidence_ids']), ''])
-    spec = candidate.get('spec') or {}
     if not spec:
         text = '\n'.join(lines)
         return citations.text(text) if citations else text
@@ -234,7 +246,7 @@ def export_report(store: Store, output_dir: Path | None = None):
     if candidates:
         lines.extend(["## 研究 Idea", ""])
         for candidate in candidates:
-            lines.extend([citations.text(idea_markdown(candidate)), ''])
+            lines.extend([citations.text(idea_markdown(candidate), compact=True), ''])
             compared = [o['paper_id'] for o in (candidate.get('spec') or {}).get('prior_art', {}).get('overlaps', [])]
             references = compared or candidate['proposal'].get('closest_work_ids', [])
             linked = [p for ref in dict.fromkeys(references) for p in papers if p['id'] == ref][:3]
@@ -242,7 +254,7 @@ def export_report(store: Store, output_dir: Path | None = None):
                 lines.extend(['**相关论文：**', ''])
                 lines.extend('- ' + citations.paper(p['id']) for p in linked)
                 lines.append('')
-            lines.extend([f"[展开方法与论文对照]({candidate['id']}.md)", ""])
+            lines.extend([f"[查看详细推导、信息来源与论文对照]({candidate['id']}.md)", ""])
     else:
         lines.extend([data['no_candidate_reason'] or "方案正在形成中，可从已保存的进度继续运行。", ""])
     lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "方案是实验前的研究设计；原文引文、审阅与执行记录如下。", ""])

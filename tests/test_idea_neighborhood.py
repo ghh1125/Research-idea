@@ -11,7 +11,7 @@ from research_idea.config import DEFAULTS
 from research_idea.controller import Controller, make_evidence, OutputValidationError
 from research_idea.demo import DemoBackend
 from research_idea.idea_neighborhood import normalize_comparison_search
-from research_idea.presentation import argument_markdown
+from research_idea.presentation import argument_markdown, activity_summary
 from research_idea.report import export_report
 from research_idea.search_scope import config_scope
 from research_idea.store import Store
@@ -122,6 +122,75 @@ class NeighborhoodTests(unittest.TestCase):
         self.assertEqual(len([r for s, r, _ in self.events if s == 'propose']), 1)
         self.assertTrue(result['candidates'])
 
+    def test_saved_completion_only_calls_propose_and_shares_the_normal_cache(self):
+        expected, _ = self.run_idea()
+        first, final = [data for stage, data in self.backend.calls if stage == 'propose']
+        task_fields = {'problem_model', 'argument_handoff', 'proposal_mode',
+                       'draft_proposals', 'max_candidates'}
+        initial = {k: v for k, v in first.items() if k not in task_fields}
+        merged = {k: v for k, v in final.items() if k not in task_fields}
+        neighborhoods = [dict(final['idea_neighborhoods'][0],
+                              papers=final['papers'], evidence=final['evidence'])]
+        problem, draft = self.store.get('problem_model'), self.store.get('idea_draft')
+        snapshot = copy.deepcopy((initial, merged, problem, draft, neighborhoods))
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(Path(directory))
+            try:
+                backend, events = Backend(), []
+                controller = Controller(store, backend, self.cfg,
+                    activity=lambda *args: events.append(args))
+                with patch('research_idea.idea_neighborhood.read_neighborhoods') as reading, \
+                     patch('research_idea.literature.discover') as search:
+                    result = controller.complete_ideas(initial, problem, draft, neighborhoods)
+                    cached = controller.complete_ideas(merged, problem, draft)
+                reading.assert_not_called()
+                search.assert_not_called()
+                self.assertEqual(result, expected)
+                self.assertEqual(cached, expected)
+                self.assertEqual(backend.calls, [('propose', final)])
+                self.assertEqual(store.get('calls_used'), 1)
+                self.assertEqual(events, [])
+                self.assertIsNone(store.get('problem_model'))
+                self.assertEqual((initial, merged, problem, draft, neighborhoods), snapshot)
+            finally:
+                store.close()
+
+    def test_saved_completion_repairs_cross_paper_citations_and_normalizes_selection(self):
+        self.run_idea()
+        final = self.backend.calls[-1][1]
+        context = {k: v for k, v in final.items() if k not in {
+            'problem_model', 'argument_handoff', 'proposal_mode', 'draft_proposals', 'max_candidates'}}
+        context = copy.deepcopy(context)
+        context['papers'].append(dict(PAPER, id='other-paper'))
+        context['evidence'].append(dict(context['evidence'][0], id='ev_other', paper_id='other-paper'))
+        problem, draft = self.store.get('problem_model'), self.store.get('idea_draft')
+        class WrongAttribution(Backend):
+            def generate(inner, task):
+                result = super().generate(task)
+                candidate = result.output['candidates'][0]
+                candidate['selection_reason'] = 'A new rationale written after method construction.'
+                if len(inner.calls) == 1:
+                    candidate['positioning'][0]['evidence_ids'] = ['ev_other']
+                return result
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(Path(directory))
+            try:
+                backend = WrongAttribution()
+                controller = Controller(store, backend, self.cfg)
+                result = controller.complete_ideas(context, problem, draft)
+                reason = problem['selected_problems'][0]['selection_reason']
+                self.assertEqual(result['candidates'][0]['selection_reason'], reason)
+                self.assertEqual([stage for stage, _ in backend.calls], ['propose', 'propose'])
+                self.assertEqual(store.get('calls_used'), 2)
+                repairs = [json.loads(row['payload']) for row in store.db.execute(
+                    "SELECT payload FROM events WHERE kind='output_repair'")]
+                self.assertEqual(len(repairs), 1)
+                self.assertIn('compared paper', repairs[0]['diagnostic'])
+                self.assertEqual(controller.complete_ideas(context, problem, draft), result)
+                self.assertEqual(store.get('calls_used'), 2)
+            finally:
+                store.close()
+
     def test_no_missing_comparison_means_no_search_or_extra_proposal(self):
         self.backend.search = False
         _, discover = self.run_idea()
@@ -149,9 +218,13 @@ class NeighborhoodTests(unittest.TestCase):
         self.assertEqual(report['candidates'][0]['proposal']['idea_core'], proposal['idea_core'])
         self.assertTrue(report['idea_neighborhoods'])
         rendered = argument_markdown(proposal['motivation'], proposal)
+        detailed = (markdown.parent / 'idea.md').read_text()
         for key, text in INPUT.items():
             if key != 'evidence_ids':
-                self.assertIn(text, rendered)
+                self.assertIn(text, detailed)
+        self.assertNotIn(INPUT['reliability_basis'], rendered)
+        self.assertNotIn(INPUT['reliability_basis'], activity_summary('propose', result))
+        self.assertNotIn(INPUT['reliability_basis'], markdown.read_text().split('<details>')[0])
         labels = ['Background ·', 'Existing methods ·', 'Possible problem ·', 'Motivation ·', 'Idea ·']
         positions = [rendered.index(label) for label in labels]
         self.assertEqual(positions, sorted(positions))

@@ -14,7 +14,7 @@ from research_idea.demo import DemoBackend, DEMO_PAPERS
 from research_idea.motivation import assess_motivation
 from research_idea.presentation import activity_summary, idea_markdown, error_summary
 from research_idea.prompts import stage_version
-from research_idea.report import export_report
+from research_idea.report import export_report, candidate_markdown
 from research_idea.store import Store, digest
 
 
@@ -426,8 +426,10 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertEqual(candidate['selected_opportunity'], expected)
                 summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
                 self.assertIn(motive['problem_derivation'], summary)
+                self.assertLess(summary.index(motive['problem_observation']),
+                                summary.index(motive['background']))
                 self.assertLess(summary.index(motive['problem_derivation']),
-                                summary.index(motive['problem_observation']))
+                                summary.index(motive['research_need']))
 
     def test_conditional_hypotheses_with_cited_premises_survive_both_origin_paths(self):
         from research_idea.literature import normalize_paper
@@ -596,7 +598,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn(revised, front)
         self.assertNotIn(original, front)
         self.assertLess(front.index('Possible problem ·'), front.index(revised))
-        self.assertLess(front.index(revised), front.index(updated_problem))
+        self.assertLess(front.index(updated_problem), front.index(revised))
         self.assertLess(front.index(updated_problem), front.index('Motivation ·'))
 
     def test_legacy_saved_problem_without_origin_or_derivation_still_exports(self):
@@ -719,7 +721,9 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertTrue(sketch['first_check'])
         summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
         self.assertNotIn(sketch['available_path'], summary)
-        self.assertIn(sketch['key_assumption'], summary)
+        self.assertIn(candidate['proposal']['idea_core']['construction_path'], summary)
+        for value in sketch.values():
+            self.assertIn(value, candidate_markdown(candidate))
         self.assertIn('Idea → Method', summary)
         self.assertIn(candidate['proposal']['motivation']['background'], summary)
 
@@ -798,6 +802,19 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertNotIn('idea_core', saved['proposal'])
         self.assertNotIn('idea_core', saved['spec'])
 
+    def test_legacy_proposal_keeps_actual_operation_when_summary_only_describes_purpose(self):
+        candidate, _ = self.run_flow()
+        candidate['spec'] = {}
+        proposal = candidate['proposal']
+        proposal.pop('idea_core')
+        proposal['intervention'] = 'Keep each retrieved passage and exchange the order of conflicting passages.'
+        proposal['motivation']['why_this_method'] = 'Understand how evidence order affects answers.'
+        proposal['motivation']['expected_progress'] = 'Explain answer instability.'
+        rendered = idea_markdown(candidate)
+        self.assertIn(proposal['intervention'], rendered)
+        self.assertIn(proposal['motivation']['why_this_method'], rendered)
+        self.assertNotIn('idea_core', proposal)
+
     def test_refinement_must_answer_the_actual_objection_and_repair_is_bounded(self):
         def remove_response(task, output):
             if task.stage == 'refine':
@@ -859,6 +876,10 @@ class IdeaWorkflowTests(unittest.TestCase):
             self.assertNotIn(heading, method_part)
         candidate['spec'] = {}
         rendered = idea_markdown(candidate)
+        self.assertIn(candidate['proposal']['motivation']['why_this_method'], rendered)
+        self.assertNotIn(candidate['proposal']['intervention'], rendered)
+        del candidate['proposal']['motivation']['why_this_method']
+        rendered = idea_markdown(candidate)
         self.assertIn(candidate['proposal']['intervention'], rendered)
         self.assertNotIn('第一项值得做的实验', rendered)
         self.assertNotIn(candidate['proposal']['feasibility_sketch']['available_path'], rendered)
@@ -906,14 +927,15 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_argument_is_ordered_and_old_saved_ideas_still_render(self):
         candidate, _ = self.run_flow()
         motive = candidate['spec']['motivation']
-        fields = ('background', 'existing_work', 'existing_approach_limit', 'causal_explanation',
-                  'problem_derivation', 'problem_observation', 'importance', 'research_need',
-                  'why_this_method', 'expected_progress')
+        fields = ('problem_observation', 'why_this_method', 'background', 'existing_work',
+                  'existing_approach_limit', 'causal_explanation', 'problem_derivation', 'research_need')
         for index, field in enumerate(fields):
             motive[field] = f'Unique argument passage {index}.'
         rendered = idea_markdown(candidate)
         positions = [rendered.index(motive[field]) for field in fields]
         self.assertEqual(positions, sorted(positions))
+        self.assertEqual(rendered.count(motive['why_this_method']), 1)
+        self.assertEqual(rendered.count(motive['problem_observation']), 1)
         self.assertLess(positions[-1], rendered.index('第二部分'))
         for axis in candidate['spec']['design_axes']:
             self.assertLess(rendered.index(axis['required_function']), rendered.index('可借鉴的技术'))

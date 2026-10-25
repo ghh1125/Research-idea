@@ -6,7 +6,7 @@ import json
 from .idea_instructions import (MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES,
                                 EXPLORE_PROBLEMS_INSTRUCTIONS, DEEPEN_PROBLEM_INSTRUCTIONS)
 
-PROMPT_VERSION = "37"
+PROMPT_VERSION = "39"
 
 
 def stage_version(stage):

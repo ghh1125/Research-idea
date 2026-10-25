@@ -31,7 +31,7 @@ A narrow implementation can be a useful starting point. Say what difficulty it i
 
 ## Stage-specific output
 
-For propose, fill `feasibility_sketch` with the observable `inputs`, an `available_path` through acquisition and use, the material `key_assumption`, and `first_check`. The latter names the evidence or interface that would resolve that assumption, without an experiment plan. Write `idea_core.construction_path` as a connected explanation using the objects in `concrete_target`; preserve the important acquisition reasoning in `information_path`. Phase two can choose technical tools, while phase one should already explain where their decisive information would come from.
+For propose, fill `feasibility_sketch` with the observable `inputs`, an `available_path` through acquisition and use, the material `key_assumption`, and `first_check`. The latter names evidence or an interface, without an experiment plan. Explain the workable route in `idea_core.construction_path`, usually one short paragraph: who uses which observable input, performs what substantive operation, and passes what result onward. Preserve detailed acquisition, checking and error treatment in `information_path` for the detailed report, rather than duplicating its fields in the main explanation. Phase one should make the key operation understandable; phase two can choose technical tools and expand implementation details.
 
 For develop, refine or review, follow the dependency path across training, inference and evaluation. For learned components, connect supervision, objective and parameter updates; for API access, use the exposed interface rather than assuming weights, token probabilities or gradients. Populate the existing schema:
 

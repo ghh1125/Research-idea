@@ -52,6 +52,53 @@ def check_references(value, evidence_ids, paper_ids):
             check_references(child, evidence_ids, paper_ids)
 
 
+def validate_idea_proposal(value, context, problem, max_candidates):
+    """Validate and normalize draft/completed ideas against their selected problems."""
+    from .idea_neighborhood import normalize_comparison_search, validate_information_path
+    decisions = {item['opportunity_id']: item for item in problem['selected_problems']}
+    check_references(value, {e["id"] for e in context["evidence"]},
+                     {p["id"] for p in context["papers"]})
+    if len(value["candidates"]) > max_candidates:
+        raise ValueError("Too many candidates")
+    proposal_ids = [candidate['opportunity_id'] for candidate in value['candidates']]
+    if len(proposal_ids) != len(set(proposal_ids)):
+        raise ValueError('Return one core idea per selected research problem')
+    for candidate in value["candidates"]:
+        if candidate['opportunity_id'] not in decisions:
+            raise ValueError('Construct an idea for a problem already selected in map.selected_problems')
+        if not candidate['selection_reason'].strip():
+            raise ValueError('Explain why this direction offers the strongest meaningful contribution')
+        if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
+            raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
+        motive = candidate["motivation"]
+        selected = next(item for item in problem['opportunities']
+                        if item['id'] == candidate['opportunity_id'])
+        if motive['problem_origin'] != selected['problem_origin']:
+            raise ValueError('The proposed problem origin must match the selected research opportunity')
+        if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+            raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
+        for comparison in candidate['positioning']:
+            if any(not comparison[field].strip() for field in ('addressed_problem', 'remaining_question', 'contribution')):
+                raise ValueError('Explain the existing problem, remaining question and contribution before presenting the idea')
+            own = {e['id'] for e in context['evidence'] if e['paper_id'] == comparison['paper_id']}
+            if not set(comparison['evidence_ids']) <= own:
+                raise ValueError('Idea positioning must cite evidence from the compared paper')
+        if not set(candidate['closest_work_ids']) <= {item['paper_id'] for item in candidate['positioning']}:
+            raise ValueError('Compare each named closest work during ideation, before technical design')
+        if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
+            raise ValueError('Describe available inputs, a working path, its key assumption and first check')
+        validate_information_path(candidate['idea_core'])
+        normalize_comparison_search(candidate['comparison_search'])
+    if not value["candidates"] and not value["no_candidate_reason"].strip():
+        raise ValueError("No-candidate outcome requires a reason")
+    if value['candidates'] and set(proposal_ids) != set(decisions):
+        raise ValueError('Construct one idea for every selected problem; do not silently drop a problem')
+    # Normalize before caching and CLI display, including on cache hits.
+    # This is the rationale made before a solution was constructed.
+    for candidate in value['candidates']:
+        candidate['selection_reason'] = decisions[candidate['opportunity_id']]['selection_reason']
+
+
 def make_evidence(paper: dict, observations: list, excerpt: str, *, source_spans=None) -> list:
     if len(observations) > 6:
         raise ValueError("Extract at most 6 observations per source")
@@ -1018,8 +1065,7 @@ class Controller:
 
     def form_ideas(self):
         """Develop each problem independently, compare, then construct ideas."""
-        from .idea_neighborhood import (normalize_comparison_search, validate_information_path,
-                                        read_neighborhoods, with_neighborhoods)
+        from .idea_neighborhood import read_neighborhoods
         context = self.ideation_context()
         # Keep the user's agenda separate from the model's proposed narrowing.
         # User follow-ups remain in the context, including any explicit narrowing.
@@ -1088,47 +1134,8 @@ class Controller:
         proposal_payload = {**context, "problem_model": selected_problem,
                             "argument_handoff": handoff,
                             "proposal_mode": "draft", "max_candidates": self.config["max_candidates"]}
-        def validate_proposal(value):
-            refs(value)
-            if len(value["candidates"]) > self.config["max_candidates"]:
-                raise ValueError("Too many candidates")
-            proposal_ids = [candidate['opportunity_id'] for candidate in value['candidates']]
-            if len(proposal_ids) != len(set(proposal_ids)):
-                raise ValueError('Return one core idea per selected research problem')
-            for candidate in value["candidates"]:
-                if candidate['opportunity_id'] not in decisions:
-                    raise ValueError('Construct an idea for a problem already selected in map.selected_problems')
-                if not candidate['selection_reason'].strip():
-                    raise ValueError('Explain why this direction offers the strongest meaningful contribution')
-                if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
-                    raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
-                motive = candidate["motivation"]
-                selected = next(item for item in problem['opportunities']
-                                if item['id'] == candidate['opportunity_id'])
-                if motive['problem_origin'] != selected['problem_origin']:
-                    raise ValueError('The proposed problem origin must match the selected research opportunity')
-                if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
-                    raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
-                for comparison in candidate['positioning']:
-                    if any(not comparison[field].strip() for field in ('addressed_problem', 'remaining_question', 'contribution')):
-                        raise ValueError('Explain the existing problem, remaining question and contribution before presenting the idea')
-                    own = {e['id'] for e in context['evidence'] if e['paper_id'] == comparison['paper_id']}
-                    if not set(comparison['evidence_ids']) <= own:
-                        raise ValueError('Idea positioning must cite evidence from the compared paper')
-                if not set(candidate['closest_work_ids']) <= {item['paper_id'] for item in candidate['positioning']}:
-                    raise ValueError('Compare each named closest work during ideation, before technical design')
-                if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
-                    raise ValueError('Describe available inputs, a working path, its key assumption and first check')
-                validate_information_path(candidate['idea_core'])
-                normalize_comparison_search(candidate['comparison_search'])
-            if not value["candidates"] and not value["no_candidate_reason"].strip():
-                raise ValueError("No-candidate outcome requires a reason")
-            if value['candidates'] and set(proposal_ids) != set(decisions):
-                raise ValueError('Construct one idea for every selected problem; do not silently drop a problem')
-            # Normalize before caching and CLI display, including on cache hits.
-            # This is the rationale made before a solution was constructed.
-            for candidate in value['candidates']:
-                candidate['selection_reason'] = decisions[candidate['opportunity_id']]['selection_reason']
+        validate_proposal = lambda value: validate_idea_proposal(
+            value, context, problem, self.config['max_candidates'])
         calls_before = self.store.get('calls_used', 0)
         self.phase = 'ideation_draft'
         draft = self.task("propose", proposal_payload, validate_proposal, publish=False)
@@ -1137,13 +1144,32 @@ class Controller:
         self.phase = 'ideation'
         result = draft
         if neighborhoods:
-            context = with_neighborhoods(context, neighborhoods)
-            result = self.task('propose', {**context, 'problem_model': selected_problem,
-                'argument_handoff': handoff,
-                'proposal_mode': 'complete', 'draft_proposals': draft['candidates'],
-                'max_candidates': self.config['max_candidates']}, validate_proposal, publish=False)
+            result = self.complete_ideas(context, selected_problem, draft, neighborhoods)
         self.activity('propose', result, self.store.get('calls_used', 0) == calls_before)
         return result
+
+    def complete_ideas(self, context, problem, draft, neighborhoods=None):
+        """Complete a saved draft using the normal task, checks and call budget.
+
+        Pass raw results from read_neighborhoods to merge them into the initial
+        context. With neighborhoods=None, context is an already merged snapshot,
+        including its idea_neighborhoods metadata. This method does not discover,
+        select or read sources, and leaves publication to its caller.
+        """
+        from .idea_neighborhood import with_neighborhoods
+        from .problem_discovery import argument_handoff
+        context = (with_neighborhoods(context, neighborhoods) if neighborhoods is not None
+                   else deepcopy(context))
+        chosen_ids = {item['opportunity_id'] for item in problem['selected_problems']}
+        selected_problem = {**problem, 'opportunities': [item for item in problem['opportunities']
+                                                       if item['id'] in chosen_ids]}
+        self.phase = 'ideation'
+        return self.task('propose', {**context, 'problem_model': selected_problem,
+            'argument_handoff': argument_handoff(selected_problem),
+            'proposal_mode': 'complete', 'draft_proposals': draft['candidates'],
+            'max_candidates': self.config['max_candidates']},
+            lambda value: validate_idea_proposal(value, context, problem, self.config['max_candidates']),
+            publish=False)
 
     def run(self):
         recovered = self.store.interrupt_running_tasks()

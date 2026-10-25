@@ -41,7 +41,7 @@ flowchart TD
 
 候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
 
-`motivation.existing_work` 说明已有方法实际做到了什么。Problem 内先以 `existing_approach_limit` 承接这些方法在相关条件下的正常回应，以 `causal_explanation` 解释为什么仍会留下或产生困难，再展示 `problem_derivation`、简明问题与意义；`research_need` 据此推导动机，最后提出回应这一需要的 idea。CLI 和主报告保持 Background、Existing methods、Possible problem、Motivation、Idea 五段连续论证，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
+CLI 和主报告开头使用 `motivation.problem_observation`、`why_this_method` 直接说明问题与想法，再展开 Background、Existing methods、Possible problem、Motivation、Idea 五段论证。`motivation.existing_work` 说明已有进展；Problem 保留 `existing_approach_limit`、`causal_explanation`、`problem_derivation` 三段；`research_need` 推导动机；Idea 正文使用 `idea_core` 的四段解释，不附完整 `information_path`。深入问题分析保持完整，由现有 `propose` 调用负责成文整合。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
 
 技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
 
@@ -169,7 +169,7 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 读取后新增证据会使旧分析卡失效；来源和 skill 变化会改变缓存身份。预算中断时，报告只展示已完成的阅读范围与当前有效分析，恢复时复用成功任务。全部文本提供给模型也不等于全面理解；图表标题的文本覆盖不等于视觉验证。
 
-主报告先展示 idea 与简要技术参考，完整论证与原文依据折叠展示。分析卡是内部推理与按需核查材料，不是增加用户操作步骤的目标。
+主报告展示核心 idea、简要技术参考与论文链接，保留影响有效性的可观察依据及它怎样改变后续操作；单篇 idea 详细报告展开 `importance`、`expected_progress`、`information_path` 的取得与核对细节以及逐篇 `positioning`。完整 JSON 保留所有分析字段。展示层重新安排已有内容，不增加模型调用、字段或科学门槛；分析卡仍供内部推理与按需核查使用。
 
 ## 构思与交流契约
 

@@ -56,7 +56,7 @@ def points(items):
 
 
 def argument_markdown(motivation, proposal, *, include_intervention=True, idea_core=None):
-    """Render consecutive parts of the argument, including older saved outputs."""
+    """Lead with the intended change, then explain the argument without its ledger."""
     existing = motivation.get('existing_work') or '；'.join(
         p.get('addressed_problem', '') for p in proposal.get('positioning', []))
     core = proposal.get('idea_core', {}) if idea_core is None else idea_core
@@ -64,28 +64,43 @@ def argument_markdown(motivation, proposal, *, include_intervention=True, idea_c
         ('concrete_target', '具体利用什么'), ('construction_path', '这些信息怎样得到'),
         ('capability_bridge', '为什么能解决这个问题'), ('essential_difference', '与已有方法的本质区别'))
         if core.get(key)]
-    for item in core.get('information_path', []):
-        concrete_idea.append('**关键信息：' + item['information'] + '**\n\n' + '\n\n'.join(
-            '**' + label + '：** ' + item[key] for key, label in (
-                ('source', '从哪里获得'), ('construction', '怎样取得'),
-                ('reliability_basis', '判断依据'), ('error_handling', '信息有误时怎样处理'),
-                ('applicability', '适用条件'))))
+    intended_change = motivation.get('why_this_method') or (
+        proposal.get('intervention') if include_intervention else core.get('concrete_target'))
+    overview = '\n\n'.join('**' + label + '：** ' + value.strip() for label, value in (
+        ('要解决什么', motivation.get('problem_observation') or proposal.get('problem')),
+        ('我们的想法', intended_change)) if value and value.strip())
     parts = [
         ('Background · 研究背景', [motivation.get('background')]),
         ('Existing methods · 现有方法做到了什么', [existing]),
         ('Possible problem · 从已有进展推导研究问题', [motivation.get('existing_approach_limit'),
             motivation.get('causal_explanation', proposal.get('hypothesis')),
-            motivation.get('problem_derivation'),
-            motivation.get('problem_observation', proposal.get('problem')),
-            motivation.get('importance', proposal.get('why_it_matters'))]),
+            motivation.get('problem_derivation')]),
         ('Motivation · 为什么需要这项研究', [motivation.get('research_need')]),
-        ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
-            motivation.get('why_this_method', proposal.get('intervention')),
-            *concrete_idea,
-            motivation.get('expected_progress')]),
+        ('Idea · 基于动机提出核心想法', concrete_idea or [
+            proposal.get('intervention') if include_intervention else None,
+            motivation.get('expected_progress') or intended_change]),
     ]
-    return '\n\n'.join('**' + label + '**\n\n' + '\n\n'.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
-                        for label, values in parts)
+    argument = '\n\n'.join('**' + label + '**\n\n' + '\n\n'.join(dict.fromkeys(v.strip() for v in values if v and v.strip()))
+                           for label, values in parts)
+    return '\n\n'.join(part for part in (overview, argument) if part)
+
+
+def argument_details_markdown(motivation, proposal, *, idea_core=None):
+    """Keep acquisition reasoning available without repeating it in the main view."""
+    core = proposal.get('idea_core', {}) if idea_core is None else idea_core
+    lines = []
+    for key, label in (('importance', '研究价值'), ('expected_progress', '预期进展')):
+        if motivation.get(key):
+            lines.append('**' + label + '：** ' + motivation[key])
+    for item in core.get('information_path', []):
+        lines.append('**关键信息：' + item['information'] + '**\n\n' + '\n\n'.join(
+            '**' + label + '：** ' + item[key] for key, label in (
+                ('source', '从哪里获得'), ('construction', '怎样取得'),
+                ('reliability_basis', '判断依据'), ('error_handling', '信息有误时怎样处理'),
+                ('applicability', '适用条件'))))
+        if item.get('evidence_ids'):
+            lines.append('来源：' + '、'.join(item['evidence_ids']))
+    return '\n\n'.join(lines)
 
 
 def design_axes_markdown(axes):
@@ -213,19 +228,10 @@ def activity_summary(stage, result, citations=None):
         for item in result.get('candidates', []):
             section('Idea · ' + item['title'])
             lines.append(argument_markdown(item['motivation'], item))
-            add('选择这个方向的理由', item.get('selection_reason'))
-            section('基本可行性')
-            sketch = item.get('feasibility_sketch', {})
-            add('可用输入', sketch.get('inputs'))
-            add('关键假设', sketch.get('key_assumption'))
-            if item.get('positioning'):
-                section('与已有工作的区别')
-            for comparison in item.get('positioning', []):
-                source(comparison['paper_id'])
-                add('已有工作解决了什么', comparison['addressed_problem'])
-                add('我们继续回答什么', comparison['remaining_question'])
-                add('预期贡献', comparison['contribution'])
-                source_refs(comparison['evidence_ids'], comparison['paper_id'])
+            if citations and item.get('closest_work_ids'):
+                section('相关论文')
+                for paper_id in dict.fromkeys(item['closest_work_ids']):
+                    source(paper_id)
         if lines:
             lines.append('第一阶段到此完成。接下来：Idea → Method，探索技术路线并形成研究方案。')
         if not lines:
@@ -265,7 +271,7 @@ def activity_summary(stage, result, citations=None):
             add('设计讨论', item['issue'])
             add('改进办法', item['action'])
     text = '\n\n'.join(lines)
-    return citations.text(text) if citations else text
+    return citations.text(text, compact=stage == 'propose') if citations else text
 
 
 def idea_markdown(candidate):
@@ -284,9 +290,6 @@ def idea_markdown(candidate):
                       idea_core=spec.get('idea_core', proposal.get('idea_core', {}))), ''])
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))
     if not spec:
-        sketch = proposal.get('feasibility_sketch', {})
-        add('可用输入', sketch.get('inputs'))
-        add('关键假设', sketch.get('key_assumption'))
         return '\n'.join(lines)
     lines.extend(['#### 第二部分 · Idea → Method · 技术参考', ''])
     axes = spec.get('design_axes') or candidate.get('design_search_plan', {}).get('design_axes', [])

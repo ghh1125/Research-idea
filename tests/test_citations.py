@@ -41,6 +41,22 @@ class CitationTests(unittest.TestCase):
         self.assertNotIn('http', citations.reference('ev_123'))
         self.assertEqual(citations.text('ev_missing'), '原文来源未找到')
 
+    def test_compact_citations_merge_adjacent_sources_but_preserve_claim_links(self):
+        second = dict(self.evidence, id='ev_456', page=6, line=102)
+        other = dict(self.paper, id='p2', title='Another paper', url='https://example.org/another')
+        third = dict(self.evidence, id='ev_789', paper_id='p2')
+        citations = Citations([self.paper, other], [self.evidence, second, third])
+        source = 'First claim (`ev_123`、ev_456, ev_789). Another claim ev_456.'
+        compact = citations.text(source, compact=True)
+        self.assertEqual(compact, 'First claim (' + citations.paper('p1') + '、' + citations.paper('p2') +
+                         '). Another claim ' + citations.paper('p1') + '.')
+        self.assertNotIn('第 4 页', compact)
+        detailed = citations.text(source)
+        self.assertIn('#page=4', detailed)
+        self.assertIn('#page=6', detailed)
+        self.assertEqual(citations.text('ev_missing', compact=True), '原文来源未找到')
+        self.assertEqual(second['page'], 6)
+
     def test_cli_design_findings_and_details_name_the_paper_without_internal_ids(self):
         from research_idea.presentation import activity_summary
         from research_idea.chat_worker import outline
