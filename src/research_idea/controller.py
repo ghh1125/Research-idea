@@ -386,7 +386,7 @@ class Controller:
 
     def retrieve_full_texts(self, selected_ids=None):
         """Acquire bounded source text; a failed download remains an evidence gap."""
-        from .literature import fetch_full_text, LiteratureError
+        from .literature import fetch_full_text, LiteratureError, FULL_TEXT_STRATEGY_VERSION
         if (not self.config["auto_search"] or not self.config.get("fetch_full_text", True)
                 or self.config["backend"] == "demo"):
             return False
@@ -397,12 +397,14 @@ class Controller:
                 continue
             if paper.get("content_kind") != "abstract":
                 continue
-            key = digest([paper["id"], paper.get("url"), paper.get("pdf_url"), paper.get("locations")])
+            key = digest([FULL_TEXT_STRATEGY_VERSION, paper["id"], paper.get("url"),
+                          paper.get("pdf_url"), paper.get("locations")])
             previous = ledger.get(key, {})
             if paper['id'] in self.full_text_attempted or previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
                 continue
             self.check_budget()
             entry = {"paper_id": paper["id"], "status": "started", "time": now(),
+                     "strategy_version": FULL_TEXT_STRATEGY_VERSION,
                      "attempts": previous.get("attempts", 0) + 1}
             ledger[key] = entry
             self.store.set("full_text_ledger", ledger)

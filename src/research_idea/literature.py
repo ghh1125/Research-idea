@@ -30,6 +30,9 @@ from .venues import SOURCE_QUERIES, RELATED_SOURCE_VENUES, VENUES, canonical_ven
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_SOURCE_BYTES = 32 * 1024 * 1024
+# Bump when PDF resolution or fallback behavior changes, so exhausted failures
+# can use the new strategy without discarding their retrieval history.
+FULL_TEXT_STRATEGY_VERSION = 2
 ARXIV_ENDPOINT = "https://export.arxiv.org/api/query"
 OPENALEX_ENDPOINT = "https://api.openalex.org/works"
 OPENALEX_SOURCES_ENDPOINT = "https://api.openalex.org/sources"

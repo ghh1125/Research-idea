@@ -8,9 +8,9 @@ from unittest.mock import patch
 from research_idea.config import DEFAULTS
 from research_idea.backend_types import BackendResult
 from research_idea.controller import BudgetExhausted, Controller
-from research_idea.literature import LiteratureError, normalize_paper
+from research_idea.literature import LiteratureError, normalize_paper, FULL_TEXT_STRATEGY_VERSION
 from research_idea.report import export_report
-from research_idea.store import Store
+from research_idea.store import Store, digest
 
 
 class ScreeningBackend:
@@ -96,6 +96,64 @@ class RetrievalFlowTests(unittest.TestCase):
             for _ in range(3):
                 self.controller().retrieve_full_texts()
         self.assertEqual(fetch.call_count, 2)
+
+    def test_legacy_exhausted_failure_gets_new_strategy_without_resetting_budget(self):
+        self.store.put('papers', self.paper)
+        legacy_key = digest([self.paper['id'], self.paper.get('url'),
+                             self.paper.get('pdf_url'), self.paper.get('locations')])
+        previous = {'paper_id': self.paper['id'], 'status': 'failed',
+                    'attempts': 2, 'error': 'Old resolver returned HTTP 404'}
+        self.store.set('full_text_ledger', {legacy_key: previous})
+        self.store.set('calls_used', 7)
+        self.store.set('elapsed_s', 12)
+        full = dict(self.paper, content_kind='full_text', text='Recovered public source.')
+        with patch('research_idea.literature.fetch_full_text', return_value=full) as fetch:
+            self.assertTrue(self.controller().retrieve_full_texts())
+            self.assertFalse(self.controller().retrieve_full_texts())
+        fetch.assert_called_once()
+        ledger = self.store.get('full_text_ledger')
+        self.assertEqual(ledger[legacy_key], previous)
+        current = next(entry for key, entry in ledger.items() if key != legacy_key)
+        self.assertEqual(current['strategy_version'], FULL_TEXT_STRATEGY_VERSION)
+        self.assertEqual(current['attempts'], 1)
+        self.assertEqual(current['status'], 'completed')
+        self.assertEqual(self.store.get('calls_used'), 7)
+        self.assertGreaterEqual(self.store.get('elapsed_s'), 12)
+
+    def test_two_failures_remain_exhausted_until_strategy_changes(self):
+        self.store.put('papers', self.paper)
+        with patch('research_idea.literature.fetch_full_text', side_effect=LiteratureError('PDF unavailable')) as fetch:
+            for _ in range(3):
+                self.controller().retrieve_full_texts()
+            self.assertEqual(fetch.call_count, 2)
+            with patch('research_idea.literature.FULL_TEXT_STRATEGY_VERSION', FULL_TEXT_STRATEGY_VERSION + 1):
+                for _ in range(3):
+                    self.controller().retrieve_full_texts()
+            self.assertEqual(fetch.call_count, 4)
+        entries = list(self.store.get('full_text_ledger').values())
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(all(entry['attempts'] == 2 for entry in entries))
+        self.assertEqual({entry['strategy_version'] for entry in entries},
+                         {FULL_TEXT_STRATEGY_VERSION, FULL_TEXT_STRATEGY_VERSION + 1})
+
+    def test_strategy_change_keeps_existing_full_text_without_redownload(self):
+        full = dict(self.paper, content_kind='full_text', text='Already acquired source.')
+        self.store.put('papers', full)
+        with patch('research_idea.literature.FULL_TEXT_STRATEGY_VERSION', FULL_TEXT_STRATEGY_VERSION + 1), \
+             patch('research_idea.literature.fetch_full_text') as fetch:
+            self.assertFalse(self.controller().retrieve_full_texts())
+        fetch.assert_not_called()
+        self.assertEqual(self.store.rows('papers')[0], full)
+
+    def test_new_strategy_still_respects_exhausted_project_budget(self):
+        self.store.put('papers', self.paper)
+        self.store.set('calls_used', self.config['max_calls'])
+        with patch('research_idea.literature.fetch_full_text') as fetch:
+            with self.assertRaises(BudgetExhausted):
+                self.controller().retrieve_full_texts()
+        fetch.assert_not_called()
+        self.assertEqual(self.store.get('calls_used'), self.config['max_calls'])
+        self.assertEqual(self.store.get('full_text_ledger', {}), {})
 
     def test_recovered_or_removed_source_is_not_a_current_retrieval_gap(self):
         self.store.put('papers', self.paper)
