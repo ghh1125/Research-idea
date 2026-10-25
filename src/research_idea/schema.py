@@ -44,7 +44,8 @@ OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), 
     evidence_ids=STRINGS, closest_work_ids=STRINGS)
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
-    opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY))
+    opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
+    selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
     problem_origin=string(PROBLEM_ORIGINS), problem_derivation=STR,
     problem_observation=STR, evidence_ids=STRINGS, importance=STR, existing_approach_limit=STR,
@@ -52,10 +53,11 @@ MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), ba
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
 FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
 IDEA_CORE = obj(concrete_target=STR, construction_path=STR, capability_bridge=STR, essential_difference=STR)
-PROPOSE = obj(candidates=array(obj(title=STR, problem=STR, hypothesis=STR, mechanism=STR, intervention=STR,
-    prediction=STR, falsifier=STR, evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
-    opportunity_id=STR, selection_reason=STR, motivation=MOTIVATION, positioning=array(POSITIONING),
-    feasibility_sketch=FEASIBILITY_SKETCH, idea_core=IDEA_CORE)), no_candidate_reason=STR)
+PROPOSE = obj(candidates=array(obj(opportunity_id=STR, selection_reason=STR, title=STR,
+    motivation=MOTIVATION, problem=STR, hypothesis=STR, idea_core=IDEA_CORE,
+    mechanism=STR, intervention=STR, prediction=STR, falsifier=STR,
+    evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
+    positioning=array(POSITIONING), feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)
 DESIGN_OPTION = obj(axis_ids=STRINGS, question=STR, source_technique=STR, shared_structure=STR, source_conditions=STR,
     adaptation=STR, why_it_helps=STR, simpler_alternative=STR, first_test=STR, evidence_ids=STRINGS)
 DESIGN_TRANSFER = obj(paper_id=STR, options=array(DESIGN_OPTION), reading_gaps=STRINGS)

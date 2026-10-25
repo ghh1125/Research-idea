@@ -91,7 +91,7 @@ class PipelineBackend:
                       "observations": ["A narrow reported result does not establish the broad claim."],
                       "competing_explanations": ["Feedback validity versus prompt differences"],
                       "unresolved_questions": ["Does the mechanism survive a matched-prompt control?"],
-                      "opportunity_types": [], "evidence_ids": [item["id"] for item in payload["evidence"]], "opportunities": []}
+                      "opportunity_types": [], "evidence_ids": [item["id"] for item in payload["evidence"]], "opportunities": [], "selected_problems": []}
         elif task.stage == "propose":
             output = {"candidates": [], "no_candidate_reason": "These synthetic sources are insufficient to justify a new candidate."}
         else:

@@ -75,13 +75,24 @@ class DemoBackend:
                     ('order', '相同证据的顺序为何影响回答？',
                      '我们怀疑更多来源拼接后，模型对信息位置的不同关注会改变实际使用的依据，即使完整内容没有变化。',
                      '需要弄清扩大信息覆盖时，怎样维持对关键内容的稳定使用，避免新增信息使回答更加依赖排列。')]]
+            output['selected_problems'] = [
+                {'opportunity_id': item['id'],
+                 'selection_reason': '合成演示优先区分信息缺失与使用困难：这关系到已有资料能否支持可靠回答，单纯增加资料仍可能留下依据选择问题。'}
+                for item in output['opportunities'][:payload.get('max_candidates', 1)]]
         elif task.stage == "propose":
             candidates = []
-            for title, intervention in [("演示候选：固定检索的冲突诊断", "保持证据完整，改变冲突程度"), ("演示候选：证据顺序敏感性", "保持证据内容，随机交换段落顺序")][:payload["max_candidates"]]:
+            opportunities = {item['id']: item for item in payload['problem_model']['opportunities']}
+            decisions = payload['problem_model'].get('selected_problems') or [
+                {'opportunity_id': item['id'], 'selection_reason': '旧演示问题的构思。'}
+                for item in payload['problem_model']['opportunities'][:payload['max_candidates']]]
+            for decision in decisions:
+                selected = opportunities[decision['opportunity_id']]
+                title = '演示候选：' + selected['question']
+                intervention = ('保持证据内容，随机交换段落顺序' if selected['id'] == 'order'
+                                else '保持证据完整，改变冲突程度')
                 candidates.append({"title": title, "problem": "诊断假想错误来源", "hypothesis": "待检验：输入证据的关系会影响答案稳定性。", "mechanism": "在信息保持可用时分离冲突或顺序因素。", "intervention": intervention, "prediction": "如果假设成立，控制条件之间会出现可重复差异。", "falsifier": "正确实现且测量充分时没有差异，或简单控制解释全部差异。", "evidence_ids": refs, "closest_work_ids": papers, "why_it_matters": "演示如何把假设转化为诊断，不宣称创新或有效。"})
-                selected = payload['problem_model']['opportunities'][len(candidates) - 1]
                 candidates[-1]['opportunity_id'] = selected['id']
-                candidates[-1]['selection_reason'] = '合成演示优先区分信息缺失与使用困难，保留研究问题和可用信息之间的联系。'
+                candidates[-1]['selection_reason'] = decision['selection_reason']
                 candidates[-1]["motivation"] = {"basis": "research_hypothesis", "background": "多来源问答需要可靠地使用已经取得的证据。", "problem_observation": "合成笔记描述假想的证据冲突错误；尚无实测现象。", "evidence_ids": refs,
                     "problem_origin": selected['problem_origin'], "problem_derivation": selected['derivation'],
                     "existing_work": "合成场景中的现有做法通过检索向回答模型提供相关文本，以缓解信息缺失。",

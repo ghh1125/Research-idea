@@ -5,7 +5,7 @@ import json
 
 from .idea_instructions import MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES
 
-PROMPT_VERSION = "29"
+PROMPT_VERSION = "31"
 
 
 def stage_version(stage):

@@ -791,6 +791,92 @@ class Controller:
         room = self.config['max_papers'] - len(self.store.rows('papers'))
         return self.select_search_results([key], min(room, max_new if max_new is not None else 3), candidate=candidate)
 
+    def form_ideas(self):
+        """Choose consequential problems in map, then construct their ideas."""
+        context = self.ideation_context()
+        # Keep the user's agenda separate from the model's proposed narrowing.
+        # User follow-ups remain in the context, including any explicit narrowing.
+        user_goal = context.get('topic') or ''
+        refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
+        def validate_problem(value):
+            refs(value)
+            value['research_frame']['user_goal'] = user_goal
+            if any(not part.strip() for part in value['research_frame'].values()):
+                raise ValueError('Connect the user goal, synthesized literature logic, research question and source scope')
+            opportunities = value['opportunities']
+            if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:
+                raise ValueError('Problem origins must match the unresolved needs or emerging problems in the research directions')
+            if len(opportunities) > 4:
+                raise ValueError('Keep at most four substantive research directions')
+            ids = set()
+            for opportunity in opportunities:
+                if any(not item.strip() for key, item in opportunity.items()
+                       if key not in {'evidence_ids', 'closest_work_ids'}):
+                    raise ValueError('Explain how the literature leads to each research direction, its value and plausible path')
+                if opportunity['id'] in ids:
+                    raise ValueError('Research direction IDs must be unique')
+                ids.add(opportunity['id'])
+                if opportunity['basis'] == 'source_observation' and not opportunity['evidence_ids']:
+                    raise ValueError('An observed research opportunity requires source evidence; hypotheses may have no citations')
+            decisions = value['selected_problems']
+            chosen_ids = [item['opportunity_id'] for item in decisions]
+            if len(chosen_ids) != len(set(chosen_ids)) or not set(chosen_ids) <= ids:
+                raise ValueError('Select unique existing research problems before proposing an idea')
+            if (opportunities and not decisions) or len(decisions) > self.config['max_candidates']:
+                raise ValueError('Choose research problems within max_candidates before method construction')
+            if any(not item['selection_reason'].strip() for item in decisions):
+                raise ValueError('Explain the research value of the problem choice before constructing a method')
+        problem = self.task("map", {**context, "max_candidates": self.config["max_candidates"]}, validate_problem)
+        self.store.set("problem_model", problem)
+        # Commit the research choice before any method is generated. Keep the full
+        # pool in storage, but give the constructor only the selected problems.
+        decisions = {item['opportunity_id']: item for item in problem['selected_problems']}
+        selected_problem = {**problem, 'opportunities': [item for item in problem['opportunities']
+                                                       if item['id'] in decisions]}
+        proposal_payload = {**context, "problem_model": selected_problem, "max_candidates": self.config["max_candidates"]}
+        def validate_proposal(value):
+            refs(value)
+            if len(value["candidates"]) > self.config["max_candidates"]:
+                raise ValueError("Too many candidates")
+            proposal_ids = [candidate['opportunity_id'] for candidate in value['candidates']]
+            if len(proposal_ids) != len(set(proposal_ids)):
+                raise ValueError('Return one core idea per selected research problem')
+            for candidate in value["candidates"]:
+                if candidate['opportunity_id'] not in decisions:
+                    raise ValueError('Construct an idea for a problem already selected in map.selected_problems')
+                if not candidate['selection_reason'].strip():
+                    raise ValueError('Explain why this direction offers the strongest meaningful contribution')
+                if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
+                    raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
+                motive = candidate["motivation"]
+                selected = next(item for item in problem['opportunities']
+                                if item['id'] == candidate['opportunity_id'])
+                if motive['problem_origin'] != selected['problem_origin']:
+                    raise ValueError('The proposed problem origin must match the selected research opportunity')
+                if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
+                    raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
+                for comparison in candidate['positioning']:
+                    if any(not comparison[field].strip() for field in ('addressed_problem', 'remaining_question', 'contribution')):
+                        raise ValueError('Explain the existing problem, remaining question and contribution before presenting the idea')
+                    own = {e['id'] for e in context['evidence'] if e['paper_id'] == comparison['paper_id']}
+                    if not set(comparison['evidence_ids']) <= own:
+                        raise ValueError('Idea positioning must cite evidence from the compared paper')
+                if not set(candidate['closest_work_ids']) <= {item['paper_id'] for item in candidate['positioning']}:
+                    raise ValueError('Compare each named closest work during ideation, before technical design')
+                if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
+                    raise ValueError('Describe available inputs, a working path, its key assumption and first check')
+                if any(not text.strip() for text in candidate['idea_core'].values()):
+                    raise ValueError('Explain the concrete target, construction path, capability bridge and essential difference in idea_core')
+            if not value["candidates"] and not value["no_candidate_reason"].strip():
+                raise ValueError("No-candidate outcome requires a reason")
+            if value['candidates'] and set(proposal_ids) != set(decisions):
+                raise ValueError('Construct one idea for every selected problem; do not silently drop a problem')
+            # Normalize before caching and CLI display, including on cache hits.
+            # This is the rationale made before a solution was constructed.
+            for candidate in value['candidates']:
+                candidate['selection_reason'] = decisions[candidate['opportunity_id']]['selection_reason']
+        return self.task("propose", proposal_payload, validate_proposal)
+
     def run(self):
         recovered = self.store.interrupt_running_tasks()
         if recovered:
@@ -820,63 +906,7 @@ class Controller:
                     cohort = None
             cohort_created = False
             if not cohort or cohort.get("key") != cohort_key:
-                context = self.ideation_context()
-                refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
-                def validate_problem(value):
-                    refs(value)
-                    if any(not part.strip() for part in value['research_frame'].values()):
-                        raise ValueError('Connect the user goal, synthesized literature logic, research question and source scope')
-                    opportunities = value['opportunities']
-                    if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:
-                        raise ValueError('Problem origins must match the unresolved needs or emerging problems in the research directions')
-                    if len(opportunities) > 4:
-                        raise ValueError('Keep at most four substantive research directions')
-                    ids = set()
-                    for opportunity in opportunities:
-                        if any(not item.strip() for key, item in opportunity.items()
-                               if key not in {'evidence_ids', 'closest_work_ids'}):
-                            raise ValueError('Explain how the literature leads to each research direction, its value and plausible path')
-                        if opportunity['id'] in ids:
-                            raise ValueError('Research direction IDs must be unique')
-                        ids.add(opportunity['id'])
-                        if opportunity['basis'] == 'source_observation' and not opportunity['evidence_ids']:
-                            raise ValueError('An observed research opportunity requires source evidence; hypotheses may have no citations')
-                problem = self.task("map", context, validate_problem)
-                self.store.set("problem_model", problem)
-                proposal_payload = {**context, "problem_model": problem, "max_candidates": self.config["max_candidates"]}
-                def validate_proposal(value):
-                    refs(value)
-                    if len(value["candidates"]) > self.config["max_candidates"]:
-                        raise ValueError("Too many candidates")
-                    for candidate in value["candidates"]:
-                        if candidate['opportunity_id'] not in {item['id'] for item in problem['opportunities']}:
-                            raise ValueError('Select an existing research direction from problem_model.opportunities')
-                        if not candidate['selection_reason'].strip():
-                            raise ValueError('Explain why this direction offers the strongest meaningful contribution')
-                        if any(not candidate[k].strip() for k in ("hypothesis", "mechanism", "prediction", "falsifier")):
-                            raise ValueError("Candidate needs evidence, a mechanism, prediction and falsifier")
-                        motive = candidate["motivation"]
-                        selected = next(item for item in problem['opportunities']
-                                        if item['id'] == candidate['opportunity_id'])
-                        if motive['problem_origin'] != selected['problem_origin']:
-                            raise ValueError('The proposed problem origin must match the selected research opportunity')
-                        if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
-                            raise ValueError("Candidate needs a grounded problem-motivation-method chain and necessity test")
-                        for comparison in candidate['positioning']:
-                            if any(not comparison[field].strip() for field in ('addressed_problem', 'remaining_question', 'contribution')):
-                                raise ValueError('Explain the existing problem, remaining question and contribution before presenting the idea')
-                            own = {e['id'] for e in context['evidence'] if e['paper_id'] == comparison['paper_id']}
-                            if not set(comparison['evidence_ids']) <= own:
-                                raise ValueError('Idea positioning must cite evidence from the compared paper')
-                        if not set(candidate['closest_work_ids']) <= {item['paper_id'] for item in candidate['positioning']}:
-                            raise ValueError('Compare each named closest work during ideation, before technical design')
-                        if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
-                            raise ValueError('Describe available inputs, a working path, its key assumption and first check')
-                        if any(not text.strip() for text in candidate['idea_core'].values()):
-                            raise ValueError('Explain the concrete target, construction path, capability bridge and essential difference in idea_core')
-                    if not value["candidates"] and not value["no_candidate_reason"].strip():
-                        raise ValueError("No-candidate outcome requires a reason")
-                proposed = self.task("propose", proposal_payload, validate_proposal)
+                proposed = self.form_ideas()
                 if self.store.rows("candidates"):
                     self.store.event("cohort_archived", {"candidates": self.store.rows("candidates")})
                 cohort = {"key": cohort_key, "proposed": proposed, "created_at": now(),
@@ -900,6 +930,10 @@ class Controller:
                         for key in ('id', 'question', 'problem_origin', 'basis', 'derivation',
                                     'prior_art_delta', 'why_it_matters', 'bottleneck_hypothesis', 'research_need')
                         if key in selected}
+                    decision = next((decision for decision in self.store.get('problem_model', {}).get('selected_problems', [])
+                                     if decision['opportunity_id'] == item['opportunity_id']), None)
+                    if decision:
+                        candidate['selected_opportunity']['selection_reason'] = decision['selection_reason']
                 candidates.append(candidate)
             self.store.replace_candidates(candidates)
             for candidate in candidates:

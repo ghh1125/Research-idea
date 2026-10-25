@@ -158,6 +158,14 @@ def activity_summary(stage, result, citations=None):
         else:
             add('观察', result.get('observations'))
             add('可能的原因', result.get('competing_explanations'))
+        choices = result.get('selected_problems', [])
+        directions = {item['id']: item for item in result.get('opportunities', [])}
+        for choice in choices:
+            question = directions.get(choice['opportunity_id'], {}).get('question', choice['opportunity_id'])
+            section('先选定问题 · ' + question)
+            add('为什么优先研究它', choice['selection_reason'])
+        if choices:
+            lines.append('问题与选择理由已保存。接下来围绕这个障碍构思 idea。')
     elif stage == 'propose':
         for item in result.get('candidates', []):
             section('Idea · ' + item['title'])

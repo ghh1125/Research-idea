@@ -1,36 +1,44 @@
 ---
 name: research-idea-motivation
-description: Synthesize source analyses into consequential research problems and motivations before proposing an idea. Use during problem mapping, proposal, development, refinement or review for LLM/NLP research.
+description: Derive consequential research problems from literature, choose them before constructing solutions, and carry that rationale into LLM/NLP ideas and technical design.
 ---
 
-## Input
+## Input and role
 
 Use the supplied topic, user_notes, constraints, evidence and task schema. This skill guides reasoning; it is not scientific evidence. Work within the current task without tools or scripts.
 
-## Procedure
+The first phase uses two existing calls. **map chooses a problem and explains why it deserves research; propose constructs an idea for that choice.** This is a division of thinking, not an extra review or approval. Think boldly about plausible new difficulties; do not limit ideas to repairs already suggested by source papers.
 
-先大胆提出猜想，再借文献把推导想深。不要因预想的审稿反对只留下安全的小改动，也不要把一篇论文已经写好的改进方向当作用户要研究的问题。
+## Form the problem before the solution
 
-1. **先问什么进展真正值得追求。** 从用户的大背景说明希望模型或研究者多做到什么、理解什么，以及为什么重要。尊重用户主动限定的范围；具体问题可以聚焦，研究理由仍须连接到原目标。不要把目标提前改写成某篇论文的指标或操作。
-2. **综合已有思路。** 按解决思路说明已有工作推进了目标的哪一部分、依靠什么原理、适用于什么条件。用 paper_claim_audits 区分作者解释与实际结论，不把不同设置的结果当作直接比较。第一阶段暂不带入论文卡里预制的改法、idea_relevance 和实验建议，但保留方法、结果、疑点与原文。论文是形成认识的材料，不是逐篇修补的清单。一篇论文也能启发大问题，不规定论文数量或共同缺陷。
-3. **只沿两个角度提出问题。** emerging_problem：已有方法解决原问题，但解决、使用或发展过程又产生重要的新困难。unresolved_need：从大背景提出一个重要的新问题，现有主要思路跨不过其中的关键障碍。沿“线索 → 有意义的条件或变化 → 困难如何产生 → 对目标的影响”推演。问题和原因都可以是猜想，不必先有失败观察或实验。bottleneck_hypothesis 解释根本关系或过程，不写成缺少我们想加的模块。
-4. **分清关键障碍和实现中的小缺点。** 即使源论文按设计正常工作，我们真正想追求的进展是什么，还有什么困难？若新困难恰由某类方法的成功使用产生，讲明依赖及重要后果，不要求它脱离这类方法仍然存在。why_it_matters 连接“跨过障碍 → 获得重要能力或认识 → 推进原目标”。局部改动可以服务大问题，但仅修补操作或重新平衡取舍，不能靠宏大措辞成为重要问题。问题过小时回到背景重新头脑风暴，不增加门禁或风险清单。
-5. **从原因推出动机。** prior_art_delta 认真考虑已有主要思路对同一问题的正常回应，包括更新、探索和信息获取，再解释为什么关键障碍可能仍在。不是挑最容易批评的一篇；理论表达能力不等于实际已解决，相似主题也不等于贡献重合。research_need 由原因推出需要理解什么关系、实现什么能力或改变什么原则，以及为什么有必要。此时不指定组件、算法或实施路径。
-6. **在 propose 才构思想法。** 先比较问题与动机，selection_reason 说明为何所选障碍更重要、原因猜想更有启发；再从该 research_need 大胆构思能作用于原因的 idea。用 idea_core 解释作用对象、信息来源、核心改变与能力之间的连接、同最接近工作的实质关系。基本可行性在这里推演，不能依赖隐藏答案、循环监督或未定义的可靠组件。方法可以简单、可以借鉴其他领域，问题不会因此缩成对某个组件的修补。
-7. **把问题与动机带到后续。** map 输出问题、原因猜想、研究意义、已有回应和研究需要；不再提前填方法洞见或实现路径。propose 形成核心 idea，第二阶段再探索技术参考。后续可以合理调整问题，但要一起更新原因、动机和贡献，说明理由。避免越做越像修补借来的方法。沿用现有调用，不加评分、审批、审查轮次或实验要求。
+把用户原目标与我们提出的研究聚焦分开。research_frame.user_goal 保留原始 topic，明确补充以 user_notes 为准；选中的能力写入 research_question，在 scope_connection 解释它为何推进原目标。不能先把候选能力说成用户需要，再用符合需要证明其重要性。按解决思路综合已有工作：它们依靠什么原理，已经帮助我们走到了哪里。阅读者为某篇论文预制的改法不是出发点；保留论文的方法、实际结果、条件、疑点和证据，用它们形成更大的认识。
 
-## Output
+只沿两个角度引出问题：
 
-Return only the current task JSON. In map, research_frame connects the user goal, literature logic and consequential questions. Each opportunity has question, problem_origin, basis, derivation, bottleneck_hypothesis, why_it_matters, prior_art_delta, research_need and real source IDs. opportunity_types lists the two origins actually used. Different opportunities should differ in the problem or explanation, not just name different interventions. Leave selection to propose.
+- **emerging_problem**：已有办法解决了原问题，但成功使用或继续发展时又产生重要困难。说明困难怎样产生、影响什么、为什么原有思路难以处理。
+- **unresolved_need**：从大背景提出一个重要问题，说明现有主要思路推进后还可能跨不过什么障碍，以及它怎样妨碍所需的进展。
 
-In propose, opportunity_id identifies the chosen problem and motivation.problem_origin matches it. Carry its research_need and connection to the broader goal into the argument. problem_observation first states in one or two plain sentences what cannot be done or would go wrong; then explain the cause. The reader should understand the problem without first learning the proposed technology. motivation.research_need develops the selected motivation, while why_this_method and idea_core explain the resulting idea. A larger slogan does not replace the missing causal link.
+两条路线都可以是合理猜想。已知机制、条件变化、文献现象之间的联系可以启发尚未被报告的困难。用“我们推测，在……时，……因为……”把条件、过程和后果讲清一次，再向前展开；不要求先有实验，也不要求问题在自己的关键假设错误时仍然成立。basis 记录 source_observation 或 research_hypothesis，引用真实前提不会把新推断变成观察事实。
 
-Build one argument: background → existing progress → consequential problem → possible cause and existing response → research_need → idea. selected_opportunity preserves the starting derivation, basis, why_it_matters, bottleneck_hypothesis, prior_art_delta and research_need; older snapshots may lack fields. Compare it with the current rationale. Reasoned reframing is allowed: update the problem, origin, basis, motivation and core idea together, explaining the change in review_responses when refining.
+把问题、原因与意义连起来，而不只是为三个字段填话：
 
-basis 区分来源报告的困难和我们推演的新困难。引用真实前提仍可以是 research_hypothesis，不会自动变成 source_observation。已观察现象的原因也可以是假设。对于推测的新问题，问“推断为什么合理，如果成立为什么重要”，不要求它在关键假设错误时仍然存在。用“我们推测，在……时，……因为……”自然交代一次，后面展开动机与想法，不堆叠免责声明。
+1. **从目标到困难。** 先说明原目标需要哪种实质进展，再解释哪件做不到或变坏的事情会阻碍它。不能从“可能存在没学好的关系或没用好的信息”直接跳到关键障碍；需要说明目标为什么依赖它。“泛化”“关系”“效率”等类别还不足以让读者知道问题是什么。
+2. **让已有回应改变我们的判断。** 将最强的正常已有办法放进所猜的条件，推演它怎样影响原因、会缓解什么、介入之后还可能剩下什么困难。若它已经在改变所猜的原因，就不能原样重复干预之前的困难。不是列完方法后加一句“不保证”“没显式考虑”，也不要求证明所有方法失败。这里的剩余困难同样可以是有机制理由的新猜想。
+3. **说明为什么值得优先研究。** 如果跨过该障碍，什么重要事情会变得可做，或哪项认识会改变？如果只继续推进已有思路却留下它，为什么原目标还会受限？大背景重要，不代表每个有关的小缺点都重要。局部变化也能有重大意义，但要说明这条联系，不能以宏大措辞代替。
+4. **由剩余困难产生动机。** 据此需要理解什么关系、获得什么能力或改变什么原则？这一需要应在没有算法名、模块名时仍然说得通。过渡不成立时重新考虑问题或原因，不往技术里加细节来掩盖它。
 
-表达像和研究同伴讨论：详细、平实地解释事情，先说明谁遇到了什么困难，再解释原因与思路；必要术语先解释后命名。每段推进一个环节，避免压缩摘要、抽象名词堆砌和重复重要性。第一阶段不给具体例子或实验计划；feasibility_sketch、simplest_alternative 与 necessity_test 只保留简短内部推敲。
+一篇论文也能启发重要问题，不规定来源数量或共同缺陷。由某类方法带来的新问题可以依赖这类方法，不要求换掉它后问题仍存在。相似主题不代表问题已经解决；作者 claim 要结合实际方法与证据理解。
 
-## Improving a weak rationale
+## Choose, then construct
 
-If a question only repairs one source's operation, return to the user's goal and ask what consequential problem the source helps reveal. Improve the question within the same task instead of adding technical detail or stronger adjectives. Consider the strongest normal existing responses without weakening them. Related methods are useful building blocks; the contribution may be a new capability, relation or explanation. Explain what makes it meaningful and how the idea could work. Missing experiments and a reasoned uncertain hypothesis are normal at this stage, not reasons to stop brainstorming.
+**In map:** 使用 derivation、bottleneck_hypothesis、prior_art_delta、why_it_matters、research_need 保存上述论证。通常探索两三个在问题或原因上不同的方向，不凑数量。比较的是原目标为何仍难实现的不同解释，不是先偏爱一种能力，再围绕它生成主问题和副作用。用户已明确聚焦时，在其范围内探索。最后写 selected_problems（opportunity_id、selection_reason），最多 max_candidates 个，通常一个。在没有设计方法的这次调用里比较问题的价值：暂不考虑技术是否好写，说明为何这个困难与原目标联系更实在、已有回应后为何仍值得追问、跨过它意味着什么。选择的是已经明确的重要能力和障碍，不把一个宽泛类别留给下一步按技术方便来填充。未选问题仍保存，不需要贬低或评分。
+
+**In propose:** 接收已经保存的选择，继承理由；本次选择解决办法。先从所需进展与障碍推导操作应起什么作用，再考虑利用什么可获得的信息、采用什么思路。idea_core 展开对象、获取路径、作用与能力的连接、同最近工作的实质区别。路径行不通时换办法，不悄悄把问题改成某种技术容易完成的小任务。基本可行性在这里推演，第二阶段再探索技术参考；不要求详细工程或实验。
+
+**In develop/refine/review:** selected_opportunity 保存最初问题、推导、研究需要和选择理由；旧快照可能缺字段。可以因新的认识调整问题，同步解释原因并更新动机、核心想法与贡献。不能为了借用某个技术而无声缩小目标，也不因快照存在而强迫恢复一个已经有理由修正的判断。
+
+## Explain the resulting argument
+
+Background → Problem → Motivation → Idea 是一条因果论证。背景先说需要与已有进展；问题先用普通话说明什么重要事情做不到、为什么从背景会遇到它；动机说明已有回应后还需要改变什么；idea 直接回应这个需要。读者应在看到解决办法之前就理解选题的必要性。
+
+像向研究同伴解释为什么觉得这件事值得做：详细、平实，每段推进一步，必要术语先解释再命名。不要用篇幅、抽象名词或重复强调重要性代替过渡。第一阶段不写具体例子、实验计划或退路声明。大胆提出有理由的想法，缺少实测不是停止构思的理由；输出遵守当前任务 JSON，不新增评分、审批或额外审查。
