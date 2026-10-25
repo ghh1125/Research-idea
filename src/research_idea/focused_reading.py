@@ -95,14 +95,70 @@ def _render(text, spans):
     return "\n\n".join(f"[SOURCE SPAN {start}:{end}]\n{text[start:end]}" for start, end in spans)
 
 
+def _operative_sections(text, body_ranges):
+    """Find a few operative headings, including PDF headings missed by inventory.
+
+    A short prose line beginning with 'model' is not an operative heading.
+    Methodology and Implementation can be separate unnumbered lines after a
+    PDF puts the section number on the preceding line.
+    """
+    from .paper_reading import NUMBERING
+    families = {
+        "method": r"(?:(?:our|proposed)\s+)?(?:methods?|methodology|approach|framework)\b|(?:overall|system)\s+(?:architecture|overview)\b|(?:研究)?方法|模型架构",
+        "algorithm": r"algorithms?\b|算法",
+        "implementation": r"implementations?\b|implementation\s+details\b|实现细节|实现方法",
+    }
+    choices = {}
+    for line in re.finditer(r"(?m)^[ \t]*[^\n\r]{1,120}\r?$", text):
+        title = line.group().strip()
+        clean = re.sub(r"^#{1,6}\s*", "", title)
+        explicit = bool(NUMBERING.match(clean) or title.startswith("#"))
+        clean = NUMBERING.sub("", clean).strip()
+        family = next((name for name, pattern in families.items() if re.match(pattern, clean, re.I)), None)
+        if not family or len(clean.split()) > 10 or re.search(r"[.!?。！？]$", clean):
+            continue
+        canonical = bool(re.fullmatch(r"(?:(?:our|proposed)\s+)?(?:methods?|methodology|approach|framework|algorithms?|implementations?(?:\s+details)?)", clean, re.I))
+        separated = line.start() == 0 or text[max(0, line.start() - 4):line.start()].endswith(("\n\n", "\r\n\r\n"))
+        if not (explicit or canonical or separated):
+            continue
+        body = next(((start, end) for start, end in body_ranges if start <= line.start() < end), None)
+        if body is None:
+            continue
+        item = {"title": title, "start": line.start(), "heading_end": line.end(), "family": family,
+                "body_start": body[0], "body_end": body[1]}
+        rank = (not canonical, line.start())
+        if family not in choices or rank < choices[family][0]:
+            choices[family] = (rank, item)
+    return [choices[family][1] for family in families if family in choices]
+
+
+def _operative_window(text, section, width):
+    # Include some input/problem definitions before the method, but spend most
+    # of the window on its operations and subsequent subsections.
+    start = max(section['body_start'], section['start'] - min(2000, width // 4))
+    end = min(section['body_end'], start + width)
+    boundary = text.find("\n\n", start, section['start'])
+    if boundary >= 0:
+        start = boundary + 2
+    boundary = text.rfind("\n\n", section['heading_end'], end)
+    # Do not throw away a long final paragraph merely because its beginning is
+    # the last blank line. A bounded continuous partial paragraph is useful;
+    # an entire section ending at the body boundary needs no trimming at all.
+    if end < section['body_end'] and boundary >= 0 and end - boundary <= min(512, width // 4):
+        end = boundary
+    return start, end
+
+
 def select_focused_excerpt(text: str, limit: int, search_terms, reading_question: str = "") -> dict | None:
     """Return exact source spans plus audit metadata, or None for generic fallback.
 
     Explicit English terms locate candidates. English words in the reading
     question only break ties between those candidates; they cannot create a
-    match. Up to four windows are selected, counting span markers in ``limit``.
-    Bibliography-only matches never consume the reading allowance. A single
-    matching term is a location hint, not proof of scientific relevance.
+    match. After a lexical match, method/algorithm/implementation context can
+    expose operations absent from an introductory mention. Up to four windows
+    are selected, counting span markers in ``limit``. Bibliography-only matches
+    never consume the allowance. A match or heading is a location hint, not
+    proof of scientific relevance.
     """
     terms = _normalize_terms(search_terms)
     if not text or not terms or limit <= 0:
@@ -111,13 +167,16 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
     available = limit - marker_allowance
     if available <= 0:
         return None
-    width = min(2400, max(64, available // min(3, len(terms))), available)
+    # A fixed 2400-character window left most of a 24000-character allowance
+    # unused while broad terms repeatedly selected the introduction.
+    width = min(available, max(512, available // 3))
     patterns = [_pattern(term) for term in terms]
     question_words = sorted({word.casefold() for word in re.findall(r"[A-Za-z]{3,}", reading_question)
                              if word.casefold() not in _STOP_WORDS})[:32]
     question_patterns = [_pattern(word) for word in question_words]
     candidates = set()
-    for body_start, body_end in _body_ranges(text):
+    body_ranges = _body_ranges(text)
+    for body_start, body_end in body_ranges:
         for pattern in patterns:
             # Repeated occurrences in one small neighborhood need only one
             # window. Scan every body range so late unique details remain eligible.
@@ -136,7 +195,8 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
         matched = tuple(index for index, pattern in enumerate(patterns) if pattern.search(passage))
         question_hits = sum(bool(pattern.search(passage)) for pattern in question_patterns)
         ranked.append((start, end, matched, question_hits))
-    selected, covered = [], set()
+    selected, covered, section_context = [], set(), []
+    windows_used = 0
     for _ in range(4):
         if not ranked:
             break
@@ -152,9 +212,31 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
             selected = merged
             covered.update(matched)
             ranked.pop(index)
+            windows_used += 1
             accepted = True
             break
         if not accepted:
+            break
+        if windows_used == 1:
+            # Keep the strongest actual keyword passage. Before spending the
+            # rest on repeated broad mentions, reserve context for real method
+            # and implementation sections, even if they use different terms.
+            sections = _operative_sections(text, body_ranges)
+            for section_index, section in enumerate(sections):
+                remaining = limit - len(_render(text, selected))
+                section_width = remaining // (len(sections) - section_index) - marker_allowance
+                if section_width < 256:
+                    continue
+                start, end = _operative_window(text, section, section_width)
+                merged = _merge(selected + [(start, end)])
+                if merged == selected or len(_render(text, merged)) > limit:
+                    continue
+                selected = merged
+                covered.update(index for index, pattern in enumerate(patterns) if pattern.search(text[start:end]))
+                section_context.append({"title": section['title'], "family": section['family'],
+                                        "start": start, "end": end})
+                windows_used += 1
+        if windows_used >= 4:
             break
     if not selected:
         return None
@@ -164,7 +246,9 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
         "matched_terms": [term for index, term in enumerate(terms)
                           if any(patterns[index].search(text[start:end]) for start, end in selected)],
         "reading_question": reading_question,
+        "section_context": section_context,
         "selection_note": "Continuous source windows located by explicit terms; question words only rank matching windows. "
+                          "Method, algorithm and implementation heading context supplements repeated introductory mentions. "
                           "Offsets refer to untouched source text. Bibliography-only matches are excluded. "
                           "Lexical matching does not establish scientific relevance, correctness or exhaustive reading.",
     }

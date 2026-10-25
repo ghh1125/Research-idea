@@ -35,6 +35,47 @@ class FocusedReadingTests(unittest.TestCase):
         self.assertEqual(result['matched_terms'], ['executable labels', 'reliability calibration'])
         self.assertIn('does not establish scientific relevance', result['selection_note'])
 
+    def test_broad_intro_term_also_reads_later_operative_method_and_implementation(self):
+        metadata = 'Each knowledge-base entity includes a name, description, and a set of recorded attributes.'
+        operation = ('We compute Jaccard similarity between attribute sets, exclude the current entity, '
+                     'sort the scores, and select the top k remaining entities as negative examples.')
+        implementation = 'The implementation records missing attributes and keeps the sampled entity identifiers.'
+        text = 'Abstract\nEntity linking introduces the task.\n\n1 Introduction\n'
+        text += 'Entity linking provides a broad motivation for the topic.\n\n' * 500
+        # This is a line-wrapped sentence, not a method heading.
+        text += 'The encoder receives inputs, so the\nmodel can better control essential features of the\nsource observations.\n\n'
+        text += '3\n\nProblem Formulation\n\n' + metadata + '\n\n4\n\nMethodology\n\n'
+        text += 'The encoder processes the supplied inputs. ' * 35 + '\n\n' + operation + '\n\n'
+        text += 'Further derivation explains the operative choice. ' * 170
+        text += '\n\n5.4 Implementations\n\n' + implementation + '\n\n'
+        text += 'Implementation details preserve data identifiers. ' * 80
+        text += '\nReferences\nEntity linking in earlier papers.\nAlgorithm for a referenced work.\n'
+        result = select_focused_excerpt(text, 24000, ['entity linking', 'natural contrast mining'])
+        self.assert_exact_spans(text, result, 24000)
+        self.assertIn('Entity linking', result['excerpt'])
+        self.assertIn(metadata, result['excerpt'])
+        self.assertIn(operation, result['excerpt'])
+        self.assertIn(implementation, result['excerpt'])
+        self.assertGreater(len(result['excerpt']), 12000)
+        self.assertEqual(result['matched_terms'], ['entity linking'])
+        self.assertEqual([item['title'] for item in result['section_context']], ['Methodology', '5.4 Implementations'])
+        self.assertNotIn('Algorithm for a referenced work', result['excerpt'])
+
+    def test_algorithm_fallback_is_bounded_and_cannot_select_reference_headings(self):
+        operation = 'Algorithm operations calculate a score from two observed inputs and retain the resulting pair.'
+        text = '1 Introduction\nBroad signal motivates the task.\n\n' + 'Background text. ' * 400
+        text += '\n\n2 Algorithm\n\n' + operation + '\n\n' + 'Algorithm detail. ' * 180
+        text += '\nReferences\n3 Implementation\nThis implementation is only a bibliography entry.\n'
+        for limit in (400, 1200, 3000, 24000):
+            with self.subTest(limit=limit):
+                result = select_focused_excerpt(text, limit, ['broad signal'])
+                self.assert_exact_spans(text, result, limit)
+                self.assertLessEqual(len(result['spans']), 4)
+                self.assertNotIn('bibliography entry', result['excerpt'])
+                if limit >= 3000:
+                    self.assertIn(operation, result['excerpt'])
+        self.assertIsNone(select_focused_excerpt(text, 24000, ['absent explicit term']))
+
     def test_budget_counts_markers_and_preserves_unicode_and_line_endings(self):
         text = ('原文保持不变。\r\nLabel acquisition uses measured outputs.\r\n' * 500)
         for limit in (0, 1, 20, 50, 100, 256, 900, 2400):
