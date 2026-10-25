@@ -9,6 +9,7 @@ from research_idea.config import DEFAULTS
 from research_idea.controller import Controller, BudgetExhausted
 from research_idea.demo import DemoBackend
 from research_idea.presentation import activity_summary
+from research_idea.problem_discovery import argument_handoff
 from research_idea.report import export_report
 from research_idea.store import Store
 
@@ -137,3 +138,37 @@ class ProblemDiscoveryTests(unittest.TestCase):
         self.assertIn('assigned problem ID', attempts[1].prompt)
         self.assertEqual([c['id'] for c in self.store.get('problem_cases')],
                          ['conflict', 'order', 'feedback'])
+
+    def test_selected_causal_arguments_reach_proposal_without_other_directions(self):
+        def choose_two(task, output):
+            if task.stage == 'map':
+                output['selected_problems'] = [
+                    dict(opportunity_id=key, selection_reason='Priority for ' + key)
+                    for key in ('feedback', 'order')]
+        backend = Backend(choose_two)
+        Controller(self.store, backend, dict(self.config, max_candidates=2)).form_ideas()
+        proposal = next(payload(t) for t in backend.calls if t.stage == 'propose')
+        handoff = proposal['argument_handoff']
+        self.assertEqual([a['opportunity_id'] for a in handoff], ['feedback', 'order'])
+        cases = {c['id']: c for c in self.store.get('problem_cases')}
+        for argument in handoff:
+            case = cases[argument['opportunity_id']]
+            self.assertEqual(argument['user_goal'], self.store.get('topic'))
+            self.assertEqual(argument['selection_reason'], 'Priority for ' + case['id'])
+            self.assertEqual([s['role'] for s in argument['steps']],
+                ['existing_response', 'causal_insight', 'derivation', 'goal_impact', 'research_need'])
+            self.assertEqual([s['text'] for s in argument['steps']], [case[k] for k in (
+                'prior_art_delta', 'bottleneck_hypothesis', 'derivation', 'why_it_matters', 'research_need')])
+        self.assertEqual([task.stage for task in backend.calls],
+                         ['explore_problems', 'deepen_problem', 'deepen_problem',
+                          'deepen_problem', 'map', 'propose'])
+
+    def test_argument_projection_does_not_mutate_stored_source_reasoning(self):
+        Controller(self.store, Backend(), self.config).form_ideas()
+        problem = self.store.get('problem_model')
+        original = copy.deepcopy(problem)
+        handoff = argument_handoff(problem)
+        handoff[0]['steps'][0]['text'] = 'A later interpretation.'
+        handoff[0]['evidence_ids'].append('some-later-reference')
+        self.assertEqual(problem, original)
+        self.assertEqual(self.store.get('problem_model'), original)

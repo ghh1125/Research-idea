@@ -1025,7 +1025,7 @@ class Controller:
         # User follow-ups remain in the context, including any explicit narrowing.
         user_goal = context.get('topic') or ''
         refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
-        from .problem_discovery import develop_problem_pool
+        from .problem_discovery import argument_handoff, develop_problem_pool
         pool, cases = develop_problem_pool(self, context, refs)
         def validate_problem(value):
             refs(value)
@@ -1084,7 +1084,9 @@ class Controller:
         decisions = {item['opportunity_id']: item for item in problem['selected_problems']}
         selected_problem = {**problem, 'opportunities': [item for item in problem['opportunities']
                                                        if item['id'] in decisions]}
+        handoff = argument_handoff(selected_problem)
         proposal_payload = {**context, "problem_model": selected_problem,
+                            "argument_handoff": handoff,
                             "proposal_mode": "draft", "max_candidates": self.config["max_candidates"]}
         def validate_proposal(value):
             refs(value)
@@ -1137,6 +1139,7 @@ class Controller:
         if neighborhoods:
             context = with_neighborhoods(context, neighborhoods)
             result = self.task('propose', {**context, 'problem_model': selected_problem,
+                'argument_handoff': handoff,
                 'proposal_mode': 'complete', 'draft_proposals': draft['candidates'],
                 'max_candidates': self.config['max_candidates']}, validate_proposal, publish=False)
         self.activity('propose', result, self.store.get('calls_used', 0) == calls_before)

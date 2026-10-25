@@ -41,7 +41,7 @@ flowchart TD
 
 候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
 
-`motivation.existing_work` 说明已有方法实际做到了什么；`problem_derivation` 解释背景怎样导出所选问题，剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Existing methods、Possible problem、Motivation、Idea 五段连续论证：Problem 开头展示当前选题推导，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
+`motivation.existing_work` 说明已有方法实际做到了什么。Problem 内先以 `existing_approach_limit` 承接这些方法在相关条件下的正常回应，以 `causal_explanation` 解释为什么仍会留下或产生困难，再展示 `problem_derivation`、简明问题与意义；`research_need` 据此推导动机，最后提出回应这一需要的 idea。CLI 和主报告保持 Background、Existing methods、Possible problem、Motivation、Idea 五段连续论证，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
 
 技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
 
@@ -67,9 +67,9 @@ flowchart TD
 
 第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；需要具体近邻材料时，在同一阶段补读后完成构思。
 
-`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要问题，说明已有回应后仍可能留下的关键障碍；`emerging_problem` 从已有方法成功使用或发展中推导新困难。两者都允许大胆合理猜想。`explore_problems` 接收中性的初期材料，输出 `background_logic`、`approach_landscape` 和 `problem_seeds`，保存为 `problem_exploration`；通常三项、最多四项。`deepen_problem` 每次只收到一个种子、同样的文献与方法大类，不收到其他 case 或排序偏好。每项完成即写入 `problem_cases`。`map` 接收所有 case，在 `problem_comparisons` 逐项解释最强研究价值、剩余障碍和相对优先次序，再输出选择。结构检查只核对身份、字段与出处；不评分或要求先验证问题成立。
+`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要问题，说明已有回应后仍可能留下的关键障碍；`emerging_problem` 从已有方法成功使用或发展中推导新困难。两者都允许大胆合理猜想。`explore_problems` 接收中性的初期材料，输出 `background_logic`、`approach_landscape` 和 `problem_seeds`，保存为 `problem_exploration`；通常三项、最多四项。`deepen_problem` 每次只收到一个种子、同样的文献与方法大类，不收到其他 case 或排序偏好。从 `prior_art_delta` 的实际回应推到 `bottleneck_hypothesis` 的因果洞见，解释困难怎样产生、为什么常规改进难以自然消除，再提炼问题、影响和研究需要；洞见不能只是重述困难，也不要求解释全领域唯一起因。每项完成即写入 `problem_cases`。`map` 接收所有 case，在 `problem_comparisons` 逐项解释最强研究价值、洞见和相对优先次序，再输出选择。结构检查只核对身份、字段与出处；不评分或要求先验证问题成立。
 
-共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器将切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、`research_route_ids` 及选择理由保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择或路线，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
+共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器从所选 case 的已有字段生成 `argument_handoff`，将 `existing_response`（`prior_art_delta`）、`causal_insight`（`bottleneck_hypothesis`）、`derivation`、`goal_impact`（`why_it_matters`）、`research_need` 按顺序交给草案与补读后的完成版；不增加模型输出字段或调用。新来源可以改变原论证，方案自身的实现困难则另行处理，不无声替换原科学问题。切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、`research_route_ids` 及选择理由仍保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择或路线，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
 
 `propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
 

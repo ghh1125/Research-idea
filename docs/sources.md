@@ -106,7 +106,7 @@
 
 | 参考 | 本项目的采用方式 |
 | --- | --- |
-| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 由 `explore_problems` 打开不同问题，`deepen_problem` 逐个独立展开原因、意义与已有回应，`map` 比较后选择，再交给 `propose` 构思想法；不照搬固定数量候选、多模型调用或实验执行 |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 由 `explore_problems` 打开不同问题，`deepen_problem` 逐个从已有回应推导困难成因、问题与意义，`map` 比较后选择，再交给 `propose` 构思想法；不照搬固定数量候选、多模型调用或实验执行 |
 | [ARIS novelty-check](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/novelty-check/SKILL.md) 区分相邻研究与具体结果已被覆盖 | 对照需要指出论文实际覆盖的主张；已知组件可以揭示新的相互作用或发现，逐个组件存在不等于整个贡献重复 |
 | [Supervisor-Skills paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 的隐藏假设与问题重要性追问 | 用核心洞见、重要能力或认识的变化解释意义；不照搬固定分数、裁决标签或履历限制 |
 | [research-idea-explorer 的构思结构](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/skills/research-idea-explorer/references/schema.md) 与[生成流程](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/research_idea_explorer/engine.py) | 借鉴从未解释的问题、主张、区分关系和研究意义组织构思，保存来源与选择关系；其词项相似度、检索相近程度和拥挤度启发式不用于本项目的科学查重判断 |
@@ -123,11 +123,11 @@
 | IdeaScientist [gap_finder](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py#L139) 按机制组织已有进展，解释最接近的方法为何仍留下困难，随后才交给 innovator；[rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py#L180) 追问谁受到阻碍、解决后能获得什么能力或认识 | 在同一条件下考虑已有方法的正常回应，避免用“没采用我们的操作”替代剩余问题；动机说明跨过障碍为什么推进背景目标 |
 | Supervisor-Skills [paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 追问隐藏前提、发展变化与问题意义；[idea-evaluator](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 接受尚无实测结果但有机制论证的 idea | 允许基于文献线索提出合理猜想，用成立条件和推导说明问题为何可能出现；研究意义由它对原目标的影响解释，不要求先完成实验 |
 
-综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`map` 先说明原目标需要什么实质进展、什么困难阻碍它、为什么该障碍关键；再推演最强已有回应在同样条件下实际如何工作、为何仍可能留下困难，据此形成动机并选择问题。`propose` 才为已选问题构思 idea 与基本可行路径。问题来自现有办法解决原问题时产生的新困难，或背景中提出、现有主要思路难以解决的新问题。允许大胆猜想与单篇启发，不要求共同缺陷或先证明全领域无解。
+综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`deepen_problem` 先解释最强已有方法在同样条件下怎样正常工作、实际缓解了什么，再推导为什么仍会留下或产生困难、怎样妨碍原目标，由此形成问题和动机。`bottleneck_hypothesis` 要提出有解释力的因果洞见，说明不显然的依赖、假设或相互作用，以及常规改进为何不能自然消除障碍，而非给困难换个术语。`map` 比较各问题的价值与洞见后选择，`propose` 才构思 idea 与基本可行路径。问题来自现有办法解决原问题时产生的新困难，或背景中提出、现有主要思路难以解决的新问题。允许大胆猜想与单篇启发，不要求共同缺陷、唯一起因或先证明全领域无解。
 
 为落实分工，初期检索先围绕原目标的不同原因与已有思路建立 `research_routes`，查询、实际召回、互补选文和正文阅读沿同一路线关联，优先把约三分之二阅读额度用于第一阶段。[research_context.py](../src/research_idea/research_context.py) 为构思建立材料副本，控制器限定初期来源，暂不带入旧候选解释、论文卡里的预制改法与实验建议；源论文的方法、实验、结果、条件和原文引用仍保留，对原贡献的审计疑点留在完整记录中。构思承接已有进展，不靠否定原贡献制造新动机；完整记录供第二阶段参考。路线不是预设技术角度，也不要求各路线凑足论文。
 
-控制器保留用户原始目标，系统在 `research_question` 中聚焦，并用 `scope_connection` 解释为什么这个聚焦值得研究。`map` 结合检索计划、实际路线覆盖与阅读内容，比较原目标未实现的不同解释，以 `bottleneck_hypothesis` 和 `research_need` 保存原因猜想与动机，保留全部问题池、路线关联及 `selected_problems` 的理由；`propose` 只收到已选子集，后续通过 `selected_opportunity` 继续保留问题与选择依据。相比直接把单篇论文建议当成候选，这一分工让问题推导先于方案构思。它是本项目的综合设计，不增加模型评分或审查轮次，也不是上述框架统一规定的流程。
+控制器保留用户原始目标，系统在 `research_question` 中聚焦，并用 `scope_connection` 解释为什么这个聚焦值得研究。`map` 结合检索计划、实际路线覆盖与各问题的独立论证进行比较，保留全部问题池、路线关联及 `selected_problems` 的理由。控制器从已选字段构造 `argument_handoff`，按已有回应、因果洞见、问题推导、目标影响和研究需要交给 `propose`，补读后的完成版同样接收；后续通过 `selected_opportunity` 保留问题与选择依据。新来源可以修订原认识，同时区分原科学问题与方案实现时才出现的困难。相比直接把单篇论文建议当成候选，这一分工让问题推导先于方案构思。它是本项目的综合设计，不增加模型调用、评分或审查轮次，也不是上述框架统一规定的流程。
 
 这是面向本项目的综合设计，不固定示例中的领域、困难数量或方法模块，也不引入上述框架的评分、额外审查或实验执行。第二阶段继续由 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个技术问题，借助 `design_axes` 连接检索、迁移与方法选择；一种技术可以服务两个问题。测试检查阶段衔接和材料传递，实际论证是否更好仍应通过产出判断。
 

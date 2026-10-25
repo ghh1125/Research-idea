@@ -179,7 +179,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('previous_revision_record', second_review)
         export_report(self.store, self.store.project)
         front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
-        for label in ('Possible problem · 在此基础上还可能遇到什么问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法', '参考路线'):
+        for label in ('Possible problem · 从已有进展推导研究问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法', '参考路线'):
             self.assertIn(label, front)
         for label in ('第一步验证', '资源与规模', '值得继续的结果'):
             self.assertNotIn(label, front)
@@ -854,7 +854,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         idea_part, method_part = rendered.split('#### 第二部分 · Idea → Method', 1)
         self.assertNotIn('Current mechanism after review', idea_part)
         self.assertIn('Current mechanism after review', method_part)
-        for heading in ('Possible problem · 在此基础上还可能遇到什么问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法'):
+        for heading in ('Possible problem · 从已有进展推导研究问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法'):
             self.assertIn(heading, idea_part)
             self.assertNotIn(heading, method_part)
         candidate['spec'] = {}
@@ -906,8 +906,8 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_argument_is_ordered_and_old_saved_ideas_still_render(self):
         candidate, _ = self.run_flow()
         motive = candidate['spec']['motivation']
-        fields = ('background', 'existing_work', 'problem_observation', 'importance',
-                  'causal_explanation', 'existing_approach_limit', 'research_need',
+        fields = ('background', 'existing_work', 'existing_approach_limit', 'causal_explanation',
+                  'problem_derivation', 'problem_observation', 'importance', 'research_need',
                   'why_this_method', 'expected_progress')
         for index, field in enumerate(fields):
             motive[field] = f'Unique argument passage {index}.'
@@ -917,12 +917,13 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertLess(positions[-1], rendered.index('第二部分'))
         for axis in candidate['spec']['design_axes']:
             self.assertLess(rendered.index(axis['required_function']), rendered.index('可借鉴的技术'))
-        del motive['existing_work'], motive['research_need']
+        absent_need = motive.pop('research_need')
+        del motive['existing_work']
         del candidate['spec']['design_axes']
         candidate.pop('design_search_plan', None)
         legacy = idea_markdown(candidate)
         self.assertIn(motive['background'], legacy)
-        self.assertNotIn('Unique argument passage 6.', legacy)
+        self.assertNotIn(absent_need, legacy)
 
     def test_ideation_update_reuses_unchanged_reader_version(self):
         self.assertEqual(stage_version('read_section'), '8')

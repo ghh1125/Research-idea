@@ -73,11 +73,11 @@ def argument_markdown(motivation, proposal, *, include_intervention=True, idea_c
     parts = [
         ('Background · 研究背景', [motivation.get('background')]),
         ('Existing methods · 现有方法做到了什么', [existing]),
-        ('Possible problem · 在此基础上还可能遇到什么问题', [motivation.get('problem_derivation'),
-            motivation.get('problem_observation', proposal.get('problem')),
-            motivation.get('importance', proposal.get('why_it_matters')),
+        ('Possible problem · 从已有进展推导研究问题', [motivation.get('existing_approach_limit'),
             motivation.get('causal_explanation', proposal.get('hypothesis')),
-            motivation.get('existing_approach_limit')]),
+            motivation.get('problem_derivation'),
+            motivation.get('problem_observation', proposal.get('problem')),
+            motivation.get('importance', proposal.get('why_it_matters'))]),
         ('Motivation · 为什么需要这项研究', [motivation.get('research_need')]),
         ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
             motivation.get('why_this_method', proposal.get('intervention')),
@@ -161,8 +161,9 @@ def activity_summary(stage, result, citations=None):
         section(item['question'])
         add('问题来源', {'unresolved_need': '已有进展之后仍值得解决的重要需要',
                        'emerging_problem': '已有方法使用或发展中产生的新困难'}.get(item.get('problem_origin')))
-        for key, label in (('derivation', '这个问题怎样产生'), ('why_it_matters', '解决它有什么价值'),
-                           ('bottleneck_hypothesis', '为什么会成为障碍'), ('prior_art_delta', '已有办法做到了什么，还留下什么'),
+        for key, label in (('prior_art_delta', '已有办法怎样回应'),
+                           ('bottleneck_hypothesis', '为什么仍会遇到这个困难'),
+                           ('derivation', '由此怎样引出问题'), ('why_it_matters', '解决它有什么价值'),
                            ('research_need', '因此需要研究什么'), ('evidence_ids', '原文依据')):
             add(label, item.get(key))
     elif stage == 'map':

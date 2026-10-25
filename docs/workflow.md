@@ -4,9 +4,9 @@
 
 完整 idea 以能够支撑 CCF-A 研究为构思目标：问题具体且重要，解释包含非显而易见的洞见，核心想法针对该洞见，扣除最近工作后仍有实质贡献，并能说明这会改变什么能力或科学认识。`map` 据此比较并选择问题，`propose` 为已选问题构思想法，`develop/refine` 让技术服务核心贡献，`review` 检查整条论证并提出具体改法。所有阶段共享项目预算，不增加评分、审批或录用预测。
 
-表达按与一位没有读过相关论文的研究者讨论来写：先说明谁遇到了什么困难，再展开原因、现有方法为什么不够，以及 idea 怎样改变这一点。必要术语在首次出现时解释，论文名称附带它实际做了什么。各部分允许用数句完整的话讲清逻辑，技术角度使用短问题作标题，具体条件放在正文。CLI 保留段落间隔；增加篇幅用于解释推理和操作，不补写例子或实验计划。
+表达按与一位没有读过相关论文的研究者讨论来写：从背景目标讲到已有方法怎样推进它，再解释为什么仍会留下或产生重要困难，由此引出问题、动机和 idea。必要术语在首次出现时解释，论文名称附带它实际做了什么。各部分允许用数句完整的话讲清逻辑，技术角度使用短问题作标题，具体条件放在正文。CLI 保留段落间隔；增加篇幅用于解释推理和操作，不补写例子或实验计划。
 
-第一阶段先展开问题，再比较选择和构思操作。`explore_problems` 从原目标、已有方法大类和进展探索通常三个、最多四个重要问题，不预先排序。`deepen_problem` 对每个问题单独调用：`derivation` 连接背景、已有线索和困难的产生过程；`why_it_matters` 说明跨过障碍会带来什么进展；`prior_art_delta` 推演最强正常已有回应怎样工作、缓解了什么、为何仍可能留下困难；`bottleneck_hypothesis` 保存原因猜想，`research_need` 保存研究需要。每次收到同一组来源材料和自己的问题，不接收其他问题的论证或偏好。`map` 最后比较各问题最强的价值，保存 `problem_comparisons` 和 `selected_problems`；`propose` 才构想解决办法及基本可行路径。
+第一阶段先展开问题，再比较选择和构思操作。`explore_problems` 从原目标、已有方法大类和进展探索通常三个、最多四个重要问题，不预先排序。`deepen_problem` 对每个问题单独调用：先用 `prior_art_delta` 推演最强正常已有回应怎样工作、缓解了什么，再以 `bottleneck_hypothesis` 解释为什么仍会留下或产生困难、常规改进为何难以消除；`derivation` 将这层认识连成背景到问题的推导，`why_it_matters` 说明对原目标的影响，`research_need` 提炼研究需要。原因猜想应揭示不显然的依赖、假设或相互作用，增加解释力，而非重述困难或给它换个术语；不要求它是全领域唯一的原因。每次收到同一组来源材料和自己的问题，不接收其他问题的论证或偏好。`map` 最后比较各问题最强的价值与洞见，保存 `problem_comparisons` 和 `selected_problems`；`propose` 才构想解决办法及基本可行路径。
 
 这些任务使用 `Controller.ideation_context()` 准备的材料副本，按初期选文集合限定来源；恢复旧项目时也可使用旧批次记录的初期来源。保留这些论文的方法、实验、结果、条件和原文引用，暂去掉阅读者生成的研究机会、对 idea 的建议、对原贡献的分析质疑，以及旧候选定向阅读产生的解释。主张审计只向构思传递原主张、测试条件、报告结果与可支持结论；归因疑点、缺少对照和审计判定保留在完整记录中，避免直接变成选题动机。完整论文卡与证据仍保存在项目中，第二阶段继续使用，避免先前的小操作替新的综合选题定方向。
 
@@ -18,7 +18,7 @@
 
 ## 主流程
 
-**第一阶段：Background → Existing methods → Possible problem → Motivation → Idea。** 按背景需要、已有工作进展、困难及可能原因、已有回应为何可能不足、研究需要、核心 idea 建立论证。`motivation.problem_origin` 只取两值：`unresolved_need` 从背景需求提出新的重要问题，解释现有主要思路难以跨过的障碍；`emerging_problem` 承认已有方法解决了原问题，再推导解决、使用或发展过程中暴露的新重要问题。两者均可基于已观察现象或合理推断。`problem_derivation` 在提出方法前讲清背景到问题的过渡，在 CLI 和主报告的 Problem 开头展示。
+**第一阶段：Background → Existing methods → Possible problem → Motivation → Idea。** 按背景需要、已有方法的实际回应、困难产生的原因、问题及其影响、研究需要、核心 idea 建立论证。`motivation.problem_origin` 只取两值：`unresolved_need` 从背景需求提出新的重要问题，解释现有主要思路难以跨过的障碍；`emerging_problem` 承认已有方法解决了原问题，再推导解决、使用或发展过程中暴露的新重要问题。两者均可基于已观察现象或合理推断。CLI 和主报告的 Problem 依次展示 `existing_approach_limit`、`causal_explanation`、`problem_derivation`、简明问题和意义，让读者先理解已有回应与成因，再理解为什么提出这个问题。
 
 `existing_work` 保存已有进展，`research_need` 保存从局限推导的动机；`intervention` 总述准备作出的改变，`idea_core` 把核心想法展开为四段具体解释：
 
@@ -33,7 +33,7 @@
 
 **动机的挖掘是第一阶段的核心工作。** `research_frame.user_goal` 保留用户原话，用户补充另行传递；系统聚焦的问题写在 `research_question`，`scope_connection` 解释原目标为何需要研究这项能力或障碍。探索出的候选应提供原目标尚未实现的不同解释，不能先偏爱一种能力，再围绕它列主问题和副作用。比较这些解释对原目标的影响后再选择，`propose` 继承选择并构思想法。获取路径和操作服务于所选问题，不能靠改写用户目标或缩小问题来适配容易实现的办法。
 
-`map.selected_problems` 的每项包含 `opportunity_id` 和 `selection_reason`，全部问题池同时保存；每个机会的 `research_route_ids` 记录它参考了哪些初期研究路线。`propose` 只收到已选问题子集，继承选择理由与问题来源。控制器将切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、路线关联及 `selection_reason` 保存为 `candidate.selected_opportunity`，交给后续技术探索、设计和审阅。后续可有理由地调整问题，在 `review_responses` 解释并同步更新当前动机；最初快照保持不变。旧快照仍可恢复、导出，不补造历史理由或路线。任务共享项目预算，不新增评分、审批或实验要求。
+`map.selected_problems` 的每项包含 `opportunity_id` 和 `selection_reason`，全部问题池同时保存；每个机会的 `research_route_ids` 记录它参考了哪些初期研究路线。`propose` 只收到已选问题子集。控制器从已有字段生成 `argument_handoff`，按 `existing_response`（`prior_art_delta`）、`causal_insight`（`bottleneck_hypothesis`）、`derivation`、`goal_impact`（`why_it_matters`）、`research_need` 传递论证，供草案和补读后的完成版使用。这是理解原问题的起点，新来源可以促使模型修订原认识；补读发现的方案实现困难另行处理，不能无声替换科学问题。原切口字段、路线关联及选择理由继续保存在 `candidate.selected_opportunity`，交给后续技术探索、设计和审阅。后续调整在 `review_responses` 解释并同步更新当前动机；最初快照保持不变。旧快照仍可恢复、导出，不补造历史理由或路线。任务共享项目预算，不新增评分、审批或实验要求。
 
 **第二阶段：Idea → Method（技术参考）。** 寻找可借鉴技术，说明为什么适合当前 idea、需要怎样改造。第一阶段的 `idea_core` 进入技术检索与设计；`develop/refine` 保留其具体解释，讨论改变想法时同步修改核心解释与动机，并记录理由。CLI 和主报告优先展示当前 `spec` 的选题推导与核心解释，还未形成技术方案时使用 `proposal`。旧保存内容缺少新字段时仍可导出，不补造问题来源或推导。第一阶段内部推演信息依赖与基本可行性；第二阶段也不以写出完整工程或实验协议为目标。
 

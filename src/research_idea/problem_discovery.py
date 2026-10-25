@@ -8,6 +8,34 @@ from __future__ import annotations
 from copy import deepcopy
 
 
+def argument_handoff(problem):
+    """Carry the selected causal argument into writing, in explanatory order.
+
+    These are starting arguments, not frozen scientific conclusions. New source
+    details can change them; an implementation difficulty is not a substitute
+    for the research need that motivated the selected problem.
+    """
+    cases = {case['id']: case for case in problem.get('opportunities', [])}
+    arguments = []
+    for choice in problem.get('selected_problems', []):
+        case = cases[choice['opportunity_id']]
+        arguments.append({
+            'opportunity_id': case['id'],
+            'user_goal': problem.get('research_frame', {}).get('user_goal', ''),
+            'question': case['question'],
+            'steps': [{'role': role, 'text': case[field]} for role, field in (
+                ('existing_response', 'prior_art_delta'),
+                ('causal_insight', 'bottleneck_hypothesis'),
+                ('derivation', 'derivation'),
+                ('goal_impact', 'why_it_matters'),
+                ('research_need', 'research_need')) if case.get(field)],
+            'selection_reason': choice['selection_reason'],
+            'evidence_ids': list(case.get('evidence_ids', [])),
+            'closest_work_ids': list(case.get('closest_work_ids', [])),
+        })
+    return arguments
+
+
 def develop_problem_pool(controller, context, check_refs):
     routes = {item['id'] for item in context.get('discovery_plan', {}).get('research_routes', [])}
 

@@ -88,6 +88,12 @@ class NeighborhoodTests(unittest.TestCase):
         self.assertEqual([s for s, _ in self.backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose', 'screen_papers', 'inspect_source', 'propose'])
         first, final = [p for s, p in self.backend.calls if s == 'propose']
         self.assertEqual(first['problem_model'], final['problem_model'])
+        self.assertEqual(first['argument_handoff'], final['argument_handoff'])
+        chosen = first['problem_model']['opportunities'][0]
+        steps = {step['role']: step['text'] for step in final['argument_handoff'][0]['steps']}
+        self.assertEqual(steps['existing_response'], chosen['prior_art_delta'])
+        self.assertEqual(steps['causal_insight'], chosen['bottleneck_hypothesis'])
+        self.assertEqual(steps['research_need'], chosen['research_need'])
         self.assertEqual(first['evidence'], [])
         self.assertEqual(final['evidence'][0]['quote'], QUOTE)
         self.assertEqual(final['papers'][0]['id'], PAPER['id'])
