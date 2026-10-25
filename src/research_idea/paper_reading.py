@@ -93,12 +93,25 @@ def chunks(text, limit):
     return result
 
 
-def initial_chunks(parts, source_inventory, count):
-    # Cover argument, mechanism and experiments before spending all capacity on
-    # a long introduction. Follow-up requests can target still-unread ranges.
+def initial_chunks(parts, source_inventory, count, reading_role="method"):
+    # A landscape source supplies the broader approaches, including discussion
+    # late in Related Work. Method readings retain their original priorities.
+    # Neither role changes the number of chunks or establishes comprehension.
+    families = ("introduction", "method", "experiments", "results", "appendix", "limitations")
+    if reading_role == "landscape":
+        families = ("introduction", "related_work", "method", "experiments", "results", "appendix", "limitations")
     selected = []
-    for family in ("introduction", "method", "experiments", "results", "appendix", "limitations"):
-        section = next((s for s in source_inventory["sections"] if s["family"] == family), None)
+    for family in families:
+        sections = [s for s in source_inventory["sections"] if s["family"] == family]
+        if reading_role == "landscape" and family in {"introduction", "related_work"}:
+            # Abstract and Introduction share an inventory family. Prefer the
+            # actual introduction; similarly prefer Related Work/Background to
+            # a preliminaries section when both are available.
+            pattern = r"introduction\b|引言|介绍" if family == "introduction" else r"related\s+work\b|background\b|相关工作|背景"
+            preferred = [s for s in sections if re.match(pattern,
+                NUMBERING.sub("", re.sub(r"^#{1,6}\s*", "", s["title"])), re.I)]
+            sections = preferred or sections
+        section = sections[0] if sections else None
         if section:
             part = next((p for p in parts if p["start"] <= section["start"] < p["end"]), None)
             if part and part not in selected:
@@ -196,6 +209,7 @@ def read_paper(controller, paper):
     initial_plan = controller.store.get("search_plans", {}).get("initial", {})
     routes = selection.get("research_routes", initial_plan.get("research_routes", []))
     reading_intent = {
+        "reading_role": "landscape" if selection.get("reading_role") == "landscape" else "method",
         "reading_question": selection.get("reading_question", ""),
         "reason": selection.get("reason", ""),
         "route_ids": route_ids,
@@ -253,7 +267,8 @@ def read_paper(controller, paper):
         read_parts.append(part)
         save()
 
-    for part in initial_chunks(parts, source_inventory, controller.config["max_paper_read_chunks"]):
+    for part in initial_chunks(parts, source_inventory, controller.config["max_paper_read_chunks"],
+                               reading_intent["reading_role"]):
         read(part, reading_intent["reading_question"])
 
     def synthesize():

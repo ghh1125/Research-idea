@@ -52,13 +52,14 @@ class DemoBackend:
             output = {'selection_summary': 'Synthetic selection for workflow demonstration.',
                 'selected': [{'paper_id': p['id'], 'reason': 'Synthetic topic-related source.',
                               'reading_question': 'Which synthetic statement illustrates the workflow?',
-                              'route_ids': [r['id'] for r in payload.get('discovery_plan', {}).get('research_routes', [])]}
+                              'reading_role': 'method', 'route_ids': [r['id'] for r in payload.get('discovery_plan', {}).get('research_routes', [])]}
                              for p in payload['papers'][:payload['max_papers']]]}
         elif task.stage == "extract":
             lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
             output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
         elif task.stage == "map":
             output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["unresolved_need", "emerging_problem"], "evidence_ids": refs}
+            output['approach_landscape'] = [dict(name='获取资料', principle='检索相关内容', achieved_progress='提供原先缺少的资料', paper_ids=papers, evidence_ids=refs), dict(name='使用资料', principle='比较条件与证据关系', achieved_progress='合成笔记提供研究思路，没有真实测量', paper_ids=papers, evidence_ids=refs)]
             output['research_frame'] = {
                 'user_goal': payload.get('topic') or '理解模型怎样更可靠地使用已有信息。',
                 'literature_logic': '合成材料涉及两类解释：没有获得足够信息，以及没有用好已经获得的信息。这两类解释意味着不同的研究方向。',
@@ -116,7 +117,7 @@ class DemoBackend:
                     'available_path': '先人工构造少量配对文本，通过普通文本生成接口比较输出，无需权重或 logits。',
                     'key_assumption': '输入变换保持任务语义，只改变研究因素。',
                     'first_check': '人工检查配对样本，确认随机变换不能解释全部差异。'}
-                candidates[-1]['comparison_search'] = {'method_family': '证据使用与顺序', 'comparison_need': '离线演示不检索真实文献', 'queries': []}
+                candidates[-1]['comparison_search'] = {'method_family': '证据使用与顺序', 'comparison_need': '离线演示不检索真实文献', 'acquisition_requests': [], 'queries': []}
                 candidates[-1]['idea_core'] = {
                     'information_path': [],
                     'concrete_target': '合成资料中，同一问题的两条证据在结论上的冲突，以及证据出现的先后关系。',

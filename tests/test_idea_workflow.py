@@ -82,6 +82,22 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.store.set('paper_cards', {paper['id']: card})
         return card
 
+    def test_approach_families_reach_construction_without_one_paper_per_family(self):
+        self.seed_reading_context()
+        backend = RecordingBackend()
+        controller = Controller(self.store, backend, self.config)
+        controller.form_ideas()
+        saved = self.store.get('problem_model')['approach_landscape']
+        self.assertEqual(len(saved), 2)
+        self.assertEqual(saved[0]['paper_ids'], saved[1]['paper_ids'])
+        proposal_task = next(t for t in backend.calls if t.stage == 'propose')
+        payload = json.loads(proposal_task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+        self.assertEqual(payload['problem_model']['approach_landscape'], saved)
+        rendered = activity_summary('map', self.store.get('problem_model'))
+        for approach in saved:
+            self.assertIn(approach['principle'], rendered)
+            self.assertIn(approach['achieved_progress'], rendered)
+
     def test_ideation_context_removes_source_ideas_but_preserves_science_and_storage(self):
         card = self.seed_reading_context()
         controller = Controller(self.store, RecordingBackend(), self.config)

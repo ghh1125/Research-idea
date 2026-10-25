@@ -40,7 +40,7 @@ def check_references(value, evidence_ids, paper_ids):
             if key == "evidence_ids":
                 if not isinstance(child, list) or any(x not in evidence_ids for x in child):
                     raise ValueError("Unknown evidence ID in model output")
-            elif key == "closest_work_ids":
+            elif key in {"closest_work_ids", "paper_ids"}:
                 if not isinstance(child, list) or any(x not in paper_ids for x in child):
                     raise ValueError("Unknown closest-work paper ID")
             elif key == "paper_id" and child not in paper_ids:
@@ -51,14 +51,27 @@ def check_references(value, evidence_ids, paper_ids):
             check_references(child, evidence_ids, paper_ids)
 
 
-def make_evidence(paper: dict, observations: list, excerpt: str) -> list:
+def make_evidence(paper: dict, observations: list, excerpt: str, *, source_spans=None) -> list:
     if len(observations) > 6:
         raise ValueError("Extract at most 6 observations per source")
     records = []
     for obs in observations:
         locate_quote(excerpt, obs["quote"])
         original = paper.get("text") or paper.get("abstract", "")
-        start, end = locate_quote(original, obs["quote"])
+        if source_spans is None:
+            start, end = locate_quote(original, obs["quote"])
+        else:
+            for span in source_spans:
+                if not 0 <= span['start'] < span['end'] <= len(original):
+                    raise ValueError('Source span is outside the original text')
+                try:
+                    local_start, local_end = locate_quote(original[span['start']:span['end']], obs['quote'])
+                except QuoteMatchError:
+                    continue
+                start, end = span['start'] + local_start, span['start'] + local_end
+                break
+            else:
+                raise QuoteMatchError('Evidence quote is not contiguous within a supplied source span', obs['quote'])
         if not obs["statement"].strip():
             raise ValueError("Empty evidence statement")
         record = dict(obs)
@@ -604,7 +617,7 @@ class Controller:
         plan = self.plan_search()
         keys = []
         for query in plan["queries"]:
-            purpose = 'novelty' if query['purpose'] == 'motivation' else 'strategy'
+            purpose = 'novelty' if query['purpose'] == 'motivation' else 'lineage' if query['purpose'] == 'background' else 'strategy'
             keys.append(self.search_once(query["query"], query["rationale"], max_new=0, purpose=purpose))
         paper_ids = {paper['id'] for paper in self.store.rows('papers')}
         added = len(paper_ids - set(pending['starting_paper_ids']))
@@ -653,29 +666,42 @@ class Controller:
         candidate["retrieved_work_ids"] = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + new_ids))
         self.store.put('candidates', candidate)
 
-    def focus_sources(self, candidate, selected_ids=None, reading_question=''):
+    def focus_sources(self, candidate, selected_ids=None, reading_question='', acquisition_requests=None):
         """Read source details that answer a specific question about the idea."""
         closest = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + candidate["proposal"].get("closest_work_ids", [])))
         design = self.phase == 'design'
         self.progress('[design] 定向阅读：原方法怎样作用、迁移需要什么条件、哪种简单对照最有区分力。' if design else
-                      '[novelty] 定向比较问题动机、因果解释与核心主张。')
+                      '[read] 第一阶段 · 读取最接近的方法，以及关键信息如何取得和核对。')
         papers = {p["id"]: p for p in self.store.rows("papers")}
         selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
         if selected_ids is not None:
             selected = [p for p in selected if p['id'] in selected_ids]
         scope = digest([candidate["proposal"], candidate.get('spec')])
+        readings = []
         for paper in selected:
             text = paper.get("text") or paper.get("abstract") or ""
             if not text.strip():
                 continue
             excerpt = select_excerpt(text, self.config["source_chars"])
+            requests = [item for item in (acquisition_requests or [])
+                        if not item['paper_ids'] or paper['id'] in item['paper_ids']]
+            question = '\n'.join(dict.fromkeys([reading_question or
+                paper.get('selection', {}).get('reading_question', ''), *[item['question'] for item in requests]]))
+            selection = None
+            if requests:
+                from .focused_reading import select_focused_excerpt
+                selection = select_focused_excerpt(text, self.config['source_chars'],
+                    [term for item in requests for term in item['search_terms']], question)
+                if selection:
+                    excerpt = selection['excerpt']
+            spans = selection['spans'] if selection else None
             payload = {"paper_id": paper["id"], "title": paper["title"], "content_kind": "full_text",
                 "candidate": candidate["proposal"], "excerpt": excerpt,
                 "selected_opportunity": candidate.get('selected_opportunity', {}),
                 "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
             if self.phase == 'neighbor':
-                payload.update(purpose='closest_work', reading_question=reading_question or
-                    paper.get('selection', {}).get('reading_question', ''),
+                payload.update(purpose='closest_work', reading_question=question,
+                    acquisition_requests=requests,
                     comparison_search=candidate['proposal'].get('comparison_search', {}))
             if design:
                 payload.update(purpose='technical_design',
@@ -683,17 +709,33 @@ class Controller:
                     design_search_plan=candidate.get('design_search_plan', {}))
             if candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
-            result = self.task("inspect_source", payload, lambda x: make_evidence(paper, x["observations"], excerpt))
+            if selection:
+                payload['reading_selection'] = {k: v for k, v in selection.items() if k != 'excerpt'}
+            result = self.task("inspect_source", payload,
+                lambda x: make_evidence(paper, x["observations"], excerpt, source_spans=spans))
             retained = [e for e in self.store.rows("evidence") if e["paper_id"] == paper["id"]
                 and e.get("source_hash") == digest(text) and e.get("source_kind") == "full_text"
                 and e.get("extraction_stage") in self.guidance_keys
-                and e.get("guidance_key") == self.guidance_keys[e["extraction_stage"]]
+                and (e.get("extraction_stage") != "inspect_source"
+                     or e.get("guidance_key") == self.guidance_keys["inspect_source"])
                 and not (e["extraction_stage"] == "inspect_source" and e.get("extraction_scope") == scope)]
-            generated = make_evidence(paper, result["observations"], excerpt)
+            generated = make_evidence(paper, result["observations"], excerpt, source_spans=spans)
             for record in generated:
+                # Directed interpretations must not overwrite an identical
+                # neutral quote or the evidence of another candidate.
+                record['id'] = 'ev_' + digest([record['id'], 'inspect_source', scope])[:12]
                 record.update(extraction_stage="inspect_source", guidance_key=self.guidance_keys["inspect_source"],
                               extraction_scope=scope)
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
+            reading = {'paper_id': paper['id'], 'source_hash': digest(text), 'scope': scope,
+                       'reading_question': question, 'acquisition_requests': requests,
+                       'selection': payload.get('reading_selection', {'selection_note': 'General section sampling'}),
+                       'evidence_ids': [e['id'] for e in generated]}
+            journal = self.store.get('focused_readings', {})
+            journal[digest([paper['id'], scope, question])] = reading
+            self.store.set('focused_readings', journal)
+            readings.append(reading)
+        return readings
 
     def prepare_design(self, candidate, *, search=True):
         """Explore reusable techniques before writing the full implementation plan."""
@@ -815,6 +857,7 @@ class Controller:
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
                 'discovery_plan': plan,
+                'known_papers': [{key: p.get(key) for key in ('id', 'title', 'selection')} for p in papers],
                 'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'conference_year', 'publication_date', 'venue', 'discovery_provenance')}
                     | {'abstract': (paper.get('abstract') or '')[:1800]} for paper in pool]}
             if candidate and candidate.get('spec'):
@@ -986,6 +1029,9 @@ class Controller:
             value['research_frame']['user_goal'] = user_goal
             if any(not part.strip() for part in value['research_frame'].values()):
                 raise ValueError('Connect the user goal, synthesized literature logic, research question and source scope')
+            for approach in value['approach_landscape']:
+                if any(not approach[key].strip() for key in ('name', 'principle', 'achieved_progress')):
+                    raise ValueError('Describe each broad approach by its principle and achieved progress')
             opportunities = value['opportunities']
             route_ids = {route['id'] for route in context.get('discovery_plan', {}).get('research_routes', [])}
             if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:

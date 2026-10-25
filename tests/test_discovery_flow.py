@@ -48,7 +48,7 @@ class DiscoveryBackend:
         elif task.stage == 'screen_papers':
             output = {'selection_summary': 'Read representatives of the supplied inquiries.', 'selected': [
                 {'paper_id': paper['id'], 'reason': 'A useful source for the inquiry.',
-                 'reading_question': 'Which source details explain this mechanism?',
+                 'reading_question': 'Which source details explain this mechanism?', 'reading_role': 'method',
                  'route_ids': list(dict.fromkeys(route for hit in paper.get('discovery_provenance', [])
                                                 for route in hit['route_ids']))}
                 for paper in payload['papers'][:payload['max_papers']]]}
@@ -57,7 +57,7 @@ class DiscoveryBackend:
             output = {'observations': [{'statement': quote, 'quote': quote, 'kind': 'author_claim',
                 'conditions': 'Synthetic fixture only.', 'source_section': 'Supplied text'}]}
         elif task.stage == 'map':
-            output = {'research_frame': {'user_goal': payload['topic'],
+            output = {'approach_landscape': [], 'research_frame': {'user_goal': payload['topic'],
                 'literature_logic': 'Compare the supplied mechanisms.',
                 'research_question': 'Which mechanism explains the difficulty?',
                 'scope_connection': 'The sources inform the original objective.'},

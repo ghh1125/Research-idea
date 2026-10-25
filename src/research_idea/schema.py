@@ -26,7 +26,7 @@ PLAN_SEARCH = obj(research_question=STR, scope=STR,
     queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR, route_ids=STRINGS, axis_ids=STRINGS)),
     assumptions=STRINGS)
 SCREEN_PAPERS = obj(selection_summary=STR,
-    selected=array(obj(paper_id=STR, reason=STR, reading_question=STR, route_ids=STRINGS)))
+    selected=array(obj(paper_id=STR, reason=STR, reading_question=STR, reading_role=string(["landscape", "method"]), route_ids=STRINGS)))
 EVIDENCE = obj(observations=array(obj(statement=STR, quote=STR, kind=string(["reported_result", "author_claim", "limitation"]), conditions=STR, source_section=STR)))
 CLAIM_AUDIT = obj(
     paper_id=STR,
@@ -44,7 +44,8 @@ OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), 
     derivation=STR, bottleneck_hypothesis=STR, why_it_matters=STR, prior_art_delta=STR, research_need=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS, research_route_ids=STRINGS)
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
-MAP = obj(research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
+APPROACH = obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS, evidence_ids=STRINGS)
+MAP = obj(approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
     selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
@@ -58,6 +59,7 @@ INFORMATION_PATH = obj(information=STR, source=STR, construction=STR,
 IDEA_CORE = obj(concrete_target=STR, construction_path=STR, information_path=array(INFORMATION_PATH),
                 capability_bridge=STR, essential_difference=STR)
 COMPARISON_SEARCH = obj(method_family=STR, comparison_need=STR,
+    acquisition_requests=array(obj(information=STR, question=STR, paper_ids=STRINGS, search_terms=STRINGS)),
     queries=array(obj(query=STR, rationale=STR, time_scope=string(['recent', 'lineage']))))
 PROPOSE = obj(candidates=array(obj(opportunity_id=STR, selection_reason=STR, title=STR,
     motivation=MOTIVATION, problem=STR, hypothesis=STR, idea_core=IDEA_CORE,

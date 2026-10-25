@@ -53,7 +53,7 @@ class PipelineBackend:
         elif task.stage == "screen_papers":
             output = {'selection_summary': 'Read the synthetic routing sources.',
                 'selected': [{'paper_id': p['id'], 'reason': 'Direct routing study.',
-                              'reading_question': 'Which controls isolate the routing signal?', 'route_ids': []}
+                              'reading_question': 'Which controls isolate the routing signal?', 'reading_role': 'method', 'route_ids': []}
                              for p in payload['papers'][:payload['max_papers']]]}
         elif task.stage in {"extract", "inspect_source", "read_section"}:
             observations = []
@@ -87,7 +87,7 @@ class PipelineBackend:
                     "missing_controls": ["Matched-prompt baseline"],
                     "support_judgment": "supported_within_tested_scope", "next_reading": ["Read additional appendix controls."]}]}
         elif task.stage == "map":
-            output = {"research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
+            output = {"approach_landscape": [], "research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
                       "observations": ["A narrow reported result does not establish the broad claim."],
                       "competing_explanations": ["Feedback validity versus prompt differences"],
                       "unresolved_questions": ["Does the mechanism survive a matched-prompt control?"],

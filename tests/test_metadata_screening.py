@@ -23,7 +23,7 @@ class SelectionBackend:
             raise AssertionError(task.stage)
         return BackendResult({'selection_summary': 'Prioritize changing task environments.',
             'selected': [{'paper_id': pid, 'reason': 'Studies the environment intervention.',
-                          'reading_question': 'Does the environment change rules or just vocabulary?', 'route_ids': []}
+                          'reading_question': 'Does the environment change rules or just vocabulary?', 'reading_role': 'method', 'route_ids': []}
                          for pid in self.ids]})
 
 

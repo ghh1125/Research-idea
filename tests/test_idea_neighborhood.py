@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from research_idea.backend_types import BackendResult
 from research_idea.config import DEFAULTS
-from research_idea.controller import Controller
+from research_idea.controller import Controller, make_evidence, OutputValidationError
 from research_idea.demo import DemoBackend
 from research_idea.idea_neighborhood import normalize_comparison_search
 from research_idea.presentation import argument_markdown
@@ -20,7 +20,7 @@ QUOTE = 'Our method obtains its labels by executing the available program and re
 PAPER = {'id': 'arxiv:2501.01234', 'title': 'Executable supervision for structured reasoning',
          'url': 'https://arxiv.org/abs/2501.01234', 'year': 2025, 'authors': ['Fixture Author'],
          'source': 'arxiv', 'content_kind': 'abstract', 'abstract': QUOTE}
-SEARCH = {'method_family': 'executable supervision', 'comparison_need': 'How are labels actually obtained?',
+SEARCH = {'acquisition_requests': [], 'method_family': 'executable supervision', 'comparison_need': 'How are labels actually obtained?',
           'queries': [{'query': 'executable supervision reasoning', 'rationale': 'Find the actual label source', 'time_scope': 'lineage'}]}
 INPUT = dict(information='判断标签', source='输入程序', construction='执行程序并记录返回值',
              reliability_basis='语言语义规定返回值，执行超时不提供答案', error_handling='保留异常类型，错误标签不进入学习',
@@ -33,7 +33,7 @@ def payload(task):
 
 class Backend(DemoBackend):
     def __init__(self, search=True):
-        self.calls, self.search = [], search
+        self.calls, self.search, self.requests = [], search, []
 
     def generate(self, task):
         data = payload(task)
@@ -45,8 +45,11 @@ class Backend(DemoBackend):
         if task.stage == 'propose':
             candidate = result.output['candidates'][0]
             candidate['comparison_search'] = copy.deepcopy(SEARCH)
+            candidate['comparison_search']['acquisition_requests'] = copy.deepcopy(self.requests)
             if not self.search or data['proposal_mode'] == 'complete':
                 candidate['comparison_search']['queries'] = []
+            if data['proposal_mode'] == 'complete':
+                candidate['comparison_search']['acquisition_requests'] = []
             candidate['idea_core']['information_path'] = [copy.deepcopy(INPUT)]
             if data['proposal_mode'] == 'complete':
                 candidate['idea_core']['information_path'][0]['evidence_ids'] = [e['id'] for e in data['evidence']]
@@ -163,3 +166,44 @@ class NeighborhoodTests(unittest.TestCase):
         normalized = normalize_comparison_search(search)
         self.assertEqual(len(normalized['queries']), 1)
         self.assertEqual(normalized['queries'][0]['time_scope'], 'lineage')
+
+    def test_acquisition_request_reopens_known_source_offline_and_keeps_neutral_evidence(self):
+        self.cfg['auto_search'] = False
+        self.backend.search = False
+        paper = dict(PAPER, content_kind='full_text', text=QUOTE)
+        self.store.put('papers', paper)
+        obs = dict(statement=QUOTE, quote=QUOTE, kind='author_claim',
+                   conditions='Synthetic executable program fixture', source_section='Method')
+        neutral = make_evidence(paper, [obs], QUOTE)[0]
+        neutral.update(extraction_stage='read_section', guidance_key='earlier-neutral-reading-guidance')
+        self.store.replace_evidence(paper['id'], [neutral])
+        initial = self.controller.ideation_context()
+        self.backend.requests = [dict(information='Execution feedback', question='How is the label obtained?',
+            paper_ids=[paper['id']], search_terms=['executing', 'failed executions'])]
+        result, discover = self.run_idea(hydrate=lambda ids: False)
+        discover.assert_not_called()
+        stages = [stage for stage, _ in self.backend.calls]
+        self.assertEqual(stages, ['map', 'propose', 'inspect_source', 'propose'])
+        inspection = next(data for stage, data in self.backend.calls if stage == 'inspect_source')
+        self.assertEqual(inspection['acquisition_requests'], self.backend.requests)
+        self.assertIn('reading_selection', inspection)
+        final = self.backend.calls[-1][1]
+        ids = {item['id'] for item in final['evidence']}
+        self.assertIn(neutral['id'], ids)
+        self.assertEqual(len(ids), 2)
+        self.assertEqual(self.controller.ideation_context(), initial)
+        self.assertTrue(final['idea_neighborhoods'][0]['readings'][0]['selection']['spans'])
+        self.assertTrue(self.store.get('focused_readings'))
+        before = len(self.backend.calls)
+        again, _ = self.run_idea(hydrate=lambda ids: False)
+        self.assertEqual(again, result)
+        self.assertEqual(len(self.backend.calls), before)
+
+    def test_unknown_acquisition_source_is_repaired_before_reading(self):
+        self.backend.search = False
+        self.backend.requests = [dict(information='Feedback', question='How is it obtained?',
+            paper_ids=['invented-paper'], search_terms=['feedback'])]
+        with patch.object(self.controller, 'focus_sources') as reading:
+            with self.assertRaisesRegex(OutputValidationError, 'Unknown closest-work paper ID'):
+                self.controller.form_ideas()
+        reading.assert_not_called()

@@ -99,11 +99,23 @@ class TechnicalDesignTests(unittest.TestCase):
         self.assertTrue(self.candidate['development_complete'])
         self.assertEqual(self.store.rows('candidates')[0]['design_transfers'], [self.transfer()])
 
+    def reading_backend(self, responses):
+        case = self
+        class ReadingBackend(FakeBackend):
+            def generate(self, task):
+                result = super().generate(task)
+                if task.stage == 'design_transfer' and result.output['options']:
+                    case.eid = data(task)['evidence'][0]['id']
+                    for option in result.output['options']:
+                        option['evidence_ids'] = [case.eid]
+                return result
+        return ReadingBackend(responses)
+
     def test_new_source_is_read_for_the_design_question_without_full_paper_card(self):
         self.store.replace_evidence('paper-1', [])
         self.paper['selection'] = {'reading_question': 'Which signal is needed by the allocation rule?'}
         self.store.put('papers', self.paper)
-        backend = FakeBackend([{'observations': [self.observation]}, self.transfer()])
+        backend = self.reading_backend([{'observations': [self.observation]}, self.transfer()])
         Controller(self.store, backend, self.config).prepare_design(self.candidate)
         self.assertEqual([t.stage for t in backend.calls], ['inspect_source', 'design_transfer'])
         self.assertEqual(data(backend.calls[0])['purpose'], 'technical_design')
@@ -130,7 +142,7 @@ class TechnicalDesignTests(unittest.TestCase):
 
     def test_an_unanswered_design_question_triggers_one_focused_read(self):
         gap = 'Does the rule require training labels or only observable outcomes?'
-        backend = FakeBackend([{'paper_id': 'paper-1', 'options': [], 'reading_gaps': [gap]},
+        backend = self.reading_backend([{'paper_id': 'paper-1', 'options': [], 'reading_gaps': [gap]},
                                {'observations': [self.observation]}, self.transfer()])
         Controller(self.store, backend, self.config).prepare_design(self.candidate)
         self.assertEqual([t.stage for t in backend.calls], ['design_transfer', 'inspect_source', 'design_transfer'])
@@ -175,7 +187,7 @@ class TechnicalDesignTests(unittest.TestCase):
                                   'abstract': 'A source for belief updates.', 'url': 'https://example.org/borrowed'})
         screen = {'selection_summary': 'This source answers the update question.',
                   'selected': [{'paper_id': source['id'], 'reason': 'Shared partial-observation structure.',
-                                'reading_question': 'How does the belief update use observations?', 'route_ids': []}]}
+                                'reading_question': 'How does the belief update use observations?', 'reading_role': 'method', 'route_ids': []}]}
         backend = FakeBackend([plan, screen])
         controller = Controller(self.store, backend, config)
         with patch('research_idea.literature.discover', return_value=[source]), \

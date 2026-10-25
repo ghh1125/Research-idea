@@ -152,6 +152,11 @@ def activity_summary(stage, result, citations=None):
     elif stage == 'map':
         frame = result.get('research_frame', {})
         add('我们要解决的大问题', frame.get('user_goal'))
+        for approach in result.get('approach_landscape', []):
+            section('已有思路 · ' + approach['name'])
+            add('怎样起作用', approach['principle'])
+            add('已经做到什么', approach['achieved_progress'])
+            add('原文依据', approach['evidence_ids'])
         add('把相关研究连起来看', frame.get('literature_logic'))
         add('由此提出的研究问题', frame.get('research_question'))
         add('值得研究的问题', result.get('problem'))

@@ -113,7 +113,7 @@ class PaperMetadataTests(unittest.TestCase):
                 self.payloads.append(data)
                 return BackendResult({'selection_summary': 'Read the relevant conference paper.',
                     'selected': [{'paper_id': data['papers'][0]['id'], 'reason': 'Relevant abstract.',
-                                  'reading_question': 'What does the method achieve?', 'route_ids': []}]})
+                                  'reading_question': 'What does the method achieve?', 'reading_role': 'method', 'route_ids': []}]})
 
         with tempfile.TemporaryDirectory() as folder:
             store = Store(Path(folder))

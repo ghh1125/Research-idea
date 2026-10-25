@@ -11,7 +11,7 @@ from research_idea.backend_types import BackendResult
 from research_idea.cli import main
 from research_idea.config import DEFAULTS, write_config, load_config
 from research_idea.controller import BudgetExhausted, Controller, make_evidence
-from research_idea.paper_reading import FACETS, chunks, current_cards, inventory, validate_card, with_coverage
+from research_idea.paper_reading import FACETS, chunks, current_cards, initial_chunks, inventory, validate_card, with_coverage
 from research_idea.report import export_report
 from research_idea.store import Store, digest
 
@@ -26,6 +26,18 @@ def source():
         "text": block("1 Introduction", "The authors hypothesize that feedback improves routing.")
               + block("2 Method", "The router uses entropy available during inference.")
               + block("Appendix A", "The appendix reports only one model and one dataset.")}
+
+
+def landscape_source():
+    text = block("Abstract", "This source briefly advertises a new reasoning approach.")
+    text += block("1 Introduction", "The goal requires several distinct ways of obtaining useful feedback.")
+    text += block("2 Method", "The representative method learns from execution feedback.")
+    text += block("3 Experiments", "The source reports an experiment in its own task setting.")
+    for index in range(10):
+        text += block(f"4.{index} Supporting material", "This section contains other source details.")
+    text += block("5 Related Work", "Earlier approaches use additional data, inference search, or external feedback.")
+    text += block("Appendix A", "The appendix discusses the source conditions.")
+    return dict(id="p1", title="Synthetic landscape source", content_kind="full_text", text=text)
 
 
 def card_for(payload):
@@ -87,6 +99,27 @@ class ReadingInventoryTests(unittest.TestCase):
         self.assertEqual([(p["start"], p["end"]) for p in parts], [(0, 512), (512, 1024), (1024, 1536)])
         self.assertEqual("".join(text[p["start"]:p["end"]] for p in parts), text)
         self.assertEqual(chunks(text, 512), parts)
+
+    def test_landscape_prioritizes_real_introduction_and_late_related_work_within_limit(self):
+        paper = landscape_source()
+        parts, inv = chunks(paper['text'], 512), inventory(paper)
+        selected = initial_chunks(parts, inv, 3, reading_role='landscape')
+        self.assertEqual([part['start'] for part in selected], [512, 14 * 512, 2 * 512])
+        self.assertEqual(initial_chunks(parts, inv, 2, reading_role='landscape'), selected[:2])
+        self.assertEqual(len({part['id'] for part in selected}), len(selected))
+
+    def test_default_method_priority_is_unchanged(self):
+        paper = landscape_source()
+        parts, inv = chunks(paper['text'], 512), inventory(paper)
+        selected = initial_chunks(parts, inv, 3)
+        self.assertEqual(selected, initial_chunks(parts, inv, 3, reading_role='method'))
+        self.assertEqual([part['start'] for part in selected], [0, 2 * 512, 3 * 512])
+
+    def test_landscape_falls_back_without_introduction_or_related_work(self):
+        paper = dict(id='p', text=block('Abstract', 'The abstract offers an overview of the supplied source.')
+                     + block('2 Method', 'The method describes a source-specific operation.'))
+        parts = chunks(paper['text'], 512)
+        self.assertEqual(initial_chunks(parts, inventory(paper), 3, reading_role='landscape'), parts)
 
     def test_coverage_unions_spans_and_does_not_certify_visuals(self):
         inv = inventory(source())
@@ -206,7 +239,8 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.assertEqual(reads[1]['question'], 'What experimental scope is stated in the appendix?')
         for stage, payload in backend.calls:
             if stage in {'read_section', 'paper_card'}:
-                self.assertEqual(payload['reading_intent'], {**paper['selection'], 'research_routes': [route]})
+                self.assertEqual(payload['reading_intent'], {**paper['selection'], 'research_routes': [route],
+                                                             'reading_role': 'method'})
             if stage == 'paper_card':
                 self.assertEqual(payload['user_notes'], ['Keep the original broad research goal.'])
         # Observations still come from the original source, not the route or user notes.
@@ -218,8 +252,39 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         card = next(payload for stage, payload in backend.calls if stage == 'paper_card')
         self.assertEqual(read['question'], '')
         self.assertEqual(card['reading_intent'], {'reading_question': '', 'reason': '',
-                                                 'route_ids': [], 'research_routes': []})
+                                                 'route_ids': [], 'research_routes': [], 'reading_role': 'method'})
         self.assertEqual(card['user_notes'], [])
+
+    def test_landscape_role_and_late_background_evidence_reach_card_and_context(self):
+        paper = landscape_source()
+        paper['selection'] = dict(reading_role='landscape', reading_question='Which broad approaches pursue the goal?',
+                                  reason='Understand the field-level approaches.', route_ids=[])
+        self.store.put('papers', paper)
+        controller, backend = self.run_read(ReadingBackend(followup=False), max_paper_read_chunks=3)
+        reads = [payload for stage, payload in backend.calls if stage == 'read_section']
+        self.assertEqual([read['source_span']['start'] for read in reads], [512, 14 * 512, 2 * 512])
+        self.assertEqual(len(reads), 3)
+        card = next(payload for stage, payload in backend.calls if stage == 'paper_card')
+        for payload in reads + [card]:
+            self.assertEqual(payload['reading_intent']['reading_role'], 'landscape')
+            self.assertEqual(payload['reading_intent']['reading_question'], paper['selection']['reading_question'])
+        quote = 'Earlier approaches use additional data, inference search, or external feedback.'
+        self.assertTrue(any(e['quote'] == quote for e in card['evidence']))
+        self.assertTrue(any(e['quote'] == quote for e in controller.ideation_context()['evidence']))
+        self.assertEqual(controller.context()['paper_cards'][0]['inventory']['text_coverage'], 'partial')
+
+    def test_changed_reading_role_invalidates_tasks_then_resumes_from_role_cache(self):
+        paper = landscape_source()
+        self.store.put('papers', paper)
+        self.run_read(ReadingBackend(followup=False), max_paper_read_chunks=3)
+        paper['selection'] = {'reading_role': 'landscape'}
+        self.store.put('papers', paper)
+        _, changed = self.run_read(ReadingBackend(followup=False), max_paper_read_chunks=3)
+        self.assertEqual([stage for stage, _ in changed.calls], ['read_section'] * 3 + ['paper_card'])
+        self.assertTrue(all(payload['reading_intent']['reading_role'] == 'landscape'
+                            for _, payload in changed.calls))
+        _, resumed = self.run_read(ReadingBackend(followup=False), max_paper_read_chunks=3)
+        self.assertEqual(resumed.calls, [])
 
     def test_old_selection_keeps_its_route_meaning_after_replanning(self):
         paper = source()
@@ -331,7 +396,7 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.run_read()
         _, machine = export_report(self.store, self.store.project)
         report = json.loads(machine.read_text())
-        self.assertEqual(report["schema_version"], 12)
+        self.assertEqual(report["schema_version"], 13)
         card_path = machine.parent / report["paper_card_files"]["p1"]
         markdown = card_path.read_text()
         self.assertIn("九维分析框架", markdown)
