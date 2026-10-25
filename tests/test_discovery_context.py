@@ -58,8 +58,7 @@ class DiscoveryContextTests(unittest.TestCase):
         self.assertEqual(view['paper_cards'][0]['components'], original['paper_cards'][0]['components'])
         self.assertEqual(view['paper_cards'][1], original['paper_cards'][1])
         self.assertEqual(view['paper_cards'][0]['framework'], original['paper_cards'][0]['framework'][:1])
-        self.assertEqual(view['paper_cards'][0]['analyst_concerns'],
-                         [{'concern': 'An alternative explanation.'}])
+        self.assertNotIn('analyst_concerns', view['paper_cards'][0])
         self.assertNotIn('opportunities', view['paper_cards'][0])
         self.assertEqual(view['paper_claim_audits'], original['paper_claim_audits'][:1])
         self.assertEqual(view['quote_gaps'], {'g1': original['quote_gaps']['g1']})
@@ -103,6 +102,26 @@ class DiscoveryContextTests(unittest.TestCase):
         context['quote_gaps'] = list(context['quote_gaps'].values())
         view = problem_discovery_context(context, ['initial'])
         self.assertEqual(view['quote_gaps'], context['quote_gaps'][:1])
+
+    def test_ideation_keeps_contribution_scope_without_using_audit_verdicts_as_problems(self):
+        context = self.source_context()
+        claim = context['paper_claim_audits'][0]['claims'][0]
+        claim.update(claim='The method improves performance.',
+            tested_scope={'tasks': 'The original task'},
+            warranted_conclusion='The reported gain is on the original task.',
+            support_judgment='overstated', confounds=['A competing causal explanation.'],
+            limitations=['A source-specific limitation.'], missing_controls=['Another ablation.'],
+            next_reading=['Inspect an additional table.'])
+        original = deepcopy(context)
+        view = problem_discovery_context(context, ['initial'])
+        scoped = view['paper_claim_audits'][0]['claims'][0]
+        for key in ('claim', 'tested_scope', 'warranted_conclusion', 'claim_evidence_ids', 'result_evidence_ids'):
+            self.assertEqual(scoped[key], claim[key])
+        for key in ('support_judgment', 'confounds', 'limitations', 'missing_controls', 'next_reading'):
+            self.assertNotIn(key, scoped)
+        self.assertNotIn('analyst_concerns', view['paper_cards'][0])
+        self.assertEqual(view['evidence'], original['evidence'][:1])
+        self.assertEqual(context, original)
 
 
 if __name__ == '__main__':

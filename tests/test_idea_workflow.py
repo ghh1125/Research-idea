@@ -94,9 +94,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(len(retained['framework']), 8)
         for field in ('components', 'experiments', 'author_limitations', 'reading_gaps'):
             self.assertEqual(retained[field], card[field])
-        self.assertEqual(retained['analyst_concerns'], [
-            {key: value for key, value in concern.items() if key != 'discriminating_test'}
-            for concern in card['analyst_concerns']])
+        self.assertNotIn('analyst_concerns', retained)
         self.assertEqual(view['evidence'], complete['evidence'])
         self.assertEqual(view['papers'], complete['papers'])
         retained['components'][0]['function'] = 'Changed only in this returned view.'
@@ -132,9 +130,7 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertNotIn('opportunities', source)
                 self.assertEqual(source['framework'],
                     [item for item in card['framework'] if item['dimension'] != 'idea_relevance'])
-                self.assertEqual(source['analyst_concerns'], [
-                    {key: value for key, value in concern.items() if key != 'discriminating_test'}
-                    for concern in card['analyst_concerns']])
+                self.assertNotIn('analyst_concerns', source)
                 if task.stage == 'propose':
                     self.assertTrue(payload['problem_model']['opportunities'])
             else:

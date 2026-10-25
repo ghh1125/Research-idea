@@ -107,14 +107,21 @@ def problem_discovery_context(context, selected_ids=None):
         }
     for card in result.get('paper_cards', []):
         card.pop('opportunities', None)
+        # Critiques of a source's causal attribution are not ready-made research
+        # needs. Keep methods, results and scope, while leaving these critiques
+        # in the complete source card for evidence inspection.
+        card.pop('analyst_concerns', None)
         if 'framework' in card:
             card['framework'] = [item for item in card['framework']
                                  if item.get('dimension') != 'idea_relevance']
-        for concern in card.get('analyst_concerns', []):
-            concern.pop('discriminating_test', None)
+    for audit in result.get('paper_claim_audits', []):
+        audit['claims'] = [{key: deepcopy(claim[key]) for key in (
+            'claim', 'claim_evidence_ids', 'tested_scope', 'result_evidence_ids', 'warranted_conclusion')
+            if key in claim} for claim in audit.get('claims', [])]
+        audit.pop('warnings', None)
     result.setdefault('context_summary', {})['ideation_view'] = (
-        'Source methods, results, conditions, concerns and original evidence are retained. '
-        'Reader-generated paper-local proposals, idea-relevance suggestions and proposed '
-        'tests are left in the stored cards for later reference. Derive research problems '
-        'from the user goal and these source analyses before proposing an intervention.')
+        'Source methods, reported progress, tested conditions, scoped conclusions and original evidence are retained. '
+        'Reader-generated proposals and critiques of source contributions remain in the complete stored cards and audits. '
+        'Develop research needs beyond the progress already achieved: reason about what matters when existing methods '
+        'work as intended, rather than using an audit disagreement as the new problem.')
     return result

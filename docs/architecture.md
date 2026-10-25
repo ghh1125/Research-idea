@@ -72,7 +72,7 @@ flowchart TD
 
 推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
 
-第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns.discriminating_test`。这些来源的方法、原论文实验、结果、条件、疑点和原文引用保留；原卡与证据存储不变。`map/propose` 使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
+第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns`。主张审计投影保留作者主张、测试条件、结果引用和可支持结论，审计判定、归因疑点和缺少对照仍在原记录中。构思从已有贡献成立后的进展推导新需要；来源的方法、原论文实验、结果、条件和原文引用保留，原卡与证据存储不变。`map/propose` 使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
 
 `TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
 
