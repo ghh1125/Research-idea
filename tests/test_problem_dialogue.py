@@ -202,7 +202,8 @@ class ProblemDialogueTests(unittest.TestCase):
 
     def test_legacy_and_failed_messages_are_not_dropped(self):
         self.store.set('chat_messages', [dict(role='user', content=f'原始要求 {i}') for i in range(20)])
-        self.assertEqual(len(memory_context(self.store)['unreviewed_user_messages']), 20)
+        self.assertEqual(len(memory_context(self.store)['unreviewed_user_messages']), 12)
+        self.assertEqual(memory_context(self.store)['unreviewed_deferred_count'], 8)
         self.assertIn('原始要求 0', self.controller().user_notes())
         self.assertEqual(transcript(self.store)[0]['id'], transcript(self.store)[0]['id'])
 

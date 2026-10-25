@@ -407,7 +407,9 @@ class Controller:
         if checkpoint.get('state') != 'confirmed':
             return {}
         return {'confirmed_revision': checkpoint['confirmed_revision'],
-                'selected_problems': checkpoint['current']['selected_problems'],
+                'kind': checkpoint.get('kind', 'problem'),
+                'selected_problems': checkpoint['current'].get('selected_problems', []),
+                'directions': checkpoint['current'].get('problem_seeds', []),
                 'user_decisions': self.user_notes()}
 
     def user_notes(self):
@@ -430,7 +432,18 @@ class Controller:
 
     def ideation_context(self):
         """Use discovery readings, not explanations generated for an older idea."""
-        context = problem_discovery_context(self.context(), selected_ids=self.initial_paper_ids())
+        source_context = self.context()
+        context = problem_discovery_context(source_context, selected_ids=self.initial_paper_ids())
+        # Problem-directed readings are separate from old technical-design
+        # readings. Explicitly carry their source quotes into later judgments.
+        question_refs = set(self.store.get('question_source_evidence', []))
+        present_refs = {e['id'] for e in context['evidence']}
+        context['evidence'].extend(e for e in self.store.rows('evidence')
+                                  if e['id'] in question_refs - present_refs)
+        question_papers = {e['paper_id'] for e in context['evidence'] if e['id'] in question_refs}
+        present_papers = {p['id'] for p in context['papers']}
+        context['papers'].extend(p for p in source_context['papers']
+                                 if p['id'] in question_papers - present_papers)
         context['discovery_plan'] = self.store.get('search_plans', {}).get('initial', {})
         queries = {item['query'] for item in context['discovery_plan'].get('queries', [])}
         # Rebuild from discovery searches before compaction. Later candidate
@@ -760,6 +773,9 @@ class Controller:
                 payload.update(purpose='closest_work', reading_question=question,
                     acquisition_requests=requests,
                     comparison_search=candidate['proposal'].get('comparison_search', {}))
+            if self.phase == 'problem':
+                payload.update(purpose='problem_research', reading_question=question,
+                               acquisition_requests=requests)
             if design:
                 payload.update(purpose='technical_design',
                     reading_question=reading_question or candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', ''),
@@ -883,7 +899,7 @@ class Controller:
         pooled = {paper['id']: paper for paper in pool}
         ranked = [pooled.get(paper['id'], paper) for paper in ranked]
         choices = {}
-        limit = max(0, min(limit, self.config['max_papers'] - len(papers)))
+        limit = max(0, min(limit, 2 if phase == 'problem' else self.config['max_papers'] - len(papers)))
         metadata_audit = {'attempted': 0, 'enriched': 0, 'pages': []}
         if pool and limit:
             # Compare abstracts fairly before choosing a few full-text reads.
@@ -910,7 +926,7 @@ class Controller:
                             paper.update(abstract=match['abstract'], abstract_source=match['abstract_source'])
                 self.store.set('search_ledger', ledger)
             payload = {'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
-                'purpose': 'closest_work' if phase == 'neighbor' else 'technical_design' if candidate else 'strategy_discovery',
+                'purpose': 'problem_research' if phase == 'problem' else 'closest_work' if phase == 'neighbor' else 'technical_design' if candidate else 'strategy_discovery',
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
                 'discovery_plan': plan,
@@ -975,11 +991,14 @@ class Controller:
                 if merged != existing:
                     self.store.put('papers', merged)
                     updated += 1
-            elif paper['id'] in choices and added < limit and len(papers) < self.config['max_papers']:
+            elif paper['id'] in choices and added < limit and (phase == 'problem' or len(papers) < self.config['max_papers']):
                 self.store.put('papers', paper)
                 papers.append(paper)
                 selected.add(paper['id'])
                 added += 1
+        if phase == 'problem':
+            # Existing search hits are metadata refreshes, not additional full-text reads.
+            selected = set([pid for pid in choices if pid in selected][:limit])
         previous_coverage = {entry['route_id']: entry for entry in self.store.get('discovery_coverage', [])
                              if entry.get('discovery_plan_key') == plan_key}
         initial_ids = set(self.initial_paper_ids()) if candidate is None else set()
@@ -1011,16 +1030,18 @@ class Controller:
                 candidate.get('retrieved_work_ids', []) + sorted(selected)))
             if checkpoint_design:
                 candidate['design_search_complete'] = True
-            if phase != 'neighbor':
+            if phase not in {'neighbor', 'problem'}:
                 self.store.put('candidates', candidate)
-        self.progress(f"[search] 检索候选 {len(ranked)} 篇；本次比较标题/摘要 {len(pool) if limit else 0} 篇，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
+        allowance = f'本次定向补读最多 {limit} 篇' if phase == 'problem' else f"初次全文阅读上限 {self.config['max_papers']} 篇"
+        self.progress(f"[search] 检索候选 {len(ranked)} 篇；本次比较标题/摘要 {len(pool) if limit else 0} 篇，选入 {added} 篇；{allowance}")
         for paper in papers:
             if paper['id'] in selected:
                 self.progress(f"[paper] {paper_heading(paper)}\n{paper.get('url', '')}")
                 if paper.get('selection', {}).get('reason'):
                     self.progress('[read] 选读原因：' + paper['selection']['reason']
                                   + '\n重点看：' + paper['selection']['reading_question'])
-        hydrated = self.retrieve_full_texts(selected)
+        # Question discussion persists its exact selection before downloading.
+        hydrated = False if phase == 'problem' else self.retrieve_full_texts(selected)
         return bool(added or updated or hydrated)
 
     def search_once(self, query, reason, max_new=None, purpose='strategy', candidate=None):
@@ -1072,7 +1093,7 @@ class Controller:
         room = self.config['max_papers'] - len(self.store.rows('papers'))
         return self.select_search_results([key], min(room, max_new if max_new is not None else 3), candidate=candidate)
 
-    def discover_problems(self):
+    def discover_problems(self, pool=None):
         """Deepen and compare problems before committing to a method."""
         context = self.ideation_context()
         # Keep the user's agenda separate from the model's proposed narrowing.
@@ -1080,7 +1101,9 @@ class Controller:
         user_goal = context.get('topic') or ''
         refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
         from .problem_discovery import develop_problem_pool
-        pool, cases = develop_problem_pool(self, context, refs)
+        pool, cases = develop_problem_pool(self, context, refs, pool=pool)
+        context = self.ideation_context()
+        refs = lambda value: check_references(value, {e['id'] for e in context['evidence']}, {p['id'] for p in context['papers']})
         def validate_problem(value):
             refs(value)
             value['research_frame']['user_goal'] = user_goal
@@ -1190,6 +1213,10 @@ class Controller:
             'max_candidates': self.config['max_candidates']},
             lambda value: validate_idea_proposal(value, context, problem, self.config['max_candidates']),
             publish=False)
+
+    def run_questions(self, *, interactive=False, continue_problem=False):
+        from .question_workflow import run_questions
+        return run_questions(self, interactive=interactive, continue_problem=continue_problem)
 
     def run(self, *, interactive=False, continue_problem=False):
         recovered = self.store.interrupt_running_tasks()

@@ -54,6 +54,14 @@ APPROACH = obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS
 PROBLEM_POOL = obj(background_logic=STR, approach_landscape=array(APPROACH),
     problem_seeds=array(obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS),
         entry_reason=STR, research_route_ids=STRINGS)))
+RESEARCH_REQUEST = obj(question=STR, query=STR, paper_ids=STRINGS)
+PROBLEM_READING = obj(reason=STR, requests=array(RESEARCH_REQUEST))
+DISCUSS_DIRECTION = obj(answer=STR, memory_updates=MEMORY_UPDATES,
+    updated_pool=array(PROBLEM_POOL), research_requests=array(RESEARCH_REQUEST))
+DISCUSS_QUESTION = obj(**DISCUSS_PROBLEM['properties'], research_requests=array(RESEARCH_REQUEST),
+    updated_background=array(obj(research_frame=RESEARCH_FRAME, approach_landscape=array(APPROACH))))
+FRAME_QUESTION = obj(title=STR, background=STR, existing_methods=STR, problem=STR,
+    motivation=STR, research_claim=STR, why_priority=STR, closest_work_ids=STRINGS, evidence_ids=STRINGS)
 PROBLEM_CASE = obj(opportunity=OPPORTUNITY, response_analysis=array(obj(
     approach=STR, effective_response=STR, remaining_difficulty=STR, why_it_remains=STR)))
 PROBLEM_COMPARISON = obj(opportunity_id=STR, strongest_case=STR, remaining_obstacle=STR, priority_reason=STR)
@@ -133,6 +141,8 @@ SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract"
     "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "explore_problems": PROBLEM_POOL,
     "deepen_problem": PROBLEM_CASE, "discuss_problem": DISCUSS_PROBLEM,
     "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
+SCHEMAS.update(plan_problem_reading=PROBLEM_READING, discuss_direction=DISCUSS_DIRECTION,
+               discuss_question=DISCUSS_QUESTION, frame_question=FRAME_QUESTION)
 
 
 def validate(value, schema, path="$", depth=0):

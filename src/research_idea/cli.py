@@ -377,7 +377,7 @@ def build_parser():
                                 ("max-rounds", "Revision-round limit"), ("max-calls", "Model-call limit"),
                                 ("max-seconds", "Cumulative runtime limit in seconds"),
                                 ("timeout-s", "Per-model-call timeout in seconds")):
-            p.add_argument("--" + name, type=int, default=None, help=help_text)
+            p.add_argument("--" + name, type=int, default=None, help=argparse.SUPPRESS if name == "max-rounds" else help_text)
         p.add_argument("--codex-bin", default=None, help="Codex executable name or path")
         p.add_argument("--codex-profile", default=None, help="Existing Codex profile")
         p.add_argument("--skill", action="append", default=None, help="Selected local skill name/path; repeat to select several")
@@ -414,13 +414,13 @@ def build_parser():
     p = sub.add_parser("chat", help="持续对话窗口：/model、/reasoning、/run、/stop")
     p.add_argument("--project", type=Path, help="已有或新项目；省略时创建独立项目目录")
     backend_args(p)
-    p = sub.add_parser("run", help="Discover/import evidence and develop research candidates")
+    p = sub.add_parser("run", help="Read literature and develop research questions and motivation")
     p.add_argument("topic", nargs="?")
     p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
     project_arg(p)
     backend_args(p)
     p.add_argument("--no-search", action="store_true", help="Use only imported source material")
-    p.add_argument("--replan", action="store_true", help="Archive current cohort and regenerate against current sources")
+    p.add_argument("--replan", action="store_true", help="Revisit research directions using current sources; preserve conversation history")
     p = sub.add_parser("resume", help="Resume the same project using validated task checkpoints")
     project_arg(p)
     backend_args(p)
@@ -574,6 +574,7 @@ def execute(args):
                     cfg["auto_search"] = False
                 if getattr(args, "replan", False):
                     store.set("cohort", None)
+                    store.set("source_revision", store.get("source_revision", 0) + 1)
                 if store.get("demo") and cfg["backend"] != "demo":
                     raise ValueError("Demo sources cannot be promoted into a real project; initialize a new project")
                 if cfg["backend"] == "demo":
@@ -584,7 +585,7 @@ def execute(args):
                     backend = make_backend(cfg, project)
                 controller = Controller(store, backend, cfg, progress=lambda msg: print(msg, file=sys.stderr))
                 try:
-                    controller.run()
+                    controller.run_questions()
                 finally:
                     report, machine = export_report(store)
                     print(f"Report: {report}", file=sys.stderr)

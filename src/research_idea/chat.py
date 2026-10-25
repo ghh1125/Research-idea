@@ -18,9 +18,9 @@ from .config import load_config, write_config, REASONING_EFFORTS
 from .interactive import read_topic_file
 from .locking import project_lock
 from .store import Store
-from .presentation import STATUS_LABELS
-from .problem_dialogue import WAITING, problem_text
-from .conversation import memory_text
+from .presentation import STATUS_LABELS, DISCUSSION_LABELS, activity_preview
+from .problem_dialogue import problem_text
+from .conversation import memory_text, history_text
 from .citations import Citations, EVIDENCE_ID
 from .output_paths import output_parent, saved_report
 
@@ -29,10 +29,12 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 3. 对话中的补充会带入下一轮研究；/topic 查看主题，/constraints 保存资源条件。
 4. /scope ai-recent 使用各会议最新公开一届 + 近期 CS arXiv；/date 调整范围，/papers 路径 导入论文。
 5. /budget 查看预算，准备好后输入 /run。讨论与研究共用本项目累计预算。
-6. 调研并比较问题后自动暂停。直接输入意见，/problems 查看当前问题，/memory 查看保留的用户要点。
-   输入 /continue：接着讨论结果构思动机与 Idea，完成贡献对照和基本可行性判断。
-   第二阶段 [design]：Idea → Method；提供可借鉴技术、适用理由与改造建议。
-7. 最后 [idea] 显示核心想法、研究价值、工作差异与技术参考；/evidence 查看原文。
+6. 调研会先停下来讨论方向，再深入比较重要问题并再次暂停。
+   每次可直接输入意见，直到输入 /continue 才进入下一步；底部会提示接下来做什么。
+   /problems 看当前讨论，/problems detail 看完整论证；/memory 看保留的要点和出处。
+   /history 看原始对话，/history 关键词 找较早的讨论。纠正会带入后续构思。
+   方向讨论后 /continue 深入问题；问题讨论后 /continue 整理动机与研究主张。
+7. 最后 [idea] 串起背景、现有方法、问题、动机与研究主张；/evidence 查看原文。
 8. /details 展开上一步的完整分析；/details on 显示完整过程，off 恢复易读视图。
 9. /new 开始空白研究，沿用设置，调用和时间从 0 开始；/open 路径 恢复旧项目。
 10. /output 查看保存位置，/output 路径 修改父目录；文件夹固定为 idea-时间戳。
@@ -41,16 +43,18 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 /account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 
-HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
-直接输入：与模型讨论研究方向（会调用模型）；/run 才启动文献研究。
+HELP = '''/intro 使用介绍：从输入方向到形成研究主张的操作步骤。
+直接输入：讨论方向或当前问题（会调用模型）；/run 开始调研，暂停后 /continue 推进。
 /model [模型ID|inherit]  选择模型       /models       本地模型目录
 /reasoning [强度]        选择思考强度   /account      登录方式
 /topic [研究方向]        查看/设置主题  /input 路径   读取多行输入
 /run                    开始调研/恢复  /stop         停止当前任务
-/continue               按讨论后的问题继续构思 idea
-/problems               查看当前问题  /memory       查看用户要点及出处
+/continue               结束当前讨论，进入底部提示的下一步
+/problems [detail]      当前讨论；detail 展开完整论证
+/memory                 已保留的要点及出处
+/history [关键词]       原始对话；关键词可查更早的内容
 /papers [路径…]          列表/导入论文  /evidence [序号] 查看原文依据
-/status                 研究状态      /report       显示 idea 方案
+/status                 研究状态      /report       查看研究主张
 /details [on|off]        展开上一步分析；on/off 切换完整过程输出
 /config                 当前设置      /constraints [文字] 资源限制
 /output [目录|default]   保存位置；只改父目录，文件夹自动命名 idea-时间戳
@@ -58,7 +62,7 @@ HELP = '''/intro 使用介绍：从输入方向到得到 idea 的操作步骤。
 /venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
 /date                   arXiv 时间窗口与会议届次：最新公开一届或日期范围
 /new [研究方向]          新建空白研究，沿用设置，预算计数从 0 开始
-/open 项目目录           切换项目      /history      最近对话
+/open 项目目录           切换项目并恢复讨论位置
 /help                   命令说明      /exit         退出
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 COMMANDS = [line.split()[0] for line in HELP.splitlines() if line.startswith('/')]
@@ -69,17 +73,17 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
-              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan', problem='ansicyan')
-TAG_LABELS = {'problem': '问题讨论', 'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
+              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan', problem='ansicyan', direction='ansicyan', history='ansicyan')
+TAG_LABELS = {'direction': '方向讨论', 'problem': '问题讨论', 'history': '原始对话', 'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
-    'review': '方案讨论', 'idea': '研究 Idea', 'concept': 'Idea 构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
+    'review': '研究讨论', 'idea': '研究主张', 'concept': '研究构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
     'error': '这一步未完成', 'retry': '等待重试', 'recovered': '调用已恢复', 'context': '本步材料',
     'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
-BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '全文阅读上限',
-    'max_candidates': 'Idea 数量', 'max_rounds': '方案讨论轮数', 'max_calls': '模型调用上限',
+BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '初次选读规模',
+    'max_candidates': '优先问题数量', 'max_calls': '模型调用上限',
     'max_seconds': '累计时间（秒）', 'timeout_s': '单次调用超时（秒）'}
-BUDGET_KEYS = ('search_results_per_query', 'max_papers', 'max_candidates', 'max_rounds', 'max_calls', 'max_seconds', 'timeout_s')
+BUDGET_KEYS = ('search_results_per_query', 'max_papers', 'max_candidates', 'max_calls', 'max_seconds', 'timeout_s')
 BRAND = r'''             R E S E A R C H
 
        ___ ____  _____    _
@@ -89,18 +93,19 @@ BRAND = r'''             R E S E A R C H
       |___|____/|_____/_/   \_\
 
        IDEAS ONLY
-       From papers to research proposals'''
-WELCOME_NOTES = '''从一个研究方向，到一份可以开始验证的 idea。
+       From papers to meaningful research questions'''
+WELCOME_NOTES = '''从一个研究方向，到一个有意义、讲得清楚的研究问题。
 
 1. 输入方向和补充想法，直接与模型讨论。
-2. 输入 /run：调研文献、比较重要问题后暂停，可以直接讨论和纠正。
-   输入 /continue：按讨论后的问题构思动机与 Idea，再提供技术参考。
-3. 最后得到核心想法、研究价值、与已有工作的差异，以及技术参考。
+2. 输入 /run 调研文献。在方向和问题两处暂停，可以直接讨论和纠正。
+   每次讨论到满意后输入 /continue；底部会说明下一步。
+3. 最后得到背景、现有方法、问题、动机与研究主张，以及为什么值得研究。
 
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
+/problems 当前讨论 · /memory 用户要点 · /history 原始对话
 /output 保存位置 · /intro 使用介绍 · /new 新研究 · /help 全部命令
 
-专注研究 idea，附技术参考。运行中显示进展，Ctrl+C 停止，/run 继续。'''
+专注有意义的研究问题与想法。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
 
 def safe_text(text):
@@ -110,6 +115,21 @@ def safe_text(text):
 
 def resource_text(value):
     return '尚未设置。可用 /constraints 补充设备、时间或 API 预算。' if value.startswith('Resources unspecified;') else value
+
+
+def discussion_kind(checkpoint, status=''):
+    """Keep the visible next step consistent across resume and legacy projects."""
+    if checkpoint.get('state') != 'discussing':
+        return ''
+    kind = checkpoint.get('kind')
+    if kind in DISCUSSION_LABELS:
+        return kind
+    return {'awaiting_direction_discussion': 'direction', 'awaiting_idea_discussion': 'idea'}.get(status, 'problem')
+
+
+def discussion_hint(kind):
+    label, next_step = DISCUSSION_LABELS[kind]
+    return f'当前：{label}。直接输入意见继续讨论。\n/continue {next_step} · /problems 查看当前内容 · /history 查看原始对话'
 
 
 def fragments(tag, text):
@@ -194,18 +214,20 @@ class Chat:
     def busy(self):
         return self.job is not None and not self.job.done()
 
-    def show(self, tag, text):
+    def show(self, tag, text, *, full=False):
         if tag == 'detail' and not self.details_full:
             return
-        if EVIDENCE_ID.search(str(text)):
+        if tag != 'history' and EVIDENCE_ID.search(str(text)):
             try:
                 store = Store(self.project, readonly=True)
                 try:
-                    text = Citations.from_store(store).text(text)
+                    text = Citations.from_store(store).text(text, compact=tag not in {'evidence', 'detail'} and not full)
                 finally:
                     store.close()
             except (OSError, RuntimeError, sqlite3.Error):
                 pass
+        if not full and not self.details_full and tag in {'analysis', 'search', 'review', 'concept', 'design'}:
+            text = activity_preview(text)
         if self.output:
             self.output(tag, safe_text(text))
         else:
@@ -214,12 +236,13 @@ class Chat:
             print_formatted_text(FormattedText(fragments(tag, text)))
 
     def toolbar(self):
-        calls, elapsed, status = '?', 0, 'initialized'
+        calls, elapsed, status, checkpoint = '?', 0, 'initialized', {}
         try:
             store = Store(self.project, readonly=True)
             try:
                 calls, elapsed = store.get('calls_used', 0), store.get('elapsed_s', 0)
                 status = store.get('status', 'initialized')
+                checkpoint = store.get('problem_checkpoint') or {}
             finally:
                 store.close()
         except (OSError, RuntimeError):
@@ -244,8 +267,10 @@ class Chat:
             state += f' · 本步 {seconds // 60}:{seconds % 60:02d}'
         if not self.busy and status == 'running':
             state = '已有进度'
-        footer = (' /intro 使用介绍 · Ctrl+C 停止 · 完成后恢复输入' if self.busy else
-                  ' /intro 使用介绍 · /new 新研究 · ' + ('/continue 继续构思 · 直接输入可讨论' if status == WAITING else '/report 看方案' if status == 'completed' else '/run 开始研究'))
+        kind = discussion_kind(checkpoint, status)
+        footer = (' /intro 使用介绍 · Ctrl+C 停止 · 暂停或完成后恢复输入' if self.busy else
+                  ' /intro 使用介绍 · ' + ('/continue ' + DISCUSSION_LABELS[kind][1] + ' · 直接输入可讨论' if kind else
+                  '/new 新研究 · ' + ('/report 看研究主张' if status == 'completed' else '/run 开始研究')))
         context = '' if self.busy else ' · ' + self.project.name
         return [('noreverse bg:#edf3f8 #36485e', fit(f" {spinner}{self.cfg['model'] or '继承模型'} · {self.cfg['reasoning_effort'] or '继承强度'} · {state}{context}") + '\n'),
                 ('noreverse bg:#f3f5f7 #5b6470', fit(f" 本项目累计 · 调用 {calls}/{self.cfg['max_calls']} · 时间 {elapsed / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分") + '\n'),
@@ -263,7 +288,7 @@ class Chat:
             write_config(self.project, cfg)
         self.cfg = load_config(self.project)
         labels = {**BUDGET_LABELS, 'model': '模型', 'reasoning_effort': '思考强度', 'constraints': '资源条件',
-                  'search_venues': '会议', 'search_date_mode': '日期模式', 'strategy_months': '方法窗口（月）',
+                  'search_venues': '会议', 'search_date_mode': '日期模式', 'strategy_months': '背景与已有方法窗口（月）',
                   'novelty_months': '第一阶段动机对照窗口（月）', 'search_source': '文献来源', 'auto_search': '自动检索',
                   'conference_policy': '会议时间范围',
                   'search_since': '起始日期', 'search_until': '截止日期'}
@@ -352,7 +377,7 @@ class Chat:
                 event = json.loads(line)
                 if event['tag'] in {'error', 'budget'}:
                     reported_error = True
-                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking', 'concept', 'design', 'retry', 'recovered'}:
+                if event['tag'] in {'search', 'read', 'analysis', 'review', 'idea', 'thinking', 'concept', 'design', 'retry', 'recovered', 'direction', 'problem'}:
                     heading = event['text'].split('\n', 1)[0]
                     state = (re.sub(r'\s*·\s*模型调用.*$', '', heading) if re.match(r'(?:\d/4|第[一二](?:轮|阶段)(?:完成)?) · ', heading)
                              else TAG_LABELS[event['tag']])
@@ -458,7 +483,7 @@ class Chat:
                     store.close()
                 if last:
                     from .chat_worker import outline
-                    self.show('analysis', '\n'.join(outline(last['result'], citations=citations)))
+                    self.show('analysis', '\n'.join(outline(last['result'], citations=citations)), full=True)
                 else:
                     self.show('system', '还没有研究分析。输入 /run 开始。')
         elif command in {'/model', '/reasoning'}:
@@ -496,15 +521,23 @@ class Chat:
             try:
                 checkpoint = store.get('problem_checkpoint') or {}
                 if checkpoint.get('state') != 'discussing':
-                    raise ValueError('当前没有待讨论的问题。使用 /run 开始或恢复研究。')
+                    raise ValueError('当前没有暂停的讨论。使用 /run 开始或恢复研究。')
             finally:
                 store.close()
             await self.start('continue')
         elif command in {'/problems', '/memory'}:
+            if command == '/problems' and value not in {'', 'detail'}:
+                raise ValueError('/problems 查看当前讨论；/problems detail 展开完整论证。')
+            if command == '/memory' and value:
+                raise ValueError('/memory 查看保留的要点；/history 关键词 查找原始对话。')
             store = Store(self.project, readonly=True)
             try:
-                self.show('problem' if command == '/problems' else 'system',
-                          problem_text(store) if command == '/problems' else memory_text(store))
+                if command == '/problems':
+                    kind = discussion_kind(store.get('problem_checkpoint') or {}, store.get('status', ''))
+                    self.show('direction' if kind == 'direction' else 'problem',
+                              problem_text(store, detail=value == 'detail'), full=value == 'detail')
+                else:
+                    self.show('system', memory_text(store))
             finally:
                 store.close()
         elif command == '/run':
@@ -518,7 +551,9 @@ class Chat:
             try:
                 if command == '/status':
                     status = store.get('status', 'initialized')
-                    self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}")
+                    kind = discussion_kind(store.get('problem_checkpoint') or {}, status)
+                    hint = '\n\n' + discussion_hint(kind) if kind else ''
+                    self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}" + hint)
                 elif command == '/papers':
                     kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
                     citations = Citations.from_store(store)
@@ -536,8 +571,7 @@ class Chat:
                             raise ValueError('未找到这条原文；输入 /evidence 查看列表，再选择序号。')
                         self.show('evidence', citations.block(ev))
                 else:
-                    for m in store.get('chat_messages', [])[-12:]:
-                        self.show(m['role'], m['content'])
+                    self.show('history', history_text(store, query=value))
             finally:
                 store.close()
         elif command == '/papers':
@@ -593,12 +627,12 @@ class Chat:
             strategy, novelty = config_scope(cfg), config_scope(cfg, 'novelty')
             self.show('system', '\n'.join([
                 '项目：' + str(self.project), f"模型：{cfg['model'] or '继承配置'} · 思考强度 {cfg['reasoning_effort'] or '继承配置'} · 后端 {cfg['backend']}",
-                f"arXiv 背景与技术探索：{strategy['since']} → {strategy['until']}", f"arXiv 第一阶段动机对照：{novelty['since']} → {novelty['until']}",
+                f"arXiv 背景与已有方法：{strategy['since']} → {strategy['until']}", f"arXiv 动机与贡献对照：{novelty['since']} → {novelty['until']}",
                 '会议时间：' + ('各会议最新公开的一届；本届未公开则选上一届' if cfg['conference_policy'] == 'latest' else '按上述日期窗口'),
                 '参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络',
                 '会议：' + ('、'.join(cfg['search_venues']) or '按主题检索'),
-                f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 全流程最多精读 {cfg['max_papers']} 篇",
-                f"产出：最多 {cfg['max_candidates']} 个 idea，讨论 {cfg['max_rounds']} 轮",
+                f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 初次选读规模 {cfg['max_papers']} 篇；问题补读共用总预算",
+                '产出：背景、现有方法、问题、动机与研究主张；方向与问题两处可交互讨论',
                 f"预算：{cfg['max_calls']} 次调用 / {cfg['max_seconds'] / 60:g} 分钟",
                 '输出父目录：' + str(output_parent(self.project, cfg)) + '（文件夹自动命名 idea-时间戳）',
                 '调用失败：每隔 30 秒重试，最多 10 次；每次尝试和等待均计入本项目预算。',
@@ -635,11 +669,11 @@ class Chat:
             mode = '动态，每次运行按当天计算' if self.cfg['search_date_mode'] == 'rolling' else '固定日期'
             conference = ('各会议最新公开的一届；本届未公开则选上一届，不按月数截断'
                           if self.cfg['conference_policy'] == 'latest' else '按所设日期窗口筛选')
-            self.show('system', f"arXiv 日期模式：{mode}\narXiv 背景与技术探索：{strategy['since']} → {strategy['until']}\narXiv 第一阶段动机对照：{novelty['since']} → {novelty['until']}\n会议论文：{conference}\n参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络\n截止日期：{strategy['until'] or '运行当天'}\n已知的更早相关论文也会参与对比。")
+            self.show('system', f"arXiv 日期模式：{mode}\narXiv 背景与已有方法：{strategy['since']} → {strategy['until']}\narXiv 动机与贡献对照：{novelty['since']} → {novelty['until']}\n会议论文：{conference}\n参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络\n截止日期：{strategy['until'] or '运行当天'}\n已知的更早相关论文也会参与对比。")
             if not value:
                 choice = await self.pick('修改时间设置', ['返回', '动态窗口', '固定日期', '会议按最新公开一届', '会议按日期窗口'])
                 if choice == '动态窗口':
-                    months = await self.session.prompt_async('技术探索月数 动机对照月数 [12 6] › ')
+                    months = await self.session.prompt_async('背景与方法月数 动机对照月数 [12 6] › ')
                     value = 'rolling ' + (months.strip() or '12 6')
                 elif choice == '固定日期':
                     dates = await self.session.prompt_async('起始日期 截止日期 YYYY-MM-DD › ')
@@ -681,10 +715,28 @@ class Chat:
             from .cli import build_parser
             project = initialize(build_parser().parse_args(['chat', '--project', value]))
             self.project, self.cfg = project, load_config(project)
+            self.started = self.step_started = self.base_elapsed = 0
+            self.state = '就绪'
+            if self.session:
+                from prompt_toolkit.history import InMemoryHistory
+                self.session.history = InMemoryHistory()
+                self.session.default_buffer.history = self.session.history
+                self.session.default_buffer.reset()
+                self.session.app.invalidate()
             self.show('system', '已打开：' + str(project))
+            self.show_resume()
         else:
             raise ValueError('未知命令；输入 /help 查看可用命令')
         return True
+
+    def show_resume(self):
+        store = Store(self.project, readonly=True)
+        try:
+            kind = discussion_kind(store.get('problem_checkpoint') or {}, store.get('status', ''))
+            if kind:
+                self.show('direction' if kind == 'direction' else 'problem', discussion_hint(kind))
+        finally:
+            store.close()
 
     async def loop(self):
         from prompt_toolkit import PromptSession
@@ -703,6 +755,7 @@ class Chat:
         with patch_stdout():
             self.show('brand', BRAND)
             self.show('system', WELCOME_NOTES + f'\n\n项目：{self.project}')
+            self.show_resume()
             try:
                 while True:
                     try:

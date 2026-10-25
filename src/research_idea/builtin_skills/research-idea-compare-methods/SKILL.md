@@ -3,6 +3,9 @@ name: research-idea-compare-methods
 description: Compare a research candidate with the closest supplied methods at the mechanism and claim level. Use for novelty checks, related-work concerns, or a reviewer claiming that an idea has already been done.
 ---
 
+**任务范围：** v0.5 的 `plan_problem_reading/deepen_problem/discuss_question/frame_question` 只使用文末 Problem-focused discussion 的研究问题比较规则，以及相似标题不等于具体贡献重叠的原则。下列 propose/develop/refine 输出字段和六维方法规格仅服务历史方案任务，不用于当前问题与动机输出。
+
+
 # Compare mechanisms and conditions
 
 ## Inputs
@@ -31,3 +34,7 @@ In propose, fill positioning and idea_core.essential_difference. Give the reader
 
 ## Missing evidence
 Use unknown for unavailable details and uncertain for unsupported coverage. A covered recommendation needs a same-claim, six-dimensional comparison backed by full-text evidence, including reported_result evidence in the evaluation comparison; its semantics still require review. An author claim alone cannot establish that the problem was empirically solved. Unproven efficacy does not make a preexisting mechanism novel. Never reject an idea merely because a related title exists.
+
+## Problem-focused discussion (v0.5)
+
+在 plan_problem_reading、deepen_problem、discuss_question、frame_question 中，比较的是背景目标、已有有效回应、仍可能出现的困难及其原因。先找真正最接近的具体回应并读细节，再判断研究问题的区别。支持用户讨论改变方向和解释；既有方法的贡献应得到承认。不要为比较而先构造一个新算法，不输出技术方案或实验设计。

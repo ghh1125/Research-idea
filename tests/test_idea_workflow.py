@@ -724,7 +724,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn(candidate['proposal']['idea_core']['construction_path'], summary)
         for value in sketch.values():
             self.assertIn(value, candidate_markdown(candidate))
-        self.assertIn('Idea → Method', summary)
+        self.assertIn('背景、问题、动机与研究主张已整理', summary)
         self.assertIn(candidate['proposal']['motivation']['background'], summary)
 
     def test_idea_repairs_an_empty_construction_path_in_the_existing_proposal_step(self):

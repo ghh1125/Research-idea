@@ -11,6 +11,8 @@ PROMPT_VERSION = "41"
 
 def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
+    if stage in {'frame_question', 'discuss_direction', 'discuss_question', 'plan_problem_reading'}:
+        return '50'
     if stage == 'discuss_problem':
         return '42'
     if stage == 'inspect_source':
@@ -160,6 +162,62 @@ Among papers addressing the same substantive question, prioritize newer conferen
 
 for _stage in ('screen_papers', 'plan_search', 'map', 'propose', 'design_transfer', 'develop', 'refine', 'review'):
     INSTRUCTIONS[_stage] += READABLE_RESEARCH_WRITING
+
+# v0.5 focuses on the research question; legacy method prompts remain for old files.
+INSTRUCTIONS['plan_problem_reading'] = """
+围绕 problem_seed 找真正最接近的已有回应，帮助理解这个问题是否有意义、已有主要方法为什么仍可能留下它。
+先看已有资料是否已经回答疑问；足够则 requests=[]，不要为每个方向机械补搜。
+有具体缺口时给最多两条 requests：question 说明要查清什么、哪种结果会改变问题判断；
+query 为简短英文学术检索词，查已知论文可包含论文标题；paper_ids 为已有需补读的论文，未知论文用查询查找。
+问题可以被新资料重述，不能把检索设计成只证明自己的猜想。查方法细节是为了理解已有能力与新困难，
+不是设计新算法。reason 简要说明补读用途或为何现有资料足够。不安排实验或技术方案。
+"""
+from .conversation import MEMORY_INSTRUCTIONS
+
+INSTRUCTIONS['discuss_direction'] = """
+当前是文献梳理后的方向讨论。用平实中文先回答用户真正困惑的地方。
+problem_model 包含背景、主要方法和初步问题方向。允许修订背景理解、改问题、合并方向或重新扩大范围；
+不是让用户审批固定表格。updated_pool=[] 表示本轮只解释；需要修订时返回一个完整的新pool并保留仍相关的方向。
+用户追问不是同意；助手建议不能记成用户决定。明确说明当前判断改了什么。
+需要查论文才能回应时，research_requests给最多两条具体问题及查询词/已知paper_ids；不要声称已查。
+source_work_done=true时使用reading_result更新判断并返回research_requests=[]，不在一轮里无限补查。
+普通消息继续讨论，/continue才进入逐个深入比较。此阶段不生成解法和实验计划。
+""" + MEMORY_INSTRUCTIONS
+
+INSTRUCTIONS['discuss_question'] = DISCUSSION_INSTRUCTIONS + """
+v0.5本阶段最终交付问题与研究动机，不进入解决技术。用户纠正背景或主要方法时，用updated_background返回一个完整research_frame和approach_landscape，同步改动受影响的问题；只解释没有修改则[]。不能只口头答应，却让后续仍读取错误背景。重点回应：为什么这个困难真实且重要，
+已有主要方法正常发挥后为什么仍可能遇到它，它怎样妨碍原背景目标。允许合理猜想，不能把猜想冒充论文结果。
+有具体文献缺口时返回research_requests，最多两项，每项含question、简短英文query、已知paper_ids。
+source_work_done=true时依据补读结果修订，research_requests=[]；不能一边答复否定旧问题一边保留其原判断。
+已有资料足够时直接讨论，不强制检索。不要反复宣称缺证/待确认，不增加打分门槛。
+"""
+INSTRUCTIONS['frame_question'] = """
+把经过文献分析和用户讨论的研究问题写成有说服力、详细易懂的研究主张。只做背景→现有方法→问题→动机。
+不要生成算法、技术路线、模块、实现建议或实验计划，不把最难的能力改写为操作指令作为答案。
+以problem_model当前选中的问题及discussion_handoff为起点，保留用户的目标和有效纠正。
+background：解释大背景中的真实需要，不从某篇论文的数据集或小设定开头。
+existing_methods：按主要思路梳理已有进展，说明每类如何帮助原目标，再用代表论文支撑，不逐篇堆摘要。
+problem：承接这些方法正常发挥后的状态，具体说谁在什么条件下仍做不到什么，或成功使用中怎样暴露新困难。
+讲清为什么通常的改进或最接近的方法仍不能自然消除这个障碍。不是证明全领域无解，不因缺少消融否定原贡献。
+新困难允许有理由的猜想，用“我们怀疑”等自然说法表明推断，展开原因及后果，不写成泛泛免责声明。
+motivation：解释这个困难为什么影响背景目标，弄清它会推进什么重要理解；不能只说效果会更好或成本更低。
+research_claim：用一两句明确我们要研究什么关系/原因/现象，以及新的认识在哪里；不是如何解决的方案。
+why_priority：比较其他已分析问题的真正价值，解释为什么当前优先这个，不贬低替代方向、不以容易实现为理由。
+标题直白，读者看完能复述问题。各部分接着上一部分推进，避免重复、专业名词串联和局部小修补。
+事实引用只用给定paper/evidence ID；相似主题不是重复证明。用最接近工作实际解决的内容说明区别。
+""" + PROBLEM_ORIGIN_RULES
+for _stage in ('frame_question', 'discuss_direction', 'discuss_question'):
+    INSTRUCTIONS[_stage] += READABLE_RESEARCH_WRITING + "\n本任务只交付问题与动机，不展开解决办法、两个技术角度、具体例子或实验计划。"
+INSTRUCTIONS['inspect_source'] += """
+For purpose=problem_research, answer the supplied reading_question: what the strongest existing responses actually achieve,
+under which conditions, and what need could remain or arise from their successful use. Read introduction/related work
+for approach families, and method/results for the specific capability in question. Credit real progress. This reading
+serves problem discovery and discussion, not constructing a new solution or attacking the paper's contribution.
+"""
+INSTRUCTIONS['screen_papers'] += """
+For purpose=problem_research, select papers that could answer or change the supplied candidate.problem, including
+strongest existing responses. Prefer direct substantive relevance over background repetition; use route_ids=[].
+"""
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:
     guidance = ""

@@ -1,5 +1,8 @@
 # 工作流借鉴与接口资料
 
+> v0.5.0 当前流程专注研究问题与动机。本文保留历次设计来源记录；早期技术方案相关条目属于历史实现，当前主流程不再执行。当前讨论与记忆设计见文末 v0.5.0 一节。
+
+
 本项目的控制器、存储、适配器、八个内置 skill 和测试为本次自主实现；未复制或打包下列项目的源代码。它们是工作流设计的参考，不构成本项目已获得研究效果的证据。
 
 - [ARIS / Auto-Research-In-Sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)：研究任务分解、迭代和状态保存。
@@ -165,3 +168,20 @@
 - [LangGraph interrupts](https://github.com/langchain-ai/docs/blob/main/src/oss/langgraph/interrupts.mdx)：持久暂停并以同一会话恢复。对应问题讨论前后的明确阶段边界；恢复不会重复已完成的研究阶段。
 
 这些工程机制用于避免对话遗忘和重复运行，不是研究结论正确或 idea 有创新性的证明。
+
+### v0.5.0：更频繁的讨论与跨阶段会话
+
+进一步核对 ARIS 与 CORAL 的讨论、恢复和知识保存实现后，本项目采用下列分工：完整对话保留原文，当前研究要点可替换或撤回，讨论阶段单独恢复；模型每轮使用与当前问题相关的材料。
+
+| 已核对的源码行为 | 本项目采用的思路 |
+| --- | --- |
+| ARIS [idea-discovery 文献范围讨论](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L237) 在 `AUTO_PROCEED=false` 时请用户确认文献地图与范围，收到纠正后调整查询；[候选讨论](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L275) 允许重新构思或返回文献阶段 | 把讨论放到方向与问题尚可修改的时候，用户纠正实际影响后续材料、问题与选择，而不只产生一段聊天回复 |
+| ARIS [run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) 保存阶段、产物与恢复信息；[research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md#L58) 保存阶段、轮次与会话标识，并从阶段文档恢复 | 已完成的研究材料与当前讨论分别持久化，恢复后从暂停处继续；研究主线可被用户明确修订 |
+| ARIS [research_wiki.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/research_wiki.py#L225) 从 brief、论文与 idea 关系组织有长度限制的查询材料；该材料不等同于完整聊天记录 | 按本轮问题选择相关上下文，保留可回查的出处；历史内容无需每次全量塞进模型 |
+| CORAL [Codex 适配器](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/builtin/codex.py) 从运行记录获取会话 ID，通过 `codex exec resume` 延续原生会话；其默认执行方式不等待用户对话 | 借鉴恢复连续性。Research-idea 继续自行保存研究会话，由显式讨论与 `/continue` 驱动；没有把 CORAL 的原生会话恢复描述成用户讨论流程 |
+| CORAL [steering.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/steering.py) 持久记录引导内容及创建、应用时间，[manager.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/manager.py#L860) 在恢复时应用引导 | 用户纠正必须有保存、应用与阶段归属，不能只依赖模型记住最近几条消息 |
+| CORAL [create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) 区分原始来源、研究记录与综合认识，并保存替代关系及依据；[checkpoint.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/checkpoint.py) 追踪共享知识版本 | 区分用户原话、当前要求和研究者的推测；修改当前要求时保留旧版本与来源 |
+
+[conversation.py](../src/research_idea/conversation.py) 中的用户决定账本是本项目自行实现的组合设计：只有用户消息可以作为要点来源；`add/replace/remove` 保留替代关系；临时要求绑定产生时的讨论阶段和实例，`/continue` 只结束当前讨论的临时要求。长期要求持续使用，完整原话不改写。模型同时接收当前要点的原话出处、近期对话和按当前问题召回的较早用户消息；已撤回要求附带失效记录，避免旧选择被重新当成当前决定。已处理但没有提炼为要点的早期消息也可以再次检索，`/history [关键词]` 则面向用户查阅全部历史中的相关原话。
+
+以上源码启发了讨论与上下文的组织方式；没有发现 ARIS 或 CORAL 在这些入口中直接提供与本项目相同的、仅接受用户原话来源且可替代或撤回的决定账本。Research-idea 没有复制它们的代码，也不依赖后端原生会话记住研究要求。

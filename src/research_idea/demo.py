@@ -48,7 +48,26 @@ class DemoBackend:
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
         refs = [e["id"] for e in payload.get("evidence", [])]
         papers = [p["id"] for p in payload.get("papers", [])]
-        if task.stage == 'plan_search':
+        if task.stage == 'frame_question':
+            model = payload['problem_model']
+            chosen = {c['opportunity_id'] for c in model['selected_problems']}
+            cases = [c for c in model['opportunities'] if c['id'] in chosen]
+            output = dict(title='合成演示：' + cases[0]['question'],
+                background=model['research_frame']['literature_logic'],
+                existing_methods='\n\n'.join(a['name'] + '：' + a['achieved_progress'] for a in model['approach_landscape']),
+                problem='\n\n'.join(c['prior_art_delta'] + c['bottleneck_hypothesis'] + c['derivation'] for c in cases),
+                motivation='\n\n'.join(c['why_it_matters'] + c['research_need'] for c in cases),
+                research_claim='我们希望弄清：' + '；'.join(c['question'] for c in cases),
+                why_priority='；'.join(c['selection_reason'] for c in model['selected_problems']),
+                closest_work_ids=papers, evidence_ids=refs)
+        elif task.stage == 'plan_problem_reading':
+            output = {'reason': '合成演示不执行真实检索。', 'requests': []}
+        elif task.stage in {'discuss_direction', 'discuss_question'}:
+            output = {'answer': '已保留当前问题，可以继续讨论或 /continue。',
+                      'memory_updates': [], 'research_requests': []}
+            output.update({'updated_pool': []} if task.stage == 'discuss_direction' else
+                          {'updated_problems': [], 'selected_problems': [], 'updated_background': []})
+        elif task.stage == 'plan_search':
             output = demo_design_plan(technical=payload.get('purpose') == 'technical_design')
         elif task.stage == "screen_papers":
             output = {'selection_summary': 'Synthetic selection for workflow demonstration.',

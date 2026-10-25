@@ -1,191 +1,71 @@
-# 架构与当前范围
+# 架构与当前范围 · v0.5.0
 
-CLI 使用单进程控制器，SQLite 保存项目状态，文件保存 idea 报告。研究过程与模型后端解耦。
+Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目及会话状态；模型只完成有界的结构化任务。产品以背景、现有方法、问题和动机为终点，不自动生成解决方案。
 
-| 模块 | 责任 |
+## 模块
+
+| 模块 | 职责 |
 | --- | --- |
-| `cli.py` | 命令、项目锁、导入导出、本地 skill 选择 |
-| `paper_reading.py` | 有界分块读取、章节/图表清单、九维分析卡、按缺口补读与覆盖记录 |
-| `problem_discovery.py` | 问题池探索、逐个独立深入、检查点与比较交接 |
-| `controller.py` | 证据门槛、候选定向补读、对照与可行性状态、迭代、预算、恢复 |
-| `prompts.py` / `schema.py` | 有边界的任务规范和本地结构校验 |
-| `claims.py` / `novelty.py` / `feasibility.py` / `motivation.py` | 对照证据、操作前提与动机审阅的独立状态规则 |
-| `store.py` | 来源、证据、候选版本、任务缓存、事件与 skill 指纹 |
-| `literature.py` / `venues.py` / `fulltext.py` | arXiv/OpenAlex/OpenReview、会议元数据过滤、有限全文获取、规范化与去重 |
-| `backends/` | Codex、Claude Code、OpenAI-compatible、Anthropic |
-| `local_skills.py` / `builtin_skills/` | 加载显式选择的本地文件与八个内置研究 skill，按阶段提供指导 |
-| `report.py` | 可读报告和机器可读结果 |
+| `cli.py` / `chat.py` / `chat_worker.py` | 批处理与交互窗口、独立任务进程、命令及事件显示 |
+| `question_workflow.py` | 当前主流程、两处讨论暂停、确认与恢复、最终研究主张 |
+| `problem_discovery.py` | 方向探索、独立深入与比较交接 |
+| `problem_dialogue.py` | 方向/问题讨论、增量修订、原子保存对话与研究版本 |
+| `discussion_sources.py` | 具体问题触发的有界检索/补读、选择记录与恢复 |
+| `conversation.py` | 原始历史、有效要求、旧消息检索、阶段作用域与迁移 |
+| `controller.py` | 来源与模型任务、结构/引用校验、缓存、预算 |
+| `paper_reading.py` / `claims.py` | 分块阅读、九维论文卡、作者主张和结果的联系 |
+| `literature.py` / `venues.py` / `fulltext.py` | 学术索引、会议来源、公开全文获取及去重 |
+| `schema.py` / `prompts.py` / `local_skills.py` | 任务输出结构、研究规范及按任务加载的 skill |
+| `store.py` / `report.py` / `presentation.py` | 持久化、Markdown/JSON 和可读显示 |
+| `backends/` | Codex、Claude Code、OpenAI-compatible、Anthropic 适配器 |
 
-## 控制流程
+## 当前主流程
 
 ```mermaid
 flowchart TD
-    A["研究意图与约束"] --> S["按不同原因与已有思路规划研究路线和查询"]
-    S --> T["按路线组织候选池，语义筛选互补论文"]
-    T --> B["带着路线与阅读问题读取正文，形成分析卡"]
-    B --> Q["主张与实验支持审计"]
-    Q --> P["explore_problems：从已有进展探索不同问题"]
-    P --> P1["deepen_problem：逐个独立深入并保存"]
-    P1 --> C["map：比较全部论证，选择并保存理由"]
-    C --> D["propose：围绕已选问题构思 idea、贡献与可行路径"]
-    D --> A2["第二阶段：从 idea 推导两个技术问题"]
-    A2 --> R["按问题检索方法、复用证据、定向补读"]
-    R --> M["选择和改造技术，说明如何共同实现 idea"]
-    M --> E["检查论证与方法适用条件"]
-    E --> F{"是否需要具体改进"}
-    F -->|具体设计缺口且有预算| R
-    F -->|具体修订| I["修改并逐条回应"]
-    I --> E
-    F -->|完成讨论或达到预算| H["交付 idea 与简要技术参考"]
+    A[研究目标与用户要求] --> B[检索、筛选与正文阅读]
+    B --> C[explore_problems：方向与问题池]
+    C --> D[方向讨论与修订]
+    D -->|/continue| E[按问题补读、deepen_problem逐个深入]
+    E --> F[map：比较研究价值与优先理由]
+    F --> G[问题讨论与修订]
+    G -->|/continue| H[frame_question：背景、方法、问题、动机]
+    D -.具体资料缺口.-> R[定向检索与阅读后更新判断]
+    G -.具体资料缺口.-> R
+    R --> D
+    R --> G
+    H --> I[研究主张与论文依据]
+    I -->|继续讨论| G
 ```
 
-候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
+`Controller.run_questions` 是 CLI 当前入口。旧版本的方案生成函数和数据结构保留供历史项目及兼容读取，当前命令不执行 `propose/develop/refine/review` 方法循环。
 
-CLI 和主报告开头使用 `motivation.problem_observation`、`why_this_method` 直接说明问题与想法，再展开 Background、Existing methods、Possible problem、Motivation、Idea 五段论证。`motivation.existing_work` 说明已有进展；Problem 保留 `existing_approach_limit`、`causal_explanation`、`problem_derivation` 三段；`research_need` 推导动机；Idea 正文使用 `idea_core` 的四段解释，不附完整 `information_path`。深入问题分析保持完整，由现有 `propose` 调用负责成文整合。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
+所有问题所需补充来源先获得，再逐个深入；每次深入不带偏好的其他候选论证。`map` 比较各自价值，保留已深入的原论证。`frame_question` 读取当前讨论版本，输出 `title/background/existing_methods/problem/motivation/research_claim/why_priority` 以及论文、证据 ID，不包含方法或实验字段。
 
-技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
+## 对话事务与记忆
 
-## 三项研究约束
+用户原话先入库，再调用模型。讨论结果中的 `memory_updates` 只允许引用实际提供给模型的用户消息。更新支持 add/replace/remove；保留失效记录和替代关系。助手答复、研究版本、记忆和处理成功标记通过 `Store.set_many` 一起提交。
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 14`。
+来源补查是单独的可恢复工作：计划、选中论文、实际阅读记录保存后再生成讨论答复。最终模型回复失败时，消息仍是 pending；重发同文本复用原 ID。不同新消息保留为追加纠正，不删除旧原话。补查前的记忆建议不提前生效，由补查后的最终答复统一提交。
 
-| 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
-| --- | --- | --- |
-| `proposal.motivation` | 背景怎样导出现有办法未解决的问题或新暴露的问题，为什么选择它；现有方法的限制和因果解释是什么；为什么该想法能带来进展 | 论证完整不代表问题真实重要，也不代表复杂方法优于简单方法 |
-| `novelty_claim` | 贡献类型和具体主张是什么；改变了什么变量；可观测后果与证伪条件是什么；为何不是无关紧要的改动 | 主张有表述不代表创新成立或有效 |
-| `prior_art.overlaps[].comparisons` | 每篇最近工作在问题、机制、可用信息、目标、评测、核心主张六维上，与候选有什么相同或不同；原文证据在哪里 | 标题相似或某一维相同不代表核心贡献已被覆盖；差异也不自动具有价值 |
-| `feasibility.checks` | 数据访问、推理信号、接口、学习信号、计算资源、评测、最小测试七维分别需要什么，如何检查，失败后怎么处理 | 文献支持和可行性审阅不能替代接口检查、数据核验或真实实验 |
-| `feasibility.required_signals` | 每项信号用于训练、推理还是评测，当前可用性、获取计划与替代方案是什么 | 评测阶段可见的真实答案不能默认在推理阶段可用 |
+历史不等于当前要求。模型上下文组合现行要点、出处原话、近期消息、待处理用户消息与查询相关的早期内容；被替换的旧要求显式保持失效。所有原话仍在 SQLite，检索视图可以有界。
 
-`review.motivation_assessment` 将问题意义（`substantial` / `limited` / `unclear`）、因果联系（`plausible` / `unsupported` / `unclear`）、预期进展（`substantive` / `incremental` / `unclear`）分开判断，并给出理由和决定性测试。这些是待核验的审阅判断，用于暴露薄弱动机与不必要的复杂性；系统不能自动判定实质创新或发表价值。
+`discussion_key` 绑定阶段实例，`kind` 区分方向和问题；修订号变化不改变实例。`/continue` 只结束当前实例的临时要求。更换 checkpoint 前先迁移旧要点的阶段归属，避免把旧临时要求带入新阶段。
 
-对照中的 `relation` 为 `same`、`different` 或 `unknown`。可行性检查保留 `source_supported`、`unverified`、`blocked`、`not_applicable`；信号可用性保留 `source_supported`、`unverified`、`unavailable`。证据缺口保存在字符串列表 `comparison_gaps`。`feasibility_assessment` 保存 `status`、警告列表 `warnings`、阻塞项 `blocking_checks` 和待核实项 `unverified_checks`；候选的 `feasibility_status` 单独记录。这些诊断保留在 JSON。用户报告以研究问题、意义、核心洞见和贡献为主，第二部分提供技术参考；实验计划不再是必填内容。资料不足可以用 research_hypothesis 提出问题假设；有来源的观察仍要求真实引用。
+## 研究与来源状态
 
-`focus_sources` 根据候选的 `closest_work_ids` 选择最多三篇已导入且标记为 `full_text` 的来源，以候选假设为上下文执行 `inspect_source`，每篇最多补充六条方法/条件证据。摘要和笔记不会进入该步骤。每次仍由 `source_chars` 限定启发式正文片段；短来源可覆盖全部提供文本，长来源保留 `partial` 标记。因此该步骤增加有方向的证据抽取，不能保证读完全部方法、附录或排除所有既有工作。
+- 项目状态包含 `awaiting_direction_discussion`、`awaiting_problem_discussion`、`running`、`completed`、`interrupted`、`budget_exhausted`、`blocked`。
+- checkpoint 保存 `kind/state/revision/original/current/revisions/source_key/confirmed_revision`。
+- `question_cycle` 保存步骤及互动模式；`question_brief_provenance` 记录整理正文使用的版本、确认来源与缓存标识。
+- 用户更改来源或研究范围使讨论失效并重开；控制器自己补查的来源更新保留在同一阶段。模型/思考强度更改保留选择，但影响后续任务缓存。
+- 新报告使用 `schema_version: 16`，包含当前研究主张、问题分析、检索记录、完整会话和记忆。新流程不混入旧技术方案。
 
-## 任务边界
+引用校验检查 ID、原文位置、论文归属和实际引文；论文卡区分作者主张、结果及分析。模型可大胆推演新的困难，但不得把推演写成论文已经证明的结果。没有额外科学打分或发表保证门槛。
 
-第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；需要具体近邻材料时，在同一阶段补读后完成构思。
+## 预算与恢复
 
-`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要问题，说明已有回应后仍可能留下的关键障碍；`emerging_problem` 从已有方法成功使用或发展中推导新困难。两者都允许大胆合理猜想。`explore_problems` 接收中性的初期材料，输出 `background_logic`、`approach_landscape` 和 `problem_seeds`，保存为 `problem_exploration`；通常三项、最多四项。`deepen_problem` 每次只收到一个种子、同样的文献与方法大类，不收到其他 case 或排序偏好。从 `prior_art_delta` 的实际回应推到 `bottleneck_hypothesis` 的因果洞见，解释困难怎样产生、为什么常规改进难以自然消除，再提炼问题、影响和研究需要；洞见不能只是重述困难，也不要求解释全领域唯一起因。每项完成即写入 `problem_cases`。`map` 接收所有 case，在 `problem_comparisons` 逐项解释最强研究价值、洞见和相对优先次序，再输出选择。结构检查只核对身份、字段与出处；不评分或要求先验证问题成立。
+初读名额由 `max_papers` 控制；每个具体问题或讨论轮的定向工作最多选两篇。共享项目模型调用/时间预算，正文片段另受 `source_chars` 和分块/补读次数限制。成功调用缓存，失败任务可恢复；窗口等待输入不累计运行时间。
 
-共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器从所选 case 的已有字段生成 `argument_handoff`，将 `existing_response`（`prior_art_delta`）、`causal_insight`（`bottleneck_hypothesis`）、`derivation`、`goal_impact`（`why_it_matters`）、`research_need` 按顺序交给草案与补读后的完成版；不增加模型输出字段或调用。新来源可以改变原论证，方案自身的实现困难则另行处理，不无声替换原科学问题。切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、`research_route_ids` 及选择理由仍保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择或路线，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
+模型服务错误按类别提示，30 秒后重试，最多重试 10 次；每次先检查剩余预算。结构或引用错误仅进行一次有针对性的输出修复。认证和 API 请求由后端负责，应用不复制 CLI 凭据。
 
-`propose` 输出的 `idea_core` 用四个短段落保存核心解释：`concrete_target` 指明具体对象及关系或信号，`construction_path` 说明如何从可获得的输入构造并核对这些信息，`capability_bridge` 串起操作、学习或推理要求的改变与预期能力，`essential_difference` 说明与最接近方法正常使用时的关键差异。它与 `intervention` 的操作总述保持一致，随候选传入第二阶段的技术检索和设计。`develop/refine` 继续输出该对象，保留原解释或随修订同步更新。结构校验只检查字段类型和非空内容，缺失时沿用已有的一次修复；不依赖关键词判断科学价值，不增加模型任务或实验协议。
-
-推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
-
-第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns`。主张审计投影保留作者主张、测试条件、结果引用和可支持结论，审计判定、归因疑点和缺少对照仍在原记录中。构思从已有贡献成立后的进展推导新需要；来源的方法、原论文实验、结果、条件和原文引用保留，原卡与证据存储不变。探索、逐个深入、比较与构思使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
-
-`TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
-
-模型后端用于有边界的推理任务。检索和正文读取在控制器执行；模型输出的工具建议由控制器选择性处理。当前自动补证据包括有预算的学术搜索、公开全文获取，以及对最近工作全文的候选定向补读。失败的全文获取不会提升来源等级；检索覆盖缺口独立保存。代码检查和科学实验建议仅作为 idea 的交接计划；CLI 不提供实验执行或论文写作入口。
-
-API key 读取、请求协议和超时都留在适配器。适配器不把失败转换成 demo，不把 refusal 或截断结果当成有效 JSON。每个原生协议的结构化输出要求可能随服务变化，应通过真实账户做兼容性验证。
-
-模型操作错误由适配器分类为 `ProviderError`，仅输出固定的错误类别和处理建议，原始错误正文不进入日志。研究与普通对话共用 `with_retries`：首次失败后等待 30 秒，最多再尝试 10 次。API 适配器自身只发一次请求，避免重试叠加。每次调用重新检查预算和剩余超时；失败尝试和等待时间也累计。输出/证据校验继续使用原有的一次修复，不进入服务重试循环。
-
-## 状态与恢复
-
-`output_dir` 只配置结果的父目录，默认定位源码仓库；每个项目在 SQLite 中保存一个 `idea-时间戳` 文件夹名。恢复和重复导出沿用该名字，`last_output_dir` 记录最后成功导出的完整位置供 `/report` 读取。修改保存位置不改变研究任务缓存；旧报告保留，新项目生成新名字。
-
-- 任务：running / succeeded / failed。成功结果使用输入与后端配置散列缓存。
-- 项目：initialized / sources_changed / running / interrupted / completed / budget_exhausted / blocked。
-- 候选：proposed / specified_for_test / prerequisites_unverified / motivation_unresolved / needs_revision / implementation_blocked / round_limit_reached / overlap_requires_confirmation / no_detectable_progress。
-- 操作前提：`feasibility_status` 为 `prerequisites_unverified`（前提待核实）、`blocked`（前提阻塞）或 `specified_not_executed`（规格明确但未执行）；逐项依据另存，不能把流程完成当成实施已验证。
-- 实验证据：初始 untested；系统只输出验证计划，不执行科学实验。
-
-completed 表示这一轮软件工作结束，不表示 idea 已验证或具备发表价值。
-
-Ctrl+C 将项目记为 interrupted；未完成任务保留可重试的中断记录，已经保存成功的结果继续缓存。恢复时先将上次异常退出留下的 running 任务记为中断，避免旧任务长期显示为正在执行；调用与时间用量继续累计。
-
-候选批次在初次生成后冻结；内部补充证据不删除已有候选。显式导入、更换约束、用户对话补充或重新规划可以建立新批次，并归档旧批次。方法草稿在候选补查前保存，补查中断后用 `pending_round` 接着当前草稿；若全文升级使引用失效，则先更新来源引用。成功审阅后追加讨论记录，遇到预算中断可以续跑。项目文件锁防止两个控制器同时修改一个项目。`status` / `inspect` 通过 SQLite URI `mode=ro` 和 WAL 事务快照查看运行中的项目，不占用写入锁。
-
-## 检索范围
-
-`search_scope.py` 统一校验日期窗口、会议时间策略、CS 字段要求与 arXiv 分类。`conference_policy=latest` 默认按每个会议最新公开或收录的一届检索，本届尚无公开论文时采用上一届，不受 arXiv 日期窗口的起点限制；截止日期仍保留。`window` 则让会议也遵循日期窗口。显式选择固定日期时默认切到 `window`，可再次显式选择 `latest`。查询阶段和返回记录阶段分别检查范围；日期、会议策略、分类、会议和实际查询表达式进入检索缓存身份。arXiv 保留首次提交日期与交叉分类，OpenAlex 保留发表日期和计算机字段元数据，COLM 使用已录用 venue ID 和原始发布时间/创建时间。元数据缺失不被当成范围已满足。
-
-届次选择先于主题检索。ACL、EMNLP、NAACL、ICML、ICLR、NeurIPS、COLM 优先读取官方目录；本届已有论文但与查询无关，不会因此改选旧届。其他会议或未取到的目录使用已核实的 OpenAlex 来源：优先采用来源名称中的明确届次，连续出版系列采用收录年份，并保存判断依据。最多查看当前及前两个年份，以覆盖年度和隔年会议。会议届次单独保存，预印本的首次发布时间不会覆盖它。
-
-`hybrid` 先取已核实的会议来源，再在剩余预算内补充 arXiv 预印本。一次请求的全部提供方共享期限；会议失败时保留具体缺口，arXiv 补充仍使用其原有日期和领域限制。结果用既有 DOI/arXiv 去重逻辑合并。旧语料和显式导入不被自动删除，报告将当前联网范围与已有上下文区分开。
-
-最新届次模式的单次会议检索上限为 120 秒，其他模式为 60 秒，均受剩余项目预算限制。较大的官方年度目录在首次下载后进入项目的 24 小时 URL 缓存，后续主题查询复用目录。在相关度相近的论文中，排序优先较新会议届次；模型选文和贡献对照也使用这一顺序。
-
-语义选文前，`paper_metadata.py` 为排名靠前但缺摘要的会议候选读取单篇论文介绍页，最多六页、总计十二秒，不下载全文或增加模型调用。补齐的摘要保存到检索记录供恢复使用；最终仍按研究相关性选择少量论文精读。CLI 显示已核实的会议与届次，即使全文来自 arXiv 也保留会议身份。
-
-Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后出现 `turn.completed` 时接受已恢复的结构化结果；`turn.failed`、缺少成功终止事件或成功之后仍有错误的结果仍被拒绝。
-
-## 需要继续完成的能力
-
-1. 验证章节识别与定向补读是否减少关键方法、实验和附录遗漏。
-2. 使用固定真实文献集比较直接提示、普通 RAG 和本系统的质量。
-3. 评估最小验证计划是否真正区分核心机制和简单替代解释。
-4. 真实模型与本地 CLI 兼容性联调。
-5. 需要时添加批量并发和更多文献源；当前不需要分布式 agent 平台。
-
-## 本地 skill 与可复现性
-
-内置八个 skill 随包发布，默认启用；外部 skill 只按明确选择加载。`local_skills.py` 对已知研究 skill 按阶段分配；未知的用户自定义 skill 作为所有阶段的显式补充，用户应保持其范围简洁。相同名称的不同路径不会自动覆盖。
-
-控制器在一次运行开始时读取并冻结 skill 文本，提示词只携带当前阶段相关内容。文件 SHA-256 进入任务缓存，完整选择进入候选批次与方法版本的散列。报告保留实际使用清单；指纹说明加载了哪个版本，不证明模型完全遵循或研究效果更好。
-
-本地 Codex executable 和 profile 进入执行身份。Codex 自己负责现有登录与用户配置，本程序不复制认证文件。当前边界保持受限推理，skill 的脚本与外部工具需要另行实现，不能由文本指导暗中启动。
-
-
-普通证据抽取会替换此前同来源的普通解释；空结果也生效。定向阅读记录来源散列、阶段指导指纹与候选范围，只有来源和指导仍一致的记录才会保留。修改 skill 后不能仅因论文文本没变，就继续沿用已经撤回的抽取结论。
-
-## 主张审计与检索规划
-
-初期 `plan_search` 先输出 `research_routes[{id, question, why_relevant}]`，从用户原目标的不同可能原因或已有思路探索问题，通常三条、最多四条；最多六条英文查询通过 `route_ids` 关联路线。检索账本保存真实查询与路线的召回出处，候选元数据按路线交错取最多四十篇，再由原有 `screen_papers` 调用按相关性选择互补代表。选读项保存 `reading_question` 与 `route_ids`，两者进入 `read_section`、`paper_card`，路线覆盖进入后续问题建模。没有召回或未选读的路线按实际记录，不强行填满，也不据此断言文献不存在。
-
-初期阅读优先使用约三分之二的总文献额度，剩余额度供第二阶段补充。第二阶段仍先推导两个 `design_axes`，再用最多三条查询探索实现；它们与初期研究路线的职责分开。`search_planning.py` 校验结构、关联、长度、重复和容量，所有调用计入统一预算；这些改动沿用现有规划、选文、阅读和构思任务，不增加模型评分或流程调用。
-
-`audit_claims` 每篇全文最多审计四项主张，保存作者主张、测试范围、结果证据、可支持结论、限制、混杂、缺少的对照和下一步阅读。`claims.py` 重新检查同篇来源哈希和引文位置；摘要、作者主张、无实验条件的引用不能算实验证据。不支持的判断降为 `insufficient_evidence`。结果的来源分类和语义支持仍由模型判断，因此不能把结构校验当作科学证明。
-
-六维 novelty gate 的 `covered` 还要求 evaluation 对照引用同篇全文 `reported_result`。这是保守的实证研究筛选门槛；理论性主张仍可能需要人工核查，证据不足不会证明机制新颖。
-
-`versions[].revision_record` 保存原始问题/假设/预测、上轮质疑、逐字段变化、新证据和当前未解决问题。仅内容精确重复、证据未变且仍要求修订时返回 `no_detectable_progress`。文字改写仍可能算变化；程序没有声称能机械判定语义进步。
-
-
-## 有界论文分析
-
-`read_section` 对连续原文片段提取最多六条带精确位置的证据。默认优先读取引言、方法、实验等章节附近的最多三片，每片最多 `source_chars` 字符。机械库存检测章节、图表标题和公式编号；检测不保证穷尽，图片未被视觉检查。
-
-`paper_card` 仅据当前同篇原文证据生成九个固定维度，按论文类型允许证据不足或不适用：
-
-| 维度 | 要回答的问题 |
-| --- | --- |
-| problem | 什么具体问题、在什么条件下出现？ |
-| motivation | 为什么重要，已有办法为什么不足？ |
-| insight | 核心解释或假设是什么？ |
-| method | 输入输出、信息流、模块必要性是什么？ |
-| prior_work_delta | 作者声称改了什么，哪些差异尚未独立核查？ |
-| experiment_design | 测试哪个主张，基线与控制条件是什么？ |
-| results | 实际报告了什么，是否存在混杂？ |
-| conclusion_boundary | 能支持多强的结论，哪些范围未测试？ |
-| idea_relevance | 对当前问题有什么启发，如何证伪？ |
-
-细节列表区分核心模块、实验—主张链、作者局限、分析疑点和研究机会。选文时的具体阅读问题与路线随正文片段和分析卡任务传递；模型可另外提出最多三个定向补读问题，必须引用已有章节或图表 ID。控制器默认最多补读两片未读文本，再综合一次，之后保留未解决问题。不执行无限阅读、代码检查或实验。
-
-读取后新增证据会使旧分析卡失效；来源和 skill 变化会改变缓存身份。预算中断时，报告只展示已完成的阅读范围与当前有效分析，恢复时复用成功任务。全部文本提供给模型也不等于全面理解；图表标题的文本覆盖不等于视觉验证。
-
-主报告展示核心 idea、简要技术参考与论文链接，保留影响有效性的可观察依据及它怎样改变后续操作；单篇 idea 详细报告展开 `importance`、`expected_progress`、`information_path` 的取得与核对细节以及逐篇 `positioning`。完整 JSON 保留所有分析字段。展示层重新安排已有内容，不增加模型调用、字段或科学门槛；分析卡仍供内部推理与按需核查使用。
-
-## 构思与交流契约
-
-当前可读流程和角色交接详见 [workflow.md](workflow.md)。方法规格增加 `review_responses`，每条包含 `issue`、`decision`、`change`、`reason` 与 `evidence_ids`，refine 必须逐条回应上一轮意见。允许有理由地不采纳意见，不通过角色数量决定质量。`motivation.basis` 区分来源观察和问题假设；来源观察仍需引用。`dialogue` 与版本记录同时保存。
-
-`map.opportunities` 保存完整问题池，`problem_comparisons` 保存对每项的比较，`selected_problems` 保存选择及理由。控制器核对比较是否涵盖全部已深入问题，并从 `problem_cases` 复制原论证，防止选择调用改写竞争方向来支撑偏好。`propose` 只收到已选问题子集并继承选择。各步骤独立缓存、共享调用及时间预算；中断后已完成的问题深入可以直接复用。JSON 导出也保留 `problem_exploration` 与 `problem_cases`，旧项目缺少时使用空值。CLI 展示探索、逐项深入和比较的含义，不显示内部分数。
-
-提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。
-
-`idea_neighborhood.py` 执行第一阶段具体知识缺口的检索与定向阅读。内部草案通过 `task(..., publish=False)` 缓存；近邻来源标为 `selection.phase=neighbor`，不倒灌成下一次大背景选题的初始材料。`idea_neighborhoods` 保存检索、选文和证据检查点；下载中断后继续同一批来源。完成版 `propose` 只接收该草案范围内的定向证据，随后才发布一次构思内容。报告 JSON schema 14 包含这份记录与关键输入获取路径，旧报告继续可读。
-
-
-## Interactive problem checkpoint
-
-`Controller.discover_problems()` separates exploration/deepening/comparison from `propose_from_problems()`. The interactive worker passes `interactive=True`; batch runs keep their automatic path. A saved discussing checkpoint is respected by both paths. `/continue` records the confirmed revision, then executes the proposal and design stages using that problem and the current user decisions. Source revision/scope changes invalidate the checkpoint basis, while model changes preserve the human choice.
-
-`problem_dialogue.py` owns the current problem and revision ledger. `conversation.py` owns stable transcript IDs, the active memory view and source-linked add/replace/remove operations. Each entry has research or discussion scope; /continue retires temporary discussion instructions while preserving durable research constraints. A single `Store.set_many()` transaction commits the revised problem, memory and answer. User input is saved before the call so interrupted corrections remain available. Confirmation is a workflow action, not an assertion that a research hypothesis is proven. No new memory/vector-store dependency is required.
-
-`deepen_problem.response_analysis` records effective prior responses and the reasons a difficulty could remain after them; `map` receives these records alongside independently developed cases. This changes the data handed into selection, without adding review calls or numeric quality thresholds.
+结果保存到可配置父目录下固定的 `idea-时间戳` 文件夹，Markdown 面向读者，JSON 保留完整推导及来源。原始论文、旧项目记录与用户对话不会因更改报告范围被删除。

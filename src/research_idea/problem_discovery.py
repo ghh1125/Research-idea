@@ -36,7 +36,7 @@ def argument_handoff(problem):
     return arguments
 
 
-def develop_problem_pool(controller, context, check_refs):
+def explore_problem_pool(controller, context, check_refs):
     routes = {item['id'] for item in context.get('discovery_plan', {}).get('research_routes', [])}
 
     def check_pool(value):
@@ -57,12 +57,27 @@ def develop_problem_pool(controller, context, check_refs):
 
     pool = controller.task('explore_problems', context, check_pool)
     controller.store.set('problem_exploration', pool)
+    return pool
+
+
+def develop_problem_pool(controller, context, check_refs, pool=None):
+    routes = {item['id'] for item in context.get('discovery_plan', {}).get('research_routes', [])}
+    supplied_pool = pool is not None
+    pool = pool or explore_problem_pool(controller, context, check_refs)
     cases = []
     responses = {}
     controller.store.set('problem_response_analyses', responses)
     controller.store.set('problem_cases', cases)
-    # Every direction gets the same neutral source context. Other cases and any
-    # preferred candidate are deliberately absent, including on resume.
+    # Complete focused acquisition for every direction before comparing any,
+    # so later candidates do not receive a systematically richer source set.
+    if supplied_pool:
+        from .discussion_sources import investigate_problem
+        for seed in pool['problem_seeds']:
+            investigate_problem(controller, seed)
+        context = controller.ideation_context()
+        from .controller import check_references
+        check_refs = lambda value: check_references(value,
+            {e['id'] for e in context['evidence']}, {p['id'] for p in context['papers']})
     for index, seed in enumerate(pool['problem_seeds'], 1):
         def check_case(value):
             check_refs(value)

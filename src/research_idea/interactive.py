@@ -50,6 +50,8 @@ def configure_launch(args):
     if not sys.stdin.isatty():
         raise ValueError('launch requires an interactive terminal; use start TOPIC --project PATH for scripts')
     print('Research-idea · 本地研究启动器（回车接受默认值，Ctrl+C 退出）')
+    print('研究产出：背景 → 现有方法 → 问题 → 动机 → 研究主张。\n'
+          '需要边调研边讨论，可直接运行 research-idea 进入对话窗口。')
     if args.project is None:
         args.project = Path(ask('项目目录', 'research-projects/idea-' + datetime.now().strftime('%Y%m%d-%H%M%S')))
     args.project = args.project.expanduser().resolve()
@@ -131,10 +133,10 @@ def configure_launch(args):
             if conference_policy == 'latest' else '按所设日期窗口筛选。') + '可在对话中用 /date 修改。')
     if args.constraints is None:
         args.constraints = ask('资源限制（如单卡24GB、两周；未知可回车）', cfg['constraints'])
-    budget = {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2,
+    budget = {'max_papers': 6, 'max_candidates': 1,
               'max_calls': 80, 'max_seconds': 6600, 'timeout_s': 1200}
-    selection = choose('运行预算', ['试跑：6篇 / 1候选 / 2轮 / 80次调用 / 110分钟', '沿用项目设置', '逐项设置'], 1 if existing else 0)
-    labels = {'max_papers': '最多论文数', 'max_candidates': '最多候选数', 'max_rounds': '最多修订轮数',
+    selection = choose('运行预算', ['初次选读6篇 / 1个优先问题 / 80次调用 / 110分钟', '沿用项目设置', '逐项设置'], 1 if existing else 0)
+    labels = {'max_papers': '初次选读规模', 'max_candidates': '优先问题数',
               'max_calls': '模型调用上限', 'max_seconds': '累计运行秒数上限', 'timeout_s': '单次模型调用超时秒数'}
     for key, value in budget.items():
         if getattr(args, key) is not None:

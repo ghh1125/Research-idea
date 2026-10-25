@@ -210,16 +210,20 @@ def export_report(store: Store, output_dir: Path | None = None):
     from .output_paths import output_directory
     target = output_directory(store, output_dir)
     target.mkdir(parents=True, exist_ok=True)
-    candidates = store.rows("candidates")
+    candidates = [] if store.get("workflow") == "question" else store.rows("candidates")
     papers = store.rows("papers")
     evidence = store.rows("evidence")
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 15, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 16, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
         "problem_response_analyses": store.get("problem_response_analyses", {}),
         "problem_exploration": store.get("problem_exploration", {}), "problem_cases": store.get("problem_cases", []),
         "problem_checkpoint": store.get("problem_checkpoint"),
+        "discussion_checkpoints": store.get("discussion_checkpoints", []),
+        "research_brief": store.get("research_brief"), "workflow": store.get("workflow"),
+        "question_brief_provenance": store.get("question_brief_provenance"),
+        "problem_research_ledger": store.get("problem_research_ledger", {}),
         "conversation_memory": store.get("conversation_memory", []),
         "chat_messages": store.get("chat_messages", []),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
@@ -241,6 +245,8 @@ def export_report(store: Store, output_dir: Path | None = None):
     json_path = target / "report.json"
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     title = '研究方案' if data['status'] == 'completed' else '当前构思与方法草稿'
+    if data['workflow'] == 'question':
+        title = '研究问题与动机'
     if (data['problem_checkpoint'] or {}).get('state') == 'discussing':
         title = '研究问题与讨论'
     lines = ["# Research-idea — " + title, "", store.get("topic", ""), ""]
@@ -252,6 +258,9 @@ def export_report(store: Store, output_dir: Path | None = None):
     if (data['problem_checkpoint'] or {}).get('state') == 'discussing':
         from .problem_dialogue import problem_text
         lines.extend([problem_text(store), ''])
+    elif data['workflow'] == 'question' and data['research_brief']:
+        from .presentation import research_brief_markdown
+        lines.extend([research_brief_markdown(data['research_brief'], citations), ''])
     elif candidates:
         lines.extend(["## 研究 Idea", ""])
         for candidate in candidates:
@@ -266,7 +275,10 @@ def export_report(store: Store, output_dir: Path | None = None):
             lines.extend([f"[查看详细推导、信息来源与论文对照]({candidate['id']}.md)", ""])
     else:
         lines.extend([data['no_candidate_reason'] or "方案正在形成中，可从已保存的进度继续运行。", ""])
-    lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "方案是实验前的研究设计；原文引文、审阅与执行记录如下。", ""])
+    lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "以下保留文献分析、讨论版本和原文依据。", ""])
+    if data['workflow'] == 'question' and data['problem_checkpoint']:
+        from .problem_dialogue import problem_text
+        lines.extend(['## 完整问题推导', '', problem_text(store, detail=True), ''])
     if data['quote_gaps']:
         lines.extend(['## 未采用的引用', '', '下列引用未通过来源定位，未进入证据库；对应结论保持未知。', ''])
         for task_id, gap in data['quote_gaps'].items():

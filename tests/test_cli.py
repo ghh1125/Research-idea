@@ -43,18 +43,37 @@ class CLIIntegrationTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         report = json.loads(Path(json.loads(first.stdout)["json"]).read_text())
         self.assertTrue(report["demo"])
-        self.assertEqual(len(report["candidates"]), 2)
-        self.assertTrue(all(c["empirical_status"] == "untested" for c in report["candidates"]))
+        self.assertEqual(report['workflow'], 'question')
+        self.assertEqual(report['status'], 'completed')
+        self.assertEqual(report['candidates'], [])
+        brief = report['research_brief']
+        self.assertTrue(all(brief[field] for field in ('background', 'existing_methods', 'problem',
+            'motivation', 'research_claim', 'why_priority')))
+        choices = report['problem_model']['selected_problems']
+        self.assertTrue(choices)
+        self.assertEqual(report['question_brief_provenance']['selected_problems'], choices)
+        self.assertTrue(brief['evidence_ids'])
+        self.assertLessEqual(set(brief['evidence_ids']), {e['id'] for e in report['evidence']})
+        self.assertLessEqual(set(brief['closest_work_ids']), {p['id'] for p in report['papers']})
         self.assertIn("合成演示", Path(json.loads(first.stdout)["report"]).read_text())
         second = self.call("resume", "--project", self.project)
         self.assertEqual(second.returncode, 0, second.stderr)
         resumed = json.loads(Path(json.loads(second.stdout)["json"]).read_text())
         self.assertEqual(json.loads(first.stdout)["report"], json.loads(second.stdout)["report"])
         self.assertEqual(resumed["calls_used"], report["calls_used"])
-        self.assertEqual([c["id"] for c in resumed["candidates"]], [c["id"] for c in report["candidates"]])
+        self.assertEqual(resumed['research_brief'], brief)
+        self.assertEqual(resumed['question_brief_provenance'], report['question_brief_provenance'])
 
-    def test_new_source_invalidates_cohort_without_losing_archive(self):
+    def test_new_source_rebuilds_question_cycle_without_losing_archive(self):
         self.assertEqual(self.call("demo", "--project", self.project).returncode, 0)
+        store = Store(self.project)
+        try:
+            original_cycle = store.get('question_cycle')
+            original_brief = store.get('research_brief')
+            original_provenance = store.get('question_brief_provenance')
+            original_calls = store.get('calls_used')
+        finally:
+            store.close()
         notes = self.project.parent / "new.txt"
         notes.write_text("This additional synthetic note describes a new diagnostic control.\nNo real experiment has been performed.")
         added = self.call("add", "--project", self.project, notes)
@@ -64,8 +83,17 @@ class CLIIntegrationTests(unittest.TestCase):
         store = Store(self.project)
         try:
             self.assertEqual(len(store.rows("papers")), 3)
-            archived = store.db.execute("SELECT COUNT(*) FROM events WHERE kind='cohort_archived'").fetchone()[0]
-            self.assertEqual(archived, 1)
+            cycle_archives = [json.loads(row[0]) for row in store.db.execute(
+                "SELECT payload FROM events WHERE kind='question_cycle_archived'")]
+            brief_archives = [json.loads(row[0]) for row in store.db.execute(
+                "SELECT payload FROM events WHERE kind='research_brief_archived'")]
+            self.assertEqual(cycle_archives, [original_cycle])
+            self.assertEqual(brief_archives, [{'research_brief': original_brief,
+                                              'provenance': original_provenance}])
+            self.assertNotEqual(store.get('question_cycle')['source_key'], original_cycle['source_key'])
+            self.assertEqual(store.get('question_cycle')['stage'], 'completed')
+            self.assertTrue(store.get('research_brief')['research_claim'])
+            self.assertGreater(store.get('calls_used'), original_calls)
         finally:
             store.close()
 
@@ -197,7 +225,7 @@ class CLIIntegrationTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
-    def test_completed_cohort_is_rebuilt_when_reasoning_effort_changes(self):
+    def test_completed_brief_is_rebuilt_when_reasoning_effort_changes(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp))
             try:
@@ -205,15 +233,19 @@ class RecoveryTests(unittest.TestCase):
                 import_papers(store, DEMO_PAPERS)
                 config = {**DEFAULTS, 'backend': 'codex', 'auto_search': False,
                           'deep_reading': False, 'builtin_skills': False, 'max_rounds': 1}
-                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run()
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run_questions()
                 calls = store.get('calls_used')
-                cohort = store.get('cohort')['key']
-                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run()
+                brief_key = store.get('question_brief_provenance')['key']
+                confirmed = store.get('problem_checkpoint')['confirmed_revision']
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'medium'}).run_questions()
                 self.assertEqual(store.get('calls_used'), calls)
-                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'high'}).run()
+                Controller(store, DemoBackend(), {**config, 'reasoning_effort': 'high'}).run_questions()
                 self.assertGreater(store.get('calls_used'), calls)
-                self.assertNotEqual(store.get('cohort')['key'], cohort)
-                self.assertTrue(all(c['development_complete'] for c in store.rows('candidates')))
+                self.assertNotEqual(store.get('question_brief_provenance')['key'], brief_key)
+                self.assertEqual(store.get('problem_checkpoint')['confirmed_revision'], confirmed)
+                self.assertEqual(store.get('status'), 'completed')
+                self.assertTrue(store.get('research_brief')['research_claim'])
+                self.assertEqual(store.rows('candidates'), [])
             finally:
                 store.close()
 
@@ -237,21 +269,36 @@ class RecoveryTests(unittest.TestCase):
             finally:
                 store.close()
 
-    def test_budget_resume_keeps_cohort_when_internal_evidence_grows(self):
+    def test_budget_resume_keeps_confirmed_direction_when_internal_sources_grow(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp))
             try:
                 store.set("topic", DEMO_TOPIC)
                 import_papers(store, DEMO_PAPERS)
-                cfg = dict(DEFAULTS, backend="demo", auto_search=False, max_calls=7, max_seconds=120)
-                with self.assertRaises(BudgetExhausted):
-                    Controller(store, DemoBackend(), cfg).run()
-                original_ids = [c["id"] for c in store.rows("candidates")]
-                # Simulate retrieval performed inside the controller, not an explicit replan.
-                store.put("papers", {"id": "internal-new", "title": "Synthetic added evidence", "content_kind": "notes", "text": "This is synthetic material only.\nAn additional diagnostic can be tested under matched computation budgets."})
-                Controller(store, DemoBackend(), dict(cfg, max_calls=40)).run()
-                self.assertEqual(original_ids, [c["id"] for c in store.rows("candidates")])
+                cfg = dict(DEFAULTS, backend="demo", auto_search=False, max_calls=80, max_seconds=120)
+                Controller(store, DemoBackend(), cfg).run_questions(interactive=True)
+                original_pool = store.get('problem_checkpoint')['current']
+                controller = Controller(store, DemoBackend(), dict(cfg, max_calls=store.get('calls_used')))
+                discover = controller.discover_problems
+
+                def discover_with_new_source(pool=None):
+                    # Retrieval occurs inside the active stage, before its
+                    # model call hits the already-consumed budget.
+                    store.put("papers", {"id": "internal-new", "title": "Synthetic added evidence", "content_kind": "notes", "text": "This is synthetic material only.\nAn additional diagnostic can be tested under matched computation budgets."})
+                    return discover(pool=pool)
+
+                with patch.object(controller, 'discover_problems', side_effect=discover_with_new_source):
+                    with self.assertRaises(BudgetExhausted):
+                        controller.run_questions(interactive=True, continue_problem=True)
+                self.assertEqual(store.get('problem_checkpoint')['state'], 'confirmed')
+                self.assertEqual(store.get('problem_checkpoint')['current'], original_pool)
+                Controller(store, DemoBackend(), cfg).run_questions()
+                self.assertEqual(store.get('status'), 'awaiting_problem_discussion')
+                self.assertEqual(store.get('question_cycle')['confirmations']['direction']['current'], original_pool)
+                self.assertEqual(store.db.execute("SELECT COUNT(*) FROM tasks WHERE stage='explore_problems'").fetchone()[0], 1)
+                Controller(store, DemoBackend(), cfg).run_questions(continue_problem=True)
                 self.assertEqual(store.get("status"), "completed")
+                self.assertTrue(store.get('research_brief')['research_claim'])
             finally:
                 store.close()
 
@@ -318,7 +365,7 @@ class SetupAndSkillsTests(unittest.TestCase):
         (papers / "settings.json").write_text('{"api_key_env": "NOT_A_PAPER"}')
         (papers / "AGENTS.md").write_text("This is an instruction file, not a paper.")
         (papers / ".hidden.txt").write_text("Not a selected source.")
-        with patch("research_idea.backends.make_backend") as backend, patch.object(Controller, "run") as run:
+        with patch("research_idea.backends.make_backend") as backend, patch.object(Controller, "run_questions") as run:
             code, out, error = self.call("start", "研究主题", "--project", self.project,
                                          "--papers", papers, "--setup-only", "--no-search",
                                          "--codex-bin", self.base / "uninstalled-codex")
@@ -442,7 +489,7 @@ class SetupAndSkillsTests(unittest.TestCase):
     def test_run_and_resume_apply_settings_before_backend(self):
         self.init()
         for command in ("run", "resume"):
-            with self.subTest(command=command), patch("research_idea.backends.make_backend") as factory, patch.object(Controller, "run"):
+            with self.subTest(command=command), patch("research_idea.backends.make_backend") as factory, patch.object(Controller, "run_questions"):
                 code, _, error = self.call(command, "--project", self.project, "--no-search",
                                            "--codex-bin", "/custom/codex", "--codex-profile", "r",
                                            "--skill", self.first_skill, "--no-builtin-skills",
@@ -512,7 +559,7 @@ class SearchCLITests(unittest.TestCase):
         self.assertEqual(cfg["search_source"], "openalex")
         self.assertEqual(cfg["search_venues"], ["ACL", "EMNLP", "NAACL", "COLM"])
         self.assertFalse(cfg["fetch_full_text"])
-        with patch("research_idea.backends.make_backend") as factory, patch.object(Controller, "run"):
+        with patch("research_idea.backends.make_backend") as factory, patch.object(Controller, "run_questions"):
             code, _, error = self.call("run", "--project", self.project, "--no-search", "--venues", "ICML", "--fetch-full-text")
         self.assertEqual(code, 0, error)
         self.assertEqual(factory.call_args.args[0]["search_venues"], ["ICML"])
