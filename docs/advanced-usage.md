@@ -268,6 +268,8 @@ max_output_tokens = 8192
 
 ## 预算与恢复
 
+Windows 如果曾报 `[WinError 32] ... research-codex-...`，通常是模型 CLI 或其他程序还占用临时目录，导致调用结束后的清理失败。更新版本会短暂重试清理；持续占用时显示 `[cleanup]` 并保留该目录，不覆盖已返回的模型结果或原本的调用错误。超时或中断时也会尝试结束 Windows CLI 子进程树。旧版本因此中断的项目，更新并重启 CLI 后可用 `/run` 继续，已有检查点会复用。残留目录位于系统 Temp 中，确认相关进程退出后可删除。
+
 ```toml
 max_candidates = 3
 max_rounds = 2

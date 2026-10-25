@@ -7,7 +7,6 @@ are deliberately not modified by this package.
 from __future__ import annotations
 
 import json
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -15,7 +14,7 @@ from typing import Any
 from research_idea.backend_types import BackendError, BackendResult, TaskSpec
 from research_idea.backend_errors import ProviderError, classify_provider_error
 from research_idea.config import REASONING_EFFORTS
-from .common import MAX_RESPONSE_BYTES, parse_object, positive_timeout, run_cli
+from .common import MAX_RESPONSE_BYTES, cli_workspace, parse_object, positive_timeout, run_cli
 
 
 def _codex_inference_options() -> list[str]:
@@ -92,7 +91,7 @@ class CodexBackend:
         command = _codex_command(self.config)
         # Use an OS temporary directory, not the user's project: do not inherit
         # project-local AGENTS.md or accidentally treat a paper as instructions.
-        with tempfile.TemporaryDirectory(prefix="research-codex-") as directory:
+        with cli_workspace(prefix="research-codex-") as directory:
             deadline = time.monotonic() + positive_timeout(task.timeout_s)
             cwd = Path(directory)
             schema = cwd / "schema.json"
@@ -160,7 +159,7 @@ class ClaudeBackend:
         self.workspace = workspace
 
     def generate(self, task: TaskSpec) -> BackendResult:
-        with tempfile.TemporaryDirectory(prefix="research-claude-") as directory:
+        with cli_workspace(prefix="research-claude-") as directory:
             cwd = Path(directory)
             # Safe mode preserves the user's existing auth, unlike --bare.
             # Built-in and MCP tools are both disabled for bounded inference.
