@@ -6,6 +6,7 @@ CLI 使用单进程控制器，SQLite 保存项目状态，文件保存 idea 报
 | --- | --- |
 | `cli.py` | 命令、项目锁、导入导出、本地 skill 选择 |
 | `paper_reading.py` | 有界分块读取、章节/图表清单、九维分析卡、按缺口补读与覆盖记录 |
+| `problem_discovery.py` | 问题池探索、逐个独立深入、检查点与比较交接 |
 | `controller.py` | 证据门槛、候选定向补读、对照与可行性状态、迭代、预算、恢复 |
 | `prompts.py` / `schema.py` | 有边界的任务规范和本地结构校验 |
 | `claims.py` / `novelty.py` / `feasibility.py` / `motivation.py` | 对照证据、操作前提与动机审阅的独立状态规则 |
@@ -23,7 +24,9 @@ flowchart TD
     S --> T["按路线组织候选池，语义筛选互补论文"]
     T --> B["带着路线与阅读问题读取正文，形成分析卡"]
     B --> Q["主张与实验支持审计"]
-    Q --> C["map：推导问题与动机，选择并保存理由"]
+    Q --> P["explore_problems：从已有进展探索不同问题"]
+    P --> P1["deepen_problem：逐个独立深入并保存"]
+    P1 --> C["map：比较全部论证，选择并保存理由"]
     C --> D["propose：围绕已选问题构思 idea、贡献与可行路径"]
     D --> A2["第二阶段：从 idea 推导两个技术问题"]
     A2 --> R["按问题检索方法、复用证据、定向补读"]
@@ -44,7 +47,7 @@ flowchart TD
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 13`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 14`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -64,7 +67,7 @@ flowchart TD
 
 第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；需要具体近邻材料时，在同一阶段补读后完成构思。
 
-`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要的新问题，说明现有主要思路难以跨过的障碍；`emerging_problem` 从已有方法解决原问题的过程、使用或发展中，推导新产生的重要困难。两类均允许大胆合理猜想，`basis` 记录依据性质。`map` 接收 `discovery_plan` 与各路线实际覆盖，形成问题、`bottleneck_hypothesis`、意义、已有回应和 `research_need`，以 `research_route_ids` 保留路线关联，并输出 `selected_problems[{opportunity_id, selection_reason}]`。完整问题池保存在 `problem_model`；交给 `propose` 的副本只含已选子集及其选择理由。方法与基本可行路径在 `propose` 才形成，不让容易实现的操作反过来决定选题。程序检查结构和引用，不用评分判定价值，也不要求固定论文数或全领域无解。
+`opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要问题，说明已有回应后仍可能留下的关键障碍；`emerging_problem` 从已有方法成功使用或发展中推导新困难。两者都允许大胆合理猜想。`explore_problems` 接收中性的初期材料，输出 `background_logic`、`approach_landscape` 和 `problem_seeds`，保存为 `problem_exploration`；通常三项、最多四项。`deepen_problem` 每次只收到一个种子、同样的文献与方法大类，不收到其他 case 或排序偏好。每项完成即写入 `problem_cases`。`map` 接收所有 case，在 `problem_comparisons` 逐项解释最强研究价值、剩余障碍和相对优先次序，再输出选择。结构检查只核对身份、字段与出处；不评分或要求先验证问题成立。
 
 共享 `MOTIVATION` 中的 `problem_origin` 使用同一组枚举，`problem_derivation` 保存背景到选题的解释。`propose` 的 `opportunity_id` 指向已选问题并继承其 `selection_reason`。控制器将切口的 `id/question/problem_origin/basis/derivation/prior_art_delta/why_it_matters/bottleneck_hypothesis/research_need`、`research_route_ids` 及选择理由保存为 `candidate.selected_opportunity`，交给后续阶段。`develop/refine` 可合理改变当前问题、来源或解释，同步更新 `motivation`、`idea_core` 并说明原因；原快照不变，修改进入 `revision_record`。旧快照不补造历史选择或路线，旧机会的 `insight` 仍按原含义展示。结构检查和一次输出修复沿用现有机制，不增加审批任务。
 
@@ -72,7 +75,7 @@ flowchart TD
 
 推理上下文保留论文分析、原文证据和条件。`compact_research_context` 将章节/图表目录精简为数量、定位 ID、标题与阅读覆盖，保留后续定向补读所需的信息；大量检索传输记录替换为最近查询的覆盖摘要，原始记录仍在 SQLite 和详细报告。字符数以实际提示词计算并记录在 `model_context` 事件中，不冒充 token 计数或承诺适配任意模型窗口。
 
-第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns`。主张审计投影保留作者主张、测试条件、结果引用和可支持结论，审计判定、归因疑点和缺少对照仍在原记录中。构思从已有贡献成立后的进展推导新需要；来源的方法、原论文实验、结果、条件和原文引用保留，原卡与证据存储不变。`map/propose` 使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
+第一阶段的 `Controller.ideation_context()` 使用 `initial_selection_paper_ids`，或旧 `cohort` 保存的初期来源 ID，限定这一阶段的论文和证据；旧候选的 `inspect_source` 解释不进入新的问题构思。随后在上下文副本上调用 `problem_discovery_context()`，移除论文卡中的读者派生候选 `opportunities`、`framework.idea_relevance` 与 `analyst_concerns`。主张审计投影保留作者主张、测试条件、结果引用和可支持结论，审计判定、归因疑点和缺少对照仍在原记录中。构思从已有贡献成立后的进展推导新需要；来源的方法、原论文实验、结果、条件和原文引用保留，原卡与证据存储不变。探索、逐个深入、比较与构思使用同一视图，避免旧候选或单篇预制方案提前决定问题；第二阶段继续读取完整上下文。
 
 `TaskSpec` 包含 task ID、阶段、提示词、输出 schema、工作目录、超时和模型。`BackendResult` 包含 JSON 结果、可获得的用量、会话标识和原始响应。控制器只保存需要的结构化结果和用量，不依赖 CLI 会话恢复。
 
@@ -172,8 +175,8 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 
 当前可读流程和角色交接详见 [workflow.md](workflow.md)。方法规格增加 `review_responses`，每条包含 `issue`、`decision`、`change`、`reason` 与 `evidence_ids`，refine 必须逐条回应上一轮意见。允许有理由地不采纳意见，不通过角色数量决定质量。`motivation.basis` 区分来源观察和问题假设；来源观察仍需引用。`dialogue` 与版本记录同时保存。
 
-`map.opportunities` 保存完整问题池，`selected_problems` 保存方法构思前的选择及理由；`propose` 只接收已选问题并继承这项选择。切口 ID 必须存在且唯一，来源观察必须带有效引用；问题假设可以没有引用。报告保留问题池和选择记录，CLI 展示问题推导、已有回应、研究需要与选择理由。旧机会仍可导出；没有按词项相似度或自评分自动淘汰的逻辑。
+`map.opportunities` 保存完整问题池，`problem_comparisons` 保存对每项的比较，`selected_problems` 保存选择及理由。控制器核对比较是否涵盖全部已深入问题，并从 `problem_cases` 复制原论证，防止选择调用改写竞争方向来支撑偏好。`propose` 只收到已选问题子集并继承选择。各步骤独立缓存、共享调用及时间预算；中断后已完成的问题深入可以直接复用。JSON 导出也保留 `problem_exploration` 与 `problem_cases`，旧项目缺少时使用空值。CLI 展示探索、逐项深入和比较的含义，不显示内部分数。
 
 提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。
 
-`idea_neighborhood.py` 执行第一阶段具体知识缺口的检索与定向阅读。内部草案通过 `task(..., publish=False)` 缓存；近邻来源标为 `selection.phase=neighbor`，不倒灌成下一次大背景选题的初始材料。`idea_neighborhoods` 保存检索、选文和证据检查点；下载中断后继续同一批来源。完成版 `propose` 只接收该草案范围内的定向证据，随后才发布一次构思内容。报告 JSON schema 13 包含这份记录与关键输入获取路径，旧报告继续可读。
+`idea_neighborhood.py` 执行第一阶段具体知识缺口的检索与定向阅读。内部草案通过 `task(..., publish=False)` 缓存；近邻来源标为 `selection.phase=neighbor`，不倒灌成下一次大背景选题的初始材料。`idea_neighborhoods` 保存检索、选文和证据检查点；下载中断后继续同一批来源。完成版 `propose` 只接收该草案范围内的定向证据，随后才发布一次构思内容。报告 JSON schema 14 包含这份记录与关键输入获取路径，旧报告继续可读。

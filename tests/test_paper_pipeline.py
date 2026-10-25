@@ -86,12 +86,15 @@ class PipelineBackend:
                     "confounds": ["Prompt differences may affect the result."],
                     "missing_controls": ["Matched-prompt baseline"],
                     "support_judgment": "supported_within_tested_scope", "next_reading": ["Read additional appendix controls."]}]}
+        elif task.stage == "explore_problems":
+            output = {"background_logic": "Separate feedback quality from access.",
+                      "approach_landscape": [], "problem_seeds": []}
         elif task.stage == "map":
             output = {"approach_landscape": [], "research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
                       "observations": ["A narrow reported result does not establish the broad claim."],
                       "competing_explanations": ["Feedback validity versus prompt differences"],
                       "unresolved_questions": ["Does the mechanism survive a matched-prompt control?"],
-                      "opportunity_types": [], "evidence_ids": [item["id"] for item in payload["evidence"]], "opportunities": [], "selected_problems": []}
+                      "opportunity_types": [], "evidence_ids": [item["id"] for item in payload["evidence"]], "opportunities": [], "selected_problems": [], "problem_comparisons": []}
         elif task.stage == "propose":
             output = {"candidates": [], "no_candidate_reason": "These synthetic sources are insufficient to justify a new candidate."}
         else:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from copy import deepcopy
 from pathlib import Path
 
 from .backend_types import Backend, BackendError, TaskSpec
@@ -196,7 +197,7 @@ class Controller:
     def generate(self, task_id, stage, prompt, repair=False):
         self.store.event('model_context', {'task_id': task_id, 'stage': stage,
             'characters': len(prompt), 'utf8_bytes': len(prompt.encode('utf-8'))})
-        if stage in {'map', 'propose', 'develop', 'refine', 'review'}:
+        if stage in {'explore_problems', 'deepen_problem', 'map', 'propose', 'develop', 'refine', 'review'}:
             self.progress(f'[context] 本步输入 {len(prompt):,} 字符 · 包含研究要求、论文分析与原文依据')
         def invoke():
             remaining = self.check_budget()
@@ -1016,7 +1017,7 @@ class Controller:
         return self.select_search_results([key], min(room, max_new if max_new is not None else 3), candidate=candidate)
 
     def form_ideas(self):
-        """Choose consequential problems in map, then construct their ideas."""
+        """Develop each problem independently, compare, then construct ideas."""
         from .idea_neighborhood import (normalize_comparison_search, validate_information_path,
                                         read_neighborhoods, with_neighborhoods)
         context = self.ideation_context()
@@ -1024,6 +1025,8 @@ class Controller:
         # User follow-ups remain in the context, including any explicit narrowing.
         user_goal = context.get('topic') or ''
         refs = lambda value: check_references(value, {e["id"] for e in context["evidence"]}, {p["id"] for p in context["papers"]})
+        from .problem_discovery import develop_problem_pool
+        pool, cases = develop_problem_pool(self, context, refs)
         def validate_problem(value):
             refs(value)
             value['research_frame']['user_goal'] = user_goal
@@ -1033,6 +1036,20 @@ class Controller:
                 if any(not approach[key].strip() for key in ('name', 'principle', 'achieved_progress')):
                     raise ValueError('Describe each broad approach by its principle and achieved progress')
             opportunities = value['opportunities']
+            case_ids = {case['id'] for case in cases}
+            if {item['id'] for item in opportunities} != case_ids or len(opportunities) != len(cases):
+                raise ValueError('Compare all developed problems before choosing')
+            comparisons = value['problem_comparisons']
+            if {item['opportunity_id'] for item in comparisons} != case_ids or len(comparisons) != len(cases):
+                raise ValueError('Give a comparative rationale for every developed problem')
+            if any(not item[key].strip() for item in comparisons for key in
+                   ('strongest_case', 'remaining_obstacle', 'priority_reason')):
+                raise ValueError('Explain each problem on its merits and its relative priority')
+            # Preserve what each independent reading actually argued. Selection
+            # cannot rewrite the alternatives to make its preferred case win.
+            value['opportunities'] = opportunities = deepcopy(cases)
+            value['approach_landscape'] = deepcopy(pool['approach_landscape'])
+            value['opportunity_types'] = list(dict.fromkeys(c['problem_origin'] for c in cases))
             route_ids = {route['id'] for route in context.get('discovery_plan', {}).get('research_routes', [])}
             if set(value['opportunity_types']) != {o['problem_origin'] for o in opportunities}:
                 raise ValueError('Problem origins must match the unresolved needs or emerging problems in the research directions')
@@ -1058,7 +1075,9 @@ class Controller:
                 raise ValueError('Choose research problems within max_candidates before method construction')
             if any(not item['selection_reason'].strip() for item in decisions):
                 raise ValueError('Explain the research value of the problem choice before constructing a method')
-        problem = self.task("map", {**context, "max_candidates": self.config["max_candidates"]}, validate_problem)
+        problem = self.task("map", {**context, "problem_cases": cases,
+            "background_logic": pool['background_logic'], "approach_landscape": pool['approach_landscape'],
+            "max_candidates": self.config["max_candidates"]}, validate_problem)
         self.store.set("problem_model", problem)
         # Commit the research choice before any method is generated. Keep the full
         # pool in storage, but give the constructor only the selected problems.

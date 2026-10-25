@@ -137,11 +137,11 @@ class IdeaWorkflowTests(unittest.TestCase):
             controller.run()
         seen = set()
         for task in backend.calls:
-            if task.stage not in {'map', 'propose', 'develop', 'refine', 'review'}:
+            if task.stage not in {'explore_problems', 'deepen_problem', 'map', 'propose', 'develop', 'refine', 'review'}:
                 continue
             payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
             self.assertEqual(payload['evidence'], original['evidence'])
-            if task.stage in {'map', 'propose'}:
+            if task.stage in {'explore_problems', 'deepen_problem', 'map', 'propose'}:
                 source = payload['paper_cards'][0]
                 self.assertNotIn('opportunities', source)
                 self.assertEqual(source['framework'],
@@ -152,10 +152,10 @@ class IdeaWorkflowTests(unittest.TestCase):
             else:
                 self.assertEqual(payload['paper_cards'], original['paper_cards'])
             seen.add(task.stage)
-        self.assertEqual(seen, {'map', 'propose', 'develop', 'refine', 'review'})
+        self.assertEqual(seen, {'explore_problems', 'deepen_problem', 'map', 'propose', 'develop', 'refine', 'review'})
         stages = [task.stage for task in backend.calls]
         self.assertEqual({stage: stages.count(stage) for stage in set(stages)},
-                         {'map': 1, 'propose': 1, 'plan_search': 1, 'design_transfer': 1,
+                         {'explore_problems': 1, 'deepen_problem': 2, 'map': 1, 'propose': 1, 'plan_search': 1, 'design_transfer': 1,
                           'develop': 1, 'refine': 1, 'review': 2})
         self.assertEqual(self.store.get('paper_cards'), {card['paper_id']: card})
 
@@ -223,15 +223,17 @@ class IdeaWorkflowTests(unittest.TestCase):
         chosen = next(o for o in problem['opportunities'] if o['id'] == candidate['proposal']['opportunity_id'])
         self.assertEqual(set(problem['opportunity_types']), {'unresolved_need', 'emerging_problem'})
         self.assertIn(chosen['problem_origin'], problem['opportunity_types'])
-        self.assertIn('问题来源', summary)
+        analysis = activity_summary('deepen_problem', {'opportunity': chosen})
+        self.assertIn('问题来源', analysis)
         self.assertTrue(chosen['derivation'])
         self.assertTrue(chosen['prior_art_delta'])
         self.assertTrue(chosen['bottleneck_hypothesis'])
         self.assertTrue(chosen['research_need'])
         self.assertNotIn('insight', chosen)
         self.assertNotIn('feasibility_basis', chosen)
-        self.assertIn(chosen['bottleneck_hypothesis'], summary)
-        self.assertIn(chosen['research_need'], summary)
+        self.assertIn(chosen['bottleneck_hypothesis'], analysis)
+        self.assertIn(chosen['research_need'], analysis)
+        self.assertIn('与其他问题相比', summary)
         self.assertEqual(candidate['proposal']['selection_reason'], selected[chosen['id']])
         self.assertEqual(candidate['selected_opportunity']['selection_reason'], selected[chosen['id']])
         export_report(self.store, self.store.project)
@@ -277,7 +279,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn(original_goal, summary)
         self.assertIn(focused_question, summary)
         self.assertNotIn(invented_goal, summary)
-        self.assertEqual([task.stage for task in backend.calls], ['map', 'propose'])
+        self.assertEqual([task.stage for task in backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose'])
 
     def test_problem_selection_is_saved_before_propose_and_its_reason_is_inherited(self):
         selection, activities = [], []
@@ -301,7 +303,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         controller = Controller(self.store, backend, self.config,
             activity=lambda stage, output, cached: activities.append((stage, copy.deepcopy(output), cached)))
         proposed = controller.form_ideas()
-        self.assertEqual([task.stage for task in backend.calls], ['map', 'propose'])
+        self.assertEqual([task.stage for task in backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose'])
         self.assertEqual(self.store.rows('candidates'), [])
         self.assertEqual(proposed['candidates'][0]['selection_reason'], selection[0]['selection_reason'])
         controller.run()
@@ -361,18 +363,18 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual({item['selected_opportunity']['id'] for item in candidates}, selected)
         self.assertEqual(len(attempts), 2)
         self.assertEqual([task.stage for task in backend.calls],
-                         ['map', 'propose', 'propose'] +
+                         ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose', 'propose'] +
                          ['plan_search', 'develop', 'review', 'refine', 'review'] * 2)
         self.assertEqual(self.store.get('status'), 'completed')
 
     def test_budget_after_problem_selection_resumes_without_reselecting(self):
         backend = RecordingBackend()
         with self.assertRaises(BudgetExhausted):
-            Controller(self.store, backend, dict(self.config, max_calls=1)).run()
+            Controller(self.store, backend, dict(self.config, max_calls=4)).run()
         problem = self.store.get('problem_model')
         self.assertTrue(problem['selected_problems'])
         self.assertEqual(self.store.rows('candidates'), [])
-        self.assertEqual([task.stage for task in backend.calls], ['map'])
+        self.assertEqual([task.stage for task in backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map'])
         activities = []
         Controller(self.store, backend, self.config,
             activity=lambda stage, output, cached: activities.append((stage, copy.deepcopy(output), cached))).run()
@@ -446,8 +448,8 @@ class IdeaWorkflowTests(unittest.TestCase):
                 output['observations'] = [{'statement': premise, 'quote': premise, 'kind': 'author_claim',
                     'conditions': 'Synthetic description of an available operation, not a failure observation.',
                     'source_section': 'capability premise'}]
-            elif task.stage == 'map':
-                for direction in output['opportunities']:
+            elif task.stage == 'deepen_problem':
+                for direction in [output['opportunity']]:
                     direction.update(basis='research_hypothesis',
                         derivation=derivations[direction['problem_origin']], prior_art_delta=existing_response)
             elif task.stage == 'propose':
@@ -485,7 +487,7 @@ class IdeaWorkflowTests(unittest.TestCase):
                 self.assertTrue(current['motivation']['evidence_ids'])
         stages = [task.stage for task in backend.calls]
         self.assertEqual({stage: stages.count(stage) for stage in set(stages)},
-                         {'extract': 1, 'map': 1, 'propose': 1, 'plan_search': 2,
+                         {'extract': 1, 'explore_problems': 1, 'deepen_problem': 2, 'map': 1, 'propose': 1, 'plan_search': 2,
                           'develop': 2, 'refine': 2, 'review': 4})
         export_report(self.store, self.store.project)
         target = self.project / self.store.get('output_folder')
@@ -502,7 +504,7 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_four_field_problem_snapshot_resumes_without_extra_calls_and_exports(self):
         backend = RecordingBackend()
         with self.assertRaises(BudgetExhausted):
-            Controller(self.store, backend, dict(self.config, max_calls=4)).run()
+            Controller(self.store, backend, dict(self.config, max_calls=7)).run()
         candidate = self.store.rows('candidates')[0]
         legacy = {key: candidate['selected_opportunity'][key]
                   for key in ('id', 'question', 'problem_origin', 'derivation')}
@@ -621,6 +623,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.run_flow()
         legacy = self.store.get('problem_model')
         legacy.pop('selected_problems', None)
+        legacy.pop('problem_comparisons', None)
         for direction in legacy['opportunities']:
             direction['insight'] = direction.pop('bottleneck_hypothesis')
             direction['feasibility_basis'] = direction.pop('research_need')
@@ -650,7 +653,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(origins, {'unresolved_need', 'emerging_problem'})
         self.assertTrue(candidate['proposal']['motivation']['research_need'])
 
-    def test_problem_source_summary_matches_the_directions(self):
+    def test_problem_source_summary_is_derived_from_developed_directions(self):
         attempts = []
         def omit_used_source(task, output):
             if task.stage == 'map':
@@ -658,8 +661,9 @@ class IdeaWorkflowTests(unittest.TestCase):
                 if len(attempts) == 1:
                     output['opportunity_types'] = ['unresolved_need']
         self.run_flow(RecordingBackend(omit_used_source))
-        self.assertEqual(len(attempts), 2)
-        self.assertIn('Problem origins must match', attempts[1].prompt)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(set(self.store.get('problem_model')['opportunity_types']),
+                         {'unresolved_need', 'emerging_problem'})
 
     def test_unknown_origin_is_repaired_before_the_idea_is_presented(self):
         attempts = []
@@ -680,7 +684,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         backend = RecordingBackend(fabricated_reference)
         with self.assertRaisesRegex(BackendError, 'Unknown evidence'):
             self.run_flow(backend)
-        self.assertEqual([t.stage for t in backend.calls], ['map', 'map'])
+        self.assertEqual([t.stage for t in backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'map'])
         self.assertEqual(self.store.rows('candidates'), [])
 
     def test_idea_cannot_defer_named_closest_work_comparison_to_technical_design(self):
@@ -927,7 +931,7 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_budget_before_review_keeps_method_and_resume_does_not_regenerate_it(self):
         backend = RecordingBackend()
         with self.assertRaises(BudgetExhausted):
-            Controller(self.store, backend, dict(self.config, max_calls=4)).run()
+            Controller(self.store, backend, dict(self.config, max_calls=7)).run()
         self.assertTrue(self.store.rows('candidates')[0]['spec']['method']['changes'])
         export_report(self.store, self.store.project)
         self.assertIn('参考路线', (self.project / self.store.get('output_folder') / 'report.md').read_text())

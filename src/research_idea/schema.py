@@ -45,8 +45,14 @@ OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), 
     evidence_ids=STRINGS, closest_work_ids=STRINGS, research_route_ids=STRINGS)
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 APPROACH = obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS, evidence_ids=STRINGS)
+PROBLEM_POOL = obj(background_logic=STR, approach_landscape=array(APPROACH),
+    problem_seeds=array(obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS),
+        entry_reason=STR, research_route_ids=STRINGS)))
+PROBLEM_CASE = obj(opportunity=OPPORTUNITY)
+PROBLEM_COMPARISON = obj(opportunity_id=STR, strongest_case=STR, remaining_obstacle=STR, priority_reason=STR)
 MAP = obj(approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
+    problem_comparisons=array(PROBLEM_COMPARISON),
     selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
 MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), background=STR, existing_work=STR,
     problem_origin=string(PROBLEM_ORIGINS), problem_derivation=STR,
@@ -117,7 +123,8 @@ PAPER_CARD = obj(paper_id=STR, paper_type=string(["method", "empirical", "theory
     reading_gaps=STRINGS,
     followup_requests=array(obj(target_id=STR, question=STR, decision_impact=STR)))
 SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract": EVIDENCE, "read_section": EVIDENCE, "paper_card": PAPER_CARD, "design_transfer": DESIGN_TRANSFER,
-    "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
+    "inspect_source": EVIDENCE, "audit_claims": CLAIM_AUDIT, "explore_problems": PROBLEM_POOL,
+    "deepen_problem": PROBLEM_CASE, "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 
 
 def validate(value, schema, path="$", depth=0):

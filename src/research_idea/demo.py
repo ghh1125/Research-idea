@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
+from dataclasses import replace
 from .backend_types import BackendResult
 
 DEMO_TOPIC = "演示：长上下文中证据冲突的诊断实验（合成资料，不是研究结论）"
@@ -57,6 +59,20 @@ class DemoBackend:
         elif task.stage == "extract":
             lines = [x for x in payload["excerpt"].splitlines() if len(x) >= 15]
             output = {"observations": [{"statement": "合成资料提出一个待检验的诊断场景；没有实测结果。", "quote": lines[1] if len(lines) > 1 else lines[0], "kind": "author_claim", "conditions": "synthetic example only", "source_section": "demo paragraph"}]}
+        elif task.stage in {'explore_problems', 'deepen_problem'}:
+            base = DemoBackend.generate(self, replace(task, stage='map')).output
+            if task.stage == 'explore_problems':
+                output = {'background_logic': base['research_frame']['literature_logic'],
+                          'approach_landscape': base['approach_landscape'],
+                          'problem_seeds': [{key: item[key] for key in (
+                              'id', 'question', 'problem_origin', 'research_route_ids')}
+                              | {'entry_reason': item['derivation']} for item in base['opportunities']]}
+            else:
+                seed = payload['problem_seed']
+                case = deepcopy(next((item for item in base['opportunities'] if item['id'] == seed['id']),
+                                     base['opportunities'][0]))
+                case.update({key: seed[key] for key in ('id', 'question', 'problem_origin', 'research_route_ids')})
+                output = {'opportunity': case}
         elif task.stage == "map":
             output = {"problem": "演示问题：区分检索遗漏与冲突处理失误。", "observations": ["输入是合成笔记，不提供经验证的现象。"], "competing_explanations": ["证据缺失", "证据冲突", "顺序影响"], "unresolved_questions": ["实际任务中是否存在该现象？"], "opportunity_types": ["unresolved_need", "emerging_problem"], "evidence_ids": refs}
             output['approach_landscape'] = [dict(name='获取资料', principle='检索相关内容', achieved_progress='提供原先缺少的资料', paper_ids=papers, evidence_ids=refs), dict(name='使用资料', principle='比较条件与证据关系', achieved_progress='合成笔记提供研究思路，没有真实测量', paper_ids=papers, evidence_ids=refs)]
@@ -82,6 +98,14 @@ class DemoBackend:
                     ('order', '相同证据的顺序为何影响回答？',
                      '我们怀疑更多来源拼接后，模型对信息位置的不同关注会改变实际使用的依据，即使完整内容没有变化。',
                      '需要弄清扩大信息覆盖时，怎样维持对关键内容的稳定使用，避免新增信息使回答更加依赖排列。')]]
+            if 'problem_cases' in payload:
+                output['opportunities'] = deepcopy(payload['problem_cases'])
+                output['approach_landscape'] = deepcopy(payload['approach_landscape'])
+                output['opportunity_types'] = list(dict.fromkeys(item['problem_origin'] for item in output['opportunities']))
+            output['problem_comparisons'] = [dict(opportunity_id=item['id'],
+                strongest_case=item['why_it_matters'], remaining_obstacle=item['bottleneck_hypothesis'],
+                priority_reason='合成比较：根据对可靠回答的影响与其他问题比较；不表示真实研究结论。')
+                for item in output['opportunities']]
             output['selected_problems'] = [
                 {'opportunity_id': item['id'],
                  'selection_reason': '合成演示优先区分信息缺失与使用困难：这关系到已有资料能否支持可靠回答，单纯增加资料仍可能留下依据选择问题。'}

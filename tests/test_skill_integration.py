@@ -23,7 +23,7 @@ class CaptureBackend:
         self.prompts.append(task.prompt)
         return BackendResult({"approach_landscape": [], "research_frame": {"user_goal": "Understand the research goal", "literature_logic": "Compare research approaches", "research_question": "What remains?", "scope_connection": "Sources support a focused hypothesis"}, "problem": "A research question", "observations": [],
             "competing_explanations": [], "unresolved_questions": [],
-            "opportunity_types": [], "evidence_ids": [], "opportunities": [], "selected_problems": []})
+            "opportunity_types": [], "evidence_ids": [], "opportunities": [], "selected_problems": [], "problem_comparisons": []})
 
 
 class ExtractionBackend:

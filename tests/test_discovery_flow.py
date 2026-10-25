@@ -56,8 +56,11 @@ class DiscoveryBackend:
             quote = payload['excerpt'].splitlines()[0]
             output = {'observations': [{'statement': quote, 'quote': quote, 'kind': 'author_claim',
                 'conditions': 'Synthetic fixture only.', 'source_section': 'Supplied text'}]}
+        elif task.stage == 'explore_problems':
+            output = {'background_logic': 'Compare the supplied mechanisms.',
+                      'approach_landscape': [], 'problem_seeds': []}
         elif task.stage == 'map':
-            output = {'approach_landscape': [], 'research_frame': {'user_goal': payload['topic'],
+            output = {'approach_landscape': [], 'problem_comparisons': [], 'research_frame': {'user_goal': payload['topic'],
                 'literature_logic': 'Compare the supplied mechanisms.',
                 'research_question': 'Which mechanism explains the difficulty?',
                 'scope_connection': 'The sources inform the original objective.'},

@@ -11,7 +11,9 @@ STAGE_LABELS = {
     'inspect_source': ('read', '第二阶段 · 方案设计 · 定向阅读'),
     'design_transfer': ('design', '第二阶段 · 方案设计 · 这篇论文怎样帮助方案'),
     'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
-    'map': ('analysis', '第一阶段 · 文献构思 · 连接背景、问题与动机'),
+    'explore_problems': ('analysis', '第一阶段 · 探索不同的重要问题'),
+    'deepen_problem': ('analysis', '第一阶段 · 深入问题与已有回应'),
+    'map': ('analysis', '第一阶段 · 比较问题，说明优先研究什么'),
     'propose': ('concept', '第一阶段 · 背景 → 现有方法 → 可能的问题 → 动机 → Idea'),
     'develop': ('design', '第二阶段 · 技术参考 · 寻找适合 idea 的路线'),
     'refine': ('design', '第二阶段 · 技术参考 · 完善思路'),
@@ -149,6 +151,20 @@ def activity_summary(stage, result, citations=None):
             add('论文主张', item['claim'])
             add('实验支持', item['warranted_conclusion'])
             add('值得区分的解释', item.get('confounds'))
+    elif stage == 'explore_problems':
+        add('从背景和已有进展出发', result.get('background_logic'))
+        for seed in result.get('problem_seeds', []):
+            section('值得深入的问题 · ' + seed['question'])
+            add('为什么考虑它', seed['entry_reason'])
+    elif stage == 'deepen_problem':
+        item = result['opportunity']
+        section(item['question'])
+        add('问题来源', {'unresolved_need': '已有进展之后仍值得解决的重要需要',
+                       'emerging_problem': '已有方法使用或发展中产生的新困难'}.get(item.get('problem_origin')))
+        for key, label in (('derivation', '这个问题怎样产生'), ('why_it_matters', '解决它有什么价值'),
+                           ('bottleneck_hypothesis', '为什么会成为障碍'), ('prior_art_delta', '已有办法做到了什么，还留下什么'),
+                           ('research_need', '因此需要研究什么'), ('evidence_ids', '原文依据')):
+            add(label, item.get(key))
     elif stage == 'map':
         frame = result.get('research_frame', {})
         add('我们要解决的大问题', frame.get('user_goal'))
@@ -160,7 +176,15 @@ def activity_summary(stage, result, citations=None):
         add('把相关研究连起来看', frame.get('literature_logic'))
         add('由此提出的研究问题', frame.get('research_question'))
         add('值得研究的问题', result.get('problem'))
-        if result.get('opportunities'):
+        directions = {item['id']: item for item in result.get('opportunities', [])}
+        for comparison in result.get('problem_comparisons', []):
+            item = directions.get(comparison['opportunity_id'], {})
+            section('问题比较 · ' + item.get('question', comparison['opportunity_id']))
+            add('最值得研究之处', comparison['strongest_case'])
+            add('已有回应后仍留下什么', comparison['remaining_obstacle'])
+            add('与其他问题相比', comparison['priority_reason'])
+            add('原文依据', item.get('evidence_ids'))
+        if result.get('opportunities') and not result.get('problem_comparisons'):
             for opportunity in result['opportunities']:
                 section('研究切口 · ' + opportunity['question'])
                 add('问题来源', {'unresolved_need': '从背景需求提出新问题，现有主要方法难以解决',
@@ -174,11 +198,10 @@ def activity_summary(stage, result, citations=None):
                 add('由此产生的研究需要', opportunity.get('research_need'))
                 add('研究价值', opportunity['why_it_matters'])
                 add('原文依据', opportunity['evidence_ids'])
-        else:
+        elif not result.get('opportunities'):
             add('观察', result.get('observations'))
             add('可能的原因', result.get('competing_explanations'))
         choices = result.get('selected_problems', [])
-        directions = {item['id']: item for item in result.get('opportunities', [])}
         for choice in choices:
             question = directions.get(choice['opportunity_id'], {}).get('question', choice['opportunity_id'])
             section('先选定问题 · ' + question)

@@ -309,7 +309,7 @@ research-idea export --project ./research-projects/conflict
 
 `status` 和 `inspect` 使用 SQLite 只读快照，可在研究流程运行期间查看进度；修改项目的命令仍受单写入进程锁保护。
 
-结果默认保存到源码仓库下自动生成的 `idea-时间戳/`，包含 `report.md`、`report.json`、各候选 Markdown 和 `papers/` 论文分析卡。`/output 路径` 或 `--output PATH` 只修改父目录，文件夹名保持不变；恢复运行沿用同一个文件夹。`research.toml` 中的 `output_dir` 保存父目录；手动填写相对路径时以项目目录为基准，CLI 输入的路径则在输入时解析为绝对路径。JSON 报告的 `schema_version` 为 `13`，包含背景到问题和动机的论证、研究路线与查询关联、完整问题池及选择理由、第一阶段 `positioning`、`idea_core.information_path`、`idea_neighborhoods` 与 `feasibility_sketch`、两个 `design_axes` 及查询和方法的 `axis_ids` 关联、第二阶段 `design_transfers` 与最终 `design_decisions`、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及兼容旧项目的 `validation` 字段（默认不生成实验计划）、`feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
+结果默认保存到源码仓库下自动生成的 `idea-时间戳/`，包含 `report.md`、`report.json`、各候选 Markdown 和 `papers/` 论文分析卡。`/output 路径` 或 `--output PATH` 只修改父目录，文件夹名保持不变；恢复运行沿用同一个文件夹。`research.toml` 中的 `output_dir` 保存父目录；手动填写相对路径时以项目目录为基准，CLI 输入的路径则在输入时解析为绝对路径。JSON 报告的 `schema_version` 为 `14`，包含背景到问题和动机的论证、研究路线与查询关联、问题探索、每项独立深入的 `problem_cases`、完整问题池及逐项比较和选择理由、第一阶段 `positioning`、`idea_core.information_path`、`idea_neighborhoods` 与 `feasibility_sketch`、两个 `design_axes` 及查询和方法的 `axis_ids` 关联、第二阶段 `design_transfers` 与最终 `design_decisions`、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及兼容旧项目的 `validation` 字段（默认不生成实验计划）、`feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
 
 ## 开发与测试
 

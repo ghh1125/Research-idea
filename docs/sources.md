@@ -102,11 +102,11 @@
 
 ### 从文献提炼问题与判断贡献重叠
 
-2026-10-24 进一步对照以下原始实现，保留有用的思考方法，在本项目的 `map → propose` 中完成：
+2026-10-24 进一步对照以下原始实现，保留有用的思考方法，在本项目的问题探索、逐个深入、比较选择与构思中完成：
 
 | 参考 | 本项目的采用方式 |
 | --- | --- |
-| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 在 `opportunities` 保存不同问题、原因猜想与研究需要，由 `map` 先选择，再交给 `propose` 构思想法；不照搬固定数量候选、多模型调用或实验执行 |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 由 `explore_problems` 打开不同问题，`deepen_problem` 逐个独立展开原因、意义与已有回应，`map` 比较后选择，再交给 `propose` 构思想法；不照搬固定数量候选、多模型调用或实验执行 |
 | [ARIS novelty-check](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/novelty-check/SKILL.md) 区分相邻研究与具体结果已被覆盖 | 对照需要指出论文实际覆盖的主张；已知组件可以揭示新的相互作用或发现，逐个组件存在不等于整个贡献重复 |
 | [Supervisor-Skills paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 的隐藏假设与问题重要性追问 | 用核心洞见、重要能力或认识的变化解释意义；不照搬固定分数、裁决标签或履历限制 |
 | [research-idea-explorer 的构思结构](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/skills/research-idea-explorer/references/schema.md) 与[生成流程](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/research_idea_explorer/engine.py) | 借鉴从未解释的问题、主张、区分关系和研究意义组织构思，保存来源与选择关系；其词项相似度、检索相近程度和拥挤度启发式不用于本项目的科学查重判断 |

@@ -204,7 +204,8 @@ def export_report(store: Store, output_dir: Path | None = None):
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 13, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 14, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+        "problem_exploration": store.get("problem_exploration", {}), "problem_cases": store.get("problem_cases", []),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,
         "candidates": candidates, "search_ledger": store.get("search_ledger", {}),
@@ -254,6 +255,10 @@ def export_report(store: Store, output_dir: Path | None = None):
         lines.extend(["## 本次加载的研究 Skill", "", "这些文件提供研究步骤；它们不是论文证据，也不代表其中的脚本或外部工具已执行。", "",
             table(["名称", "来源", "阶段", "SHA-256"], [(s["name"], s.get("origin", "local"), ", ".join(s["stages"]), s["sha256"]) for s in data["active_skills"]]), ""])
     problem = data["problem_model"]
+    if data['problem_cases']:
+        lines.extend(['## 各问题的独立分析', ''])
+        for case in data['problem_cases']:
+            lines.extend([activity_summary('deepen_problem', {'opportunity': case}, citations), ''])
     if problem:
         lines.extend(["## 问题模型", "", problem["problem"], "", "**竞争解释：**", "", bullets(problem["competing_explanations"]), "", "**未知项：**", "", bullets(problem["unresolved_questions"]), ""])
         if problem.get('opportunities'):

@@ -7,7 +7,7 @@ description: Derive consequential research problems from literature, choose them
 
 Use the supplied topic, user_notes, constraints, evidence and task schema. This skill guides reasoning; it is not scientific evidence. Work within the current task without tools or scripts.
 
-The first phase separates problem selection from idea construction. **map chooses a problem and explains why it deserves research; propose constructs an idea for that choice.** This is a division of thinking, not an extra review or approval. Think boldly about plausible new difficulties; do not limit ideas to repairs already suggested by source papers.
+The first phase develops alternatives before choosing one. **explore_problems opens different directions; deepen_problem gives each direction an independent, substantive argument; map compares those arguments and chooses; propose constructs an idea for that choice.** This is a division of thinking, not an extra review or approval. Think boldly about plausible new difficulties; do not limit ideas to repairs already suggested by source papers.
 
 ## Form the problem before the solution
 
@@ -36,7 +36,11 @@ Use discovery_plan and discovery_coverage to see which different approaches were
 
 ## Choose, then construct
 
-**In map:** 使用 derivation、bottleneck_hypothesis、prior_art_delta、why_it_matters、research_need 保存上述论证。通常探索两三个在问题或原因上不同的方向，不凑数量。比较的是原目标为何仍难实现的不同解释，不是先偏爱一种能力，再围绕它生成主问题和副作用。用户已明确聚焦时，在其范围内探索。最后写 selected_problems（opportunity_id、selection_reason），最多 max_candidates 个，通常一个。在没有设计方法的这次调用里比较问题的价值：暂不考虑技术是否好写，说明为何这个困难与原目标联系更实在、已有回应后为何仍值得追问、跨过它意味着什么。选择的是已经明确的重要能力和障碍，不把一个宽泛类别留给下一步按技术方便来填充。未选问题仍保存，不需要贬低或评分。
+**In explore_problems:** 先整理 approach_landscape，再从原目标和已有进展探索通常三个、最多四个不同的重要问题。用户明确聚焦时就在其范围内探索，不凑数量。每个 problem_seed 说明问题、来源和为什么值得深入；此时不排序、不选解法。不同方向要有自己的研究价值，不能把偏爱的问题、它的一个副作用和一个容易否定的小修补写成三个选项。成本也能是重要问题，但应说明它限制了什么实质能力，而不只说更便宜。
+
+**In deepen_problem:** 本次只深入指定的 problem_seed。把它当成值得认真研究的方向，用 derivation、bottleneck_hypothesis、prior_art_delta、why_it_matters、research_need 完整推导上述论证。讨论主要方法的最强正常回应，包括它们能合理结合时的作用；既说明会缓解什么，也推演为什么还可能留有重要困难。哪怕它后来不被选中，也应有独立的动机和价值。不要预设另一个方向更好，不进入技术方案，不凭实现容易程度选择问题。
+
+**In map:** 接收已经独立展开的 problem_cases，比较每个问题最值得研究之处。problem_comparisons 为每项记录 strongest_case、remaining_obstacle、priority_reason：跨过它能带来什么进展、最强已有回应后还留下什么，以及和其他问题相比为什么应优先或随后研究。回应其他方向真正有力的理由，不能把它们简写成次要涨分或效率问题。若认为某问题是前提，解释解决它怎样帮助其他方向、其他方向为何不能独立先推进，而不只说“更基础”。最后写 selected_problems（opportunity_id、selection_reason），最多 max_candidates 个，通常一个；原样保留各 case 的论证。选择的是问题价值，不是技术是否好写。不要求打分、证明全领域最重要或否定未选方向；这是给出有理由的研究优先次序。
 
 **In propose:** 内部草案可指出缺失的具体方法近邻，由控制器按 comparison_search 定向检索阅读；补充后继续同一个问题的构思，完成后才展示。不是每个想法都加一轮审查，也不从论文标题作覆盖判断。
 
@@ -52,4 +56,4 @@ Background → Existing methods → Possible problem → Motivation → Idea 是
 
 把背景、现有方法、问题和动机直接写成读者能理解的正文，不留给报告再翻译。背景解释现实需要；现有方法先解释做法和作用，再提论文名；问题说明哪件事仍做不到或会变坏，以及为何会这样；动机接着说明需要改变什么、为何针对这个原因、成功会多带来什么。每段展开过程和因果联系，必要术语先用普通话解释，不能靠“表示、关系、机制、泛化”等词代替说明。原目标与起步实现保持区别：难获取的信息应促使我们设计取得和利用它的办法，不把研究问题偷偷换成只处理已经容易取得信息的情形。
 
-在 map 先整理 approach_landscape：按解决背景目标的原理归纳主要角度，代表论文只是各类的实例。可利用综述、系统比较及已读论文的引言/相关工作理解领域，不把引用到的原作伪装成自己已读。类别可以由多个来源共同支撑，一篇综述也可说明多个类别；不把当前精读列表等同于领域全貌。随后让这些主要思路参与问题推导与对照，existing_work 也按类别解释做法和作用。
+explore_problems 整理的 approach_landscape 会传给每次问题深入和比较：按解决背景目标的原理归纳主要角度，代表论文只是各类的实例。可利用综述、系统比较及已读论文的引言/相关工作理解领域，不把引用到的原作伪装成自己已读。类别可以由多个来源共同支撑，一篇综述也可说明多个类别；不把当前精读列表等同于领域全貌。让这些主要思路参与问题推导与对照，existing_work 也按类别解释做法和作用。

@@ -1,0 +1,60 @@
+"""Explore a problem pool, develop each case, then hand all cases to selection.
+
+These are reasoning tasks, not scientific acceptance tests. The controller only
+checks identity, provenance and handoff completeness; no scores or vetoes.
+"""
+from __future__ import annotations
+
+from copy import deepcopy
+
+
+def develop_problem_pool(controller, context, check_refs):
+    routes = {item['id'] for item in context.get('discovery_plan', {}).get('research_routes', [])}
+
+    def check_pool(value):
+        check_refs(value)
+        seeds = value['problem_seeds']
+        if len(seeds) > 4 or len({s['id'] for s in seeds}) != len(seeds):
+            raise ValueError('Use unique problem IDs within four directions')
+        if not value['background_logic'].strip():
+            raise ValueError('Connect the background goal and existing progress')
+        for seed in seeds:
+            if any(not seed[key].strip() for key in ('id', 'question', 'entry_reason')):
+                raise ValueError('Describe each problem and its connection to the goal')
+            if not set(seed['research_route_ids']) <= routes:
+                raise ValueError('Use supplied research route IDs')
+        for approach in value['approach_landscape']:
+            if any(not approach[key].strip() for key in ('name', 'principle', 'achieved_progress')):
+                raise ValueError('Explain the main approaches and their achieved progress')
+
+    pool = controller.task('explore_problems', context, check_pool)
+    controller.store.set('problem_exploration', pool)
+    cases = []
+    controller.store.set('problem_cases', cases)
+    # Every direction gets the same neutral source context. Other cases and any
+    # preferred candidate are deliberately absent, including on resume.
+    for index, seed in enumerate(pool['problem_seeds'], 1):
+        def check_case(value):
+            check_refs(value)
+            case = value['opportunity']
+            if case['id'] != seed['id']:
+                raise ValueError('Develop the assigned problem ID')
+            if case['problem_origin'] != seed['problem_origin']:
+                raise ValueError('Keep the assigned problem origin')
+            if not set(case['research_route_ids']) <= routes:
+                raise ValueError('Use supplied research route IDs')
+            if any(not case[key].strip() for key in (
+                    'question', 'derivation', 'bottleneck_hypothesis', 'why_it_matters',
+                    'prior_art_delta', 'research_need')):
+                raise ValueError('Explain the problem, its consequences, existing responses and motivation')
+            if case['basis'] == 'source_observation' and not case['evidence_ids']:
+                raise ValueError('Source observations must cite supplied evidence')
+
+        controller.progress(f"[analysis] 深入问题 {index}/{len(pool['problem_seeds'])} · {seed['question']}")
+        case = controller.task('deepen_problem', {
+            **context, 'background_logic': pool['background_logic'],
+            'approach_landscape': pool['approach_landscape'], 'problem_seed': deepcopy(seed),
+        }, check_case)['opportunity']
+        cases.append(case)
+        controller.store.set('problem_cases', list(cases))
+    return pool, cases

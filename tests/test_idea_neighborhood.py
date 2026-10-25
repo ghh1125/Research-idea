@@ -85,7 +85,7 @@ class NeighborhoodTests(unittest.TestCase):
 
     def test_draft_search_read_complete_and_only_final_idea_is_published(self):
         result, discover = self.run_idea()
-        self.assertEqual([s for s, _ in self.backend.calls], ['map', 'propose', 'screen_papers', 'inspect_source', 'propose'])
+        self.assertEqual([s for s, _ in self.backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose', 'screen_papers', 'inspect_source', 'propose'])
         first, final = [p for s, p in self.backend.calls if s == 'propose']
         self.assertEqual(first['problem_model'], final['problem_model'])
         self.assertEqual(first['evidence'], [])
@@ -120,7 +120,7 @@ class NeighborhoodTests(unittest.TestCase):
         self.backend.search = False
         _, discover = self.run_idea()
         discover.assert_not_called()
-        self.assertEqual([s for s, _ in self.backend.calls], ['map', 'propose'])
+        self.assertEqual([s for s, _ in self.backend.calls], ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose'])
 
     def test_no_reading_capacity_still_passes_metadata_as_leads(self):
         self.cfg['max_papers'] = 1
@@ -183,7 +183,7 @@ class NeighborhoodTests(unittest.TestCase):
         result, discover = self.run_idea(hydrate=lambda ids: False)
         discover.assert_not_called()
         stages = [stage for stage, _ in self.backend.calls]
-        self.assertEqual(stages, ['map', 'propose', 'inspect_source', 'propose'])
+        self.assertEqual(stages, ['explore_problems', 'deepen_problem', 'deepen_problem', 'map', 'propose', 'inspect_source', 'propose'])
         inspection = next(data for stage, data in self.backend.calls if stage == 'inspect_source')
         self.assertEqual(inspection['acquisition_requests'], self.backend.requests)
         self.assertIn('reading_selection', inspection)
