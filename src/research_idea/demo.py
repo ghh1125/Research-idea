@@ -116,7 +116,9 @@ class DemoBackend:
                     'available_path': '先人工构造少量配对文本，通过普通文本生成接口比较输出，无需权重或 logits。',
                     'key_assumption': '输入变换保持任务语义，只改变研究因素。',
                     'first_check': '人工检查配对样本，确认随机变换不能解释全部差异。'}
+                candidates[-1]['comparison_search'] = {'method_family': '证据使用与顺序', 'comparison_need': '离线演示不检索真实文献', 'queries': []}
                 candidates[-1]['idea_core'] = {
+                    'information_path': [],
                     'concrete_target': '合成资料中，同一问题的两条证据在结论上的冲突，以及证据出现的先后关系。',
                     'construction_path': '由资料中的陈述和条件组成配对输入，保留原句以核对内容是否变化；不让模型生成的判断充当真实标签。',
                     'capability_bridge': '固定已经取得的内容，只改变冲突或顺序，从回答变化中区分资料缺失与使用困难；这里提出解释，不宣称获得实测能力。',

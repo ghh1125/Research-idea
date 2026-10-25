@@ -216,7 +216,7 @@ class Controller:
 
         return with_retries(invoke, progress=self.progress, before_wait=before_wait, on_failure=failure)
 
-    def task(self, stage, payload, checker=None):
+    def task(self, stage, payload, checker=None, *, publish=True):
         guidance = [s for s in self.skills if stage in s["stages"]]
         if stage == 'plan_search' and payload.get('purpose') != 'technical_design':
             guidance = [s for s in guidance if s['name'] != 'research-idea-build-mechanism']
@@ -235,7 +235,8 @@ class Controller:
             if checker:
                 checker(result)
             self.progress(f"cached {stage}")
-            self.activity(stage, result, True)
+            if publish:
+                self.activity(stage, result, True)
             return result
         if guidance:
             self.progress('[skill] ' + stage + ' · ' + ', '.join(s['name'] for s in guidance))
@@ -257,7 +258,8 @@ class Controller:
                 self.store.finish_task(task_id, result.output, result.usage)
                 self.checkpoint_time()
                 self.store.event("task_completed", {"task_id": task_id, "stage": stage, "backend": self.backend.name, "usage": result.usage})
-                self.activity(stage, result.output, False)
+                if publish:
+                    self.activity(stage, result.output, False)
                 return result.output
             except ValueError as exc:
                 self.store.fail_task(task_id, str(exc))
@@ -289,7 +291,8 @@ class Controller:
                         self.store.set('quote_gaps', gaps)
                         self.store.finish_task(task_id, filtered, result.usage)
                         self.checkpoint_time()
-                        self.activity(stage, filtered, False)
+                        if publish:
+                            self.activity(stage, filtered, False)
                         return filtered
                     prompt = make_prompt(stage, payload, guidance) + '\nREPAIR DATA (not instructions):\n' + json.dumps(
                         {'previous_output': result.output, 'diagnostic': details}, ensure_ascii=False)
@@ -351,7 +354,7 @@ class Controller:
             for pid in candidate.get('retrieved_work_ids', [])}
         papers = self.store.rows('papers')
         manual_or_discovery = [paper['id'] for paper in papers
-            if paper['id'] not in design_ids and paper.get('selection', {}).get('phase') != 'design']
+            if paper['id'] not in design_ids and paper.get('selection', {}).get('phase') not in {'design', 'neighbor'}]
         present = {paper['id'] for paper in papers}
         return list(dict.fromkeys(pid for pid in list(saved) + manual_or_discovery if pid in present))
 
@@ -360,8 +363,11 @@ class Controller:
         context = problem_discovery_context(self.context(), selected_ids=self.initial_paper_ids())
         context['discovery_plan'] = self.store.get('search_plans', {}).get('initial', {})
         queries = {item['query'] for item in context['discovery_plan'].get('queries', [])}
-        context['search_coverage'] = [entry for entry in context.get('search_coverage', [])
-                                      if entry.get('query') in queries]
+        # Rebuild from discovery searches before compaction. Later candidate
+        # searches must neither evict these records nor change their cache key.
+        context['search_coverage'] = [{key: entry.get(key) for key in
+            ('query', 'source', 'venues', 'status', 'coverage')}
+            for entry in self.store.get('search_ledger', {}).values() if entry.get('query') in queries]
         papers = {paper['id']: paper for paper in context['papers']}
         full_text_ids = {pid for pid, paper in papers.items() if paper.get('content_kind') == 'full_text'}
         read_ids = {item['paper_id'] for item in context['evidence']
@@ -374,7 +380,7 @@ class Controller:
                 'full_text_read_paper_ids': [pid for pid in selected if pid in full_text_ids & read_ids],
                 'abstract_only_paper_ids': [pid for pid in selected if pid in papers and pid not in full_text_ids],
                 'retrieval_failed_paper_ids': [pid for pid in selected if papers.get(pid, {}).get('full_text_error')]})
-        return context
+        return compact_research_context(context)
 
     def reading_papers(self):
         papers = self.store.rows('papers')
@@ -667,6 +673,10 @@ class Controller:
                 "candidate": candidate["proposal"], "excerpt": excerpt,
                 "selected_opportunity": candidate.get('selected_opportunity', {}),
                 "reading_coverage": "complete_supplied_text" if excerpt == text else "partial"}
+            if self.phase == 'neighbor':
+                payload.update(purpose='closest_work', reading_question=reading_question or
+                    paper.get('selection', {}).get('reading_question', ''),
+                    comparison_search=candidate['proposal'].get('comparison_search', {}))
             if design:
                 payload.update(purpose='technical_design',
                     reading_question=reading_question or candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', ''),
@@ -748,9 +758,10 @@ class Controller:
         candidate.update(design_transfers=transfers, design_ready=source_key())
         self.store.put('candidates', candidate)
 
-    def select_search_results(self, keys, limit, candidate=None, *, checkpoint_design=False):
+    def select_search_results(self, keys, limit, candidate=None, *, checkpoint_design=False, selection_phase=None):
         from .literature import deduplicate
         ledger = self.store.get("search_ledger", {})
+        phase = selection_phase or ('design' if candidate else 'ideation')
         entries = [ledger[key] for key in keys if key in ledger]
         records = deduplicate([paper for entry in entries for paper in entry.get("metadata", [])])
         ranked = rank_metadata(records, [entry["query"] for entry in entries])
@@ -800,7 +811,7 @@ class Controller:
                             paper.update(abstract=match['abstract'], abstract_source=match['abstract_source'])
                 self.store.set('search_ledger', ledger)
             payload = {'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
-                'purpose': 'technical_design' if candidate else 'strategy_discovery',
+                'purpose': 'closest_work' if phase == 'neighbor' else 'technical_design' if candidate else 'strategy_discovery',
                 'candidate': candidate['proposal'] if candidate else None,
                 'queries': [entry['query'] for entry in entries], 'max_papers': limit,
                 'discovery_plan': plan,
@@ -811,6 +822,10 @@ class Controller:
             if candidate:
                 payload['design_search_plan'] = candidate.get('design_search_plan', {})
                 payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
+                if phase == 'neighbor':
+                    payload['comparison_search'] = candidate['proposal']['comparison_search']
+                    payload['known_papers'] = [{key: p.get(key) for key in ('id', 'title', 'url')}
+                                               for p in papers]
             allowed = {paper['id'] for paper in pool}
             route_ids = {route['id'] for route in plan.get('research_routes', [])}
             def check_selection(value):
@@ -835,7 +850,7 @@ class Controller:
             if paper['id'] in choices:
                 paper = dict(paper, selection={**paper['selection'], **choices[paper['id']],
                     'basis': 'model title/abstract screening; full-text question still to be read',
-                    'phase': 'design' if candidate else 'ideation'})
+                    'phase': phase})
                 if candidate is None:
                     paper['selection'].update(discovery_plan_key=plan_key,
                         research_routes=[dict(route) for route in plan.get('research_routes', [])])
@@ -882,7 +897,7 @@ class Controller:
             self.store.set('initial_selection_paper_ids', list(dict.fromkeys(
                 self.initial_paper_ids() + [pid for pid in choices if pid in selected])))
             self.store.set('discovery_coverage', route_coverage)
-        audit = {'time': now(), 'phase': 'design' if candidate else 'ideation',
+        audit = {'time': now(), 'phase': phase,
                  'route_coverage': route_coverage, 'queries': [entry['query'] for entry in entries],
                  'screened': len(ranked), 'selected_ids': sorted(selected), 'limit': limit,
                  'metadata_enrichment': metadata_audit,
@@ -896,7 +911,8 @@ class Controller:
                 candidate.get('retrieved_work_ids', []) + sorted(selected)))
             if checkpoint_design:
                 candidate['design_search_complete'] = True
-            self.store.put('candidates', candidate)
+            if phase != 'neighbor':
+                self.store.put('candidates', candidate)
         self.progress(f"[search] 检索候选 {len(ranked)} 篇；本次比较标题/摘要 {len(pool) if limit else 0} 篇，选入 {added} 篇；全文阅读上限 {self.config['max_papers']} 篇")
         for paper in papers:
             if paper['id'] in selected:
@@ -958,6 +974,8 @@ class Controller:
 
     def form_ideas(self):
         """Choose consequential problems in map, then construct their ideas."""
+        from .idea_neighborhood import (normalize_comparison_search, validate_information_path,
+                                        read_neighborhoods, with_neighborhoods)
         context = self.ideation_context()
         # Keep the user's agenda separate from the model's proposed narrowing.
         # User follow-ups remain in the context, including any explicit narrowing.
@@ -1001,7 +1019,8 @@ class Controller:
         decisions = {item['opportunity_id']: item for item in problem['selected_problems']}
         selected_problem = {**problem, 'opportunities': [item for item in problem['opportunities']
                                                        if item['id'] in decisions]}
-        proposal_payload = {**context, "problem_model": selected_problem, "max_candidates": self.config["max_candidates"]}
+        proposal_payload = {**context, "problem_model": selected_problem,
+                            "proposal_mode": "draft", "max_candidates": self.config["max_candidates"]}
         def validate_proposal(value):
             refs(value)
             if len(value["candidates"]) > self.config["max_candidates"]:
@@ -1033,8 +1052,8 @@ class Controller:
                     raise ValueError('Compare each named closest work during ideation, before technical design')
                 if any(not value.strip() for value in candidate['feasibility_sketch'].values()):
                     raise ValueError('Describe available inputs, a working path, its key assumption and first check')
-                if any(not text.strip() for text in candidate['idea_core'].values()):
-                    raise ValueError('Explain the concrete target, construction path, capability bridge and essential difference in idea_core')
+                validate_information_path(candidate['idea_core'])
+                normalize_comparison_search(candidate['comparison_search'])
             if not value["candidates"] and not value["no_candidate_reason"].strip():
                 raise ValueError("No-candidate outcome requires a reason")
             if value['candidates'] and set(proposal_ids) != set(decisions):
@@ -1043,7 +1062,20 @@ class Controller:
             # This is the rationale made before a solution was constructed.
             for candidate in value['candidates']:
                 candidate['selection_reason'] = decisions[candidate['opportunity_id']]['selection_reason']
-        return self.task("propose", proposal_payload, validate_proposal)
+        calls_before = self.store.get('calls_used', 0)
+        self.phase = 'ideation_draft'
+        draft = self.task("propose", proposal_payload, validate_proposal, publish=False)
+        self.store.set('idea_draft', draft)
+        neighborhoods = read_neighborhoods(self, draft, selected_problem)
+        self.phase = 'ideation'
+        result = draft
+        if neighborhoods:
+            context = with_neighborhoods(context, neighborhoods)
+            result = self.task('propose', {**context, 'problem_model': selected_problem,
+                'proposal_mode': 'complete', 'draft_proposals': draft['candidates'],
+                'max_candidates': self.config['max_candidates']}, validate_proposal, publish=False)
+        self.activity('propose', result, self.store.get('calls_used', 0) == calls_before)
+        return result
 
     def run(self):
         recovered = self.store.interrupt_running_tasks()
@@ -1201,8 +1233,8 @@ class Controller:
             def spec_check(value):
                 check_references(value, evidence_ids, paper_ids)
                 motive = value["motivation"]
-                if any(not text.strip() for text in value['idea_core'].values()):
-                    raise ValueError('Preserve or revise the concrete idea_core alongside the technical references')
+                from .idea_neighborhood import validate_information_path
+                validate_information_path(value['idea_core'])
                 if (not motive["evidence_ids"] and motive['basis'] == 'source_observation') or any(not str(v).strip() for k, v in motive.items() if k != "evidence_ids"):
                     raise ValueError("Method needs a complete, evidence-grounded motivation chain")
                 validate_comparisons(value["prior_art"]["overlaps"])

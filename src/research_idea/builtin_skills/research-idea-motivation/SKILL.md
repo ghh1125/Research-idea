@@ -7,7 +7,7 @@ description: Derive consequential research problems from literature, choose them
 
 Use the supplied topic, user_notes, constraints, evidence and task schema. This skill guides reasoning; it is not scientific evidence. Work within the current task without tools or scripts.
 
-The first phase uses two existing calls. **map chooses a problem and explains why it deserves research; propose constructs an idea for that choice.** This is a division of thinking, not an extra review or approval. Think boldly about plausible new difficulties; do not limit ideas to repairs already suggested by source papers.
+The first phase separates problem selection from idea construction. **map chooses a problem and explains why it deserves research; propose constructs an idea for that choice.** This is a division of thinking, not an extra review or approval. Think boldly about plausible new difficulties; do not limit ideas to repairs already suggested by source papers.
 
 ## Form the problem before the solution
 
@@ -38,12 +38,14 @@ Use discovery_plan and discovery_coverage to see which different approaches were
 
 **In map:** 使用 derivation、bottleneck_hypothesis、prior_art_delta、why_it_matters、research_need 保存上述论证。通常探索两三个在问题或原因上不同的方向，不凑数量。比较的是原目标为何仍难实现的不同解释，不是先偏爱一种能力，再围绕它生成主问题和副作用。用户已明确聚焦时，在其范围内探索。最后写 selected_problems（opportunity_id、selection_reason），最多 max_candidates 个，通常一个。在没有设计方法的这次调用里比较问题的价值：暂不考虑技术是否好写，说明为何这个困难与原目标联系更实在、已有回应后为何仍值得追问、跨过它意味着什么。选择的是已经明确的重要能力和障碍，不把一个宽泛类别留给下一步按技术方便来填充。未选问题仍保存，不需要贬低或评分。
 
-**In propose:** 接收已经保存的选择，继承理由；本次选择解决办法。先从所需进展与障碍推导操作应起什么作用，再考虑利用什么可获得的信息、采用什么思路。idea_core 展开对象、获取路径、作用与能力的连接、同最近工作的实质区别。路径行不通时换办法，不悄悄把问题改成某种技术容易完成的小任务。基本可行性在这里推演，第二阶段再探索技术参考；不要求详细工程或实验。
+**In propose:** 内部草案可指出缺失的具体方法近邻，由控制器按 comparison_search 定向检索阅读；补充后继续同一个问题的构思，完成后才展示。不是每个想法都加一轮审查，也不从论文标题作覆盖判断。
+
+ 接收已经保存的选择，继承理由；本次选择解决办法。先从所需进展与障碍推导操作应起什么作用，再考虑利用什么可获得的信息、采用什么思路。idea_core 展开对象、获取路径、作用与能力的连接、同最近工作的实质区别。路径行不通时换办法，不悄悄把问题改成某种技术容易完成的小任务。基本可行性在这里推演，第二阶段再探索技术参考；不要求详细工程或实验。
 
 **In develop/refine/review:** selected_opportunity 保存最初问题、推导、研究需要和选择理由；旧快照可能缺字段。可以因新的认识调整问题，同步解释原因并更新动机、核心想法与贡献。不能为了借用某个技术而无声缩小目标，也不因快照存在而强迫恢复一个已经有理由修正的判断。
 
 ## Explain the resulting argument
 
-Background → Problem → Motivation → Idea 是一条因果论证。背景先说需要与已有进展；问题先用普通话说明什么重要事情做不到、为什么从背景会遇到它；动机说明已有回应后还需要改变什么；idea 直接回应这个需要。读者应在看到解决办法之前就理解选题的必要性。
+Background → Existing methods → Possible problem → Motivation → Idea 是一条因果论证。单独讲背景的需要，再承接现有方法已实现的进展；问题先用普通话说明什么重要事情做不到、为什么从背景会遇到它；动机说明已有回应后还需要改变什么；idea 直接回应这个需要。读者应在看到解决办法之前就理解选题的必要性。
 
 像向研究同伴解释为什么觉得这件事值得做：详细、平实，每段推进一步，必要术语先解释再命名。不要用篇幅、抽象名词或重复强调重要性代替过渡。第一阶段不写具体例子、实验计划或退路声明。大胆提出有理由的想法，缺少实测不是停止构思的理由；输出遵守当前任务 JSON，不新增评分、审批或额外审查。

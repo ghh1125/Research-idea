@@ -8,6 +8,10 @@ description: Compare a research candidate with the closest supplied methods at t
 ## Inputs
 Use the candidate problem, hypothesis, method specification, source records and verified evidence IDs. Similar titles identify reading targets; they do not establish duplication.
 
+## Find the actual neighbors
+
+In draft propose, identify the family of the core operation, objective and information acquisition route. The closest background paper is not necessarily the closest method. Use comparison_search for a specific missing comparison: up to three concise English queries, across CS fields where relevant. Mark lineage when the established method may predate the rolling window; recent otherwise. If the supplied reading already contains the needed neighbors, use an empty queries array. In complete propose, incorporate the newly inspected mechanism and input construction into positioning and essential_difference; keep queries empty. Metadata-only leads locate reading targets, never establish coverage. Revise the idea within the selected meaningful problem when the nearest normal method already performs the proposed operation. This is part of constructing the idea, without a score or approval gate.
+
 ## Procedure
 Credit the prior contribution in its original setting before extending it. For ideation, reason from what happens when the reported method works as intended: which important need remains or arises as it is used and developed? A missing ablation, an audit disagreement or failure to establish a unique causal explanation does not by itself supply our research problem. Explanatory and boundary contributions also need that independent connection to the broader goal; do not create novelty by denying the earlier contribution.
 

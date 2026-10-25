@@ -331,7 +331,7 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         self.run_read()
         _, machine = export_report(self.store, self.store.project)
         report = json.loads(machine.read_text())
-        self.assertEqual(report["schema_version"], 11)
+        self.assertEqual(report["schema_version"], 12)
         card_path = machine.parent / report["paper_card_files"]["p1"]
         markdown = card_path.read_text()
         self.assertIn("九维分析框架", markdown)

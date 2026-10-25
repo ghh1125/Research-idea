@@ -163,7 +163,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertIn('previous_revision_record', second_review)
         export_report(self.store, self.store.project)
         front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
-        for label in ('Problem · 要解决的问题与原因', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法', '参考路线'):
+        for label in ('Possible problem · 在此基础上还可能遇到什么问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法', '参考路线'):
             self.assertIn(label, front)
         for label in ('第一步验证', '资源与规模', '值得继续的结果'):
             self.assertNotIn(label, front)
@@ -577,7 +577,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         front = (self.project / self.store.get('output_folder') / 'report.md').read_text().split('<details>')[0]
         self.assertIn(revised, front)
         self.assertNotIn(original, front)
-        self.assertLess(front.index('Problem ·'), front.index(revised))
+        self.assertLess(front.index('Possible problem ·'), front.index(revised))
         self.assertLess(front.index(revised), front.index(updated_problem))
         self.assertLess(front.index(updated_problem), front.index('Motivation ·'))
 
@@ -722,28 +722,28 @@ class IdeaWorkflowTests(unittest.TestCase):
         candidate, backend = self.run_flow()
         original = candidate['proposal']['idea_core']
         self.assertEqual(set(original), {'concrete_target', 'construction_path',
-                                         'capability_bridge', 'essential_difference'})
+                                         'capability_bridge', 'essential_difference', 'information_path'})
         design_plan = next(task for task in backend.calls if task.stage == 'plan_search')
         develop = next(task for task in backend.calls if task.stage == 'develop')
         for task in (design_plan, develop):
             payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
             self.assertEqual(payload['candidate']['idea_core'], original)
         summary = activity_summary('propose', {'candidates': [candidate['proposal']]})
-        for passage in original.values():
+        for passage in (v for v in original.values() if isinstance(v, str)):
             self.assertIn(passage, summary)
         export_report(self.store, self.store.project)
         target = self.project / self.store.get('output_folder')
         front = (target / 'report.md').read_text().split('<details>')[0]
         idea_part, _ = front.split('#### 第二部分 · Idea → Method', 1)
-        for passage in candidate['spec']['idea_core'].values():
+        for passage in (v for v in candidate['spec']['idea_core'].values() if isinstance(v, str)):
             self.assertIn(passage, idea_part)
         saved = json.loads((target / 'report.json').read_text())
         self.assertEqual(saved['candidates'][0]['spec']['idea_core'], candidate['spec']['idea_core'])
 
     def test_revised_idea_core_replaces_the_initial_core_and_is_tracked(self):
         fields = ('concrete_target', 'construction_path', 'capability_bridge', 'essential_difference')
-        original = {field: 'Original idea passage: ' + field for field in fields}
-        revised = {field: 'Revised idea passage: ' + field for field in fields}
+        original = {**{field: 'Original idea passage: ' + field for field in fields}, 'information_path': []}
+        revised = {**{field: 'Revised idea passage: ' + field for field in fields}, 'information_path': []}
         def revise_core(task, output):
             if task.stage == 'propose':
                 output['candidates'][0]['idea_core'] = dict(original)
@@ -754,9 +754,9 @@ class IdeaWorkflowTests(unittest.TestCase):
         self.assertEqual(candidate['spec']['idea_core'], revised)
         rendered = idea_markdown(candidate)
         idea_part, _ = rendered.split('#### 第二部分 · Idea → Method', 1)
-        for passage in revised.values():
+        for passage in (v for v in revised.values() if isinstance(v, str)):
             self.assertIn(passage, idea_part)
-        for passage in original.values():
+        for passage in (v for v in original.values() if isinstance(v, str)):
             self.assertNotIn(passage, rendered)
         changed = {item['field'] for item in candidate['versions'][-1]['revision_record']['changed_fields']}
         self.assertTrue({'idea_core.' + field for field in fields} <= changed)
@@ -834,7 +834,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         idea_part, method_part = rendered.split('#### 第二部分 · Idea → Method', 1)
         self.assertNotIn('Current mechanism after review', idea_part)
         self.assertIn('Current mechanism after review', method_part)
-        for heading in ('Problem · 要解决的问题与原因', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法'):
+        for heading in ('Possible problem · 在此基础上还可能遇到什么问题', 'Motivation · 为什么需要这项研究', 'Idea · 基于动机提出核心想法'):
             self.assertIn(heading, idea_part)
             self.assertNotIn(heading, method_part)
         candidate['spec'] = {}

@@ -38,13 +38,13 @@ flowchart TD
 
 候选主张保留在 proposal，方法变化保存在 versions。`spec.motivation` 保存当前版本的动机论证，`spec.idea_core` 保存当前核心想法的具体解释；修订同步更新两者，`versions[].revision_record` 记录包括 `idea_core` 在内的逐字段变化。原始问题与核心假设保持锚定，审阅检查是否偷换主张。相似主题不能直接证明重复；源码中的证据检查能够拒绝未知引用、拼接引文和跨论文借用论据，但不能完全判断语义蕴含。
 
-`motivation.existing_work` 说明已有方法实际做到了什么；`problem_derivation` 解释背景怎样导出所选问题，剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Problem、Motivation、Idea 四段连续论证：Problem 开头展示当前选题推导，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
+`motivation.existing_work` 说明已有方法实际做到了什么；`problem_derivation` 解释背景怎样导出所选问题，剩余问题与成因连到 `existing_approach_limit`，再用 `research_need` 推导研究动机，最后提出满足这一需要的 idea。CLI 和主报告将这些字段组合为 Background、Existing methods、Possible problem、Motivation、Idea 五段连续论证：Problem 开头展示当前选题推导，Idea 正文包含 `idea_core` 的四段解释。展示优先读取 `spec` 中的当前动机和核心解释，尚无方法版本时使用 `proposal`；旧保存内容缺少新字段时沿用原有论证，不补造来源或细节。
 
 技术规划保存在 `candidate.design_search_plan.design_axes`，每个角度记录问题、必要性、所需功能与方法检索方向。查询、来源中的可借鉴技术和最终选择都通过 `axis_ids` 关联这些角度。控制器保证先规划，再检索与选择；关闭网络或达到论文上限时仍规划并复用已读材料。最终 `spec.design_axes` 与 `design_decisions` 共同解释如何实现 idea，同一种技术可以服务两个角度。
 
 ## 三项研究约束
 
-每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 11`。
+每个方法规格同时保留贡献、对照和操作前提，报告 JSON 使用 `schema_version: 12`。
 
 | 结构 | 必须回答的问题 | 尚不能据此确认的结论 |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ flowchart TD
 
 ## 任务边界
 
-第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；仍是两次调用。
+第一阶段的 `map.research_frame` 区分用户原目标与系统聚焦的问题。`form_ideas.validate_problem` 在任务结果保存和展示前，将 `user_goal` 设为输入的 `context.topic` 原话；`user_notes` 继续单独传递。系统选择的能力或障碍写入 `research_question`，`scope_connection` 解释它对原目标为何重要，不能用改写后的目标反证选题价值。候选比较原目标尚未实现的不同解释，再结合最强已有回应选择问题。`propose` 继承原目标与选择，组织连贯论证；需要具体近邻材料时，在同一阶段补读后完成构思。
 
 `opportunities[].problem_origin` 只有两种：`unresolved_need` 从背景提出重要的新问题，说明现有主要思路难以跨过的障碍；`emerging_problem` 从已有方法解决原问题的过程、使用或发展中，推导新产生的重要困难。两类均允许大胆合理猜想，`basis` 记录依据性质。`map` 接收 `discovery_plan` 与各路线实际覆盖，形成问题、`bottleneck_hypothesis`、意义、已有回应和 `research_need`，以 `research_route_ids` 保留路线关联，并输出 `selected_problems[{opportunity_id, selection_reason}]`。完整问题池保存在 `problem_model`；交给 `propose` 的副本只含已选子集及其选择理由。方法与基本可行路径在 `propose` 才形成，不让容易实现的操作反过来决定选题。程序检查结构和引用，不用评分判定价值，也不要求固定论文数或全领域无解。
 
@@ -175,3 +175,5 @@ Codex 的临时 `error` 事件可能表示正在重连。适配器仅在其后�
 `map.opportunities` 保存完整问题池，`selected_problems` 保存方法构思前的选择及理由；`propose` 只接收已选问题并继承这项选择。切口 ID 必须存在且唯一，来源观察必须带有效引用；问题假设可以没有引用。报告保留问题池和选择记录，CLI 展示问题推导、已有回应、研究需要与选择理由。旧机会仍可导出；没有按词项相似度或自评分自动淘汰的逻辑。
 
 提示词按阶段版本缓存。阅读和引用流程未变时，构思流程更新不会重新消耗全文读取调用；方法生成后先检查点保存，审阅中断后复用原任务输入恢复。
+
+`idea_neighborhood.py` 执行第一阶段具体知识缺口的检索与定向阅读。内部草案通过 `task(..., publish=False)` 缓存；近邻来源标为 `selection.phase=neighbor`，不倒灌成下一次大背景选题的初始材料。`idea_neighborhoods` 保存检索、选文和证据检查点；下载中断后继续同一批来源。完成版 `propose` 只接收该草案范围内的定向证据，随后才发布一次构思内容。报告 JSON schema 12 包含这份记录与关键输入获取路径，旧报告继续可读。

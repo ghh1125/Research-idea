@@ -12,7 +12,7 @@ STAGE_LABELS = {
     'design_transfer': ('design', '第二阶段 · 方案设计 · 这篇论文怎样帮助方案'),
     'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
     'map': ('analysis', '第一阶段 · 文献构思 · 连接背景、问题与动机'),
-    'propose': ('concept', '第一阶段 · Background → Problem → Motivation → Idea'),
+    'propose': ('concept', '第一阶段 · 背景 → 现有方法 → 可能的问题 → 动机 → Idea'),
     'develop': ('design', '第二阶段 · 技术参考 · 寻找适合 idea 的路线'),
     'refine': ('design', '第二阶段 · 技术参考 · 完善思路'),
     'review': ('review', '第二阶段 · 技术参考 · 讨论关键判断'),
@@ -21,6 +21,10 @@ STAGE_LABELS = {
 
 def stage_label(stage, phase='ideation'):
     tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
+    if phase == 'neighbor':
+        return ('read' if stage == 'inspect_source' else 'search'), '第一阶段 · 弄清最接近的方法与关键信息来源'
+    if phase == 'ideation_draft' and stage == 'propose':
+        return 'analysis', '第一阶段 · 构思核心想法与需要补充的方法细节'
     if phase == 'design' and stage == 'plan_search':
         return 'design', '第二阶段 · 从 idea 推导技术角度与检索方向'
     if phase == 'design':
@@ -58,14 +62,21 @@ def argument_markdown(motivation, proposal, *, include_intervention=True, idea_c
         ('concrete_target', '具体利用什么'), ('construction_path', '这些信息怎样得到'),
         ('capability_bridge', '为什么能解决这个问题'), ('essential_difference', '与已有方法的本质区别'))
         if core.get(key)]
+    for item in core.get('information_path', []):
+        concrete_idea.append('**关键信息：' + item['information'] + '**\n\n' + '\n\n'.join(
+            '**' + label + '：** ' + item[key] for key, label in (
+                ('source', '从哪里获得'), ('construction', '怎样取得'),
+                ('reliability_basis', '判断依据'), ('error_handling', '信息有误时怎样处理'),
+                ('applicability', '适用条件'))))
     parts = [
-        ('Background · 背景与已有工作', [motivation.get('background'), existing]),
-        ('Problem · 要解决的问题与原因', [motivation.get('problem_derivation'),
+        ('Background · 研究背景', [motivation.get('background')]),
+        ('Existing methods · 现有方法做到了什么', [existing]),
+        ('Possible problem · 在此基础上还可能遇到什么问题', [motivation.get('problem_derivation'),
             motivation.get('problem_observation', proposal.get('problem')),
             motivation.get('importance', proposal.get('why_it_matters')),
-            motivation.get('causal_explanation', proposal.get('hypothesis'))]),
-        ('Motivation · 为什么需要这项研究', [motivation.get('existing_approach_limit'),
-            motivation.get('research_need')]),
+            motivation.get('causal_explanation', proposal.get('hypothesis')),
+            motivation.get('existing_approach_limit')]),
+        ('Motivation · 为什么需要这项研究', [motivation.get('research_need')]),
         ('Idea · 基于动机提出核心想法', [proposal.get('intervention') if include_intervention else None,
             motivation.get('why_this_method', proposal.get('intervention')),
             *concrete_idea,
@@ -239,7 +250,7 @@ def idea_markdown(candidate):
     def add(label, value):
         if value:
             lines.extend(['**' + label + '：** ' + str(value), ''])
-    lines.extend(['#### 第一部分 · Background → Problem → Motivation → Idea', '',
+    lines.extend(['#### 第一部分 · Background → Existing methods → Possible problem → Motivation → Idea', '',
                   argument_markdown(motivation, proposal, include_intervention=not spec,
                       idea_core=spec.get('idea_core', proposal.get('idea_core', {}))), ''])
     add('与已有工作的差异', claim.get('claim') or spec.get('prior_art', {}).get('justification'))

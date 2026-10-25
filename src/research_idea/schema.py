@@ -53,9 +53,15 @@ MOTIVATION = obj(basis=string(["source_observation", "research_hypothesis"]), ba
     causal_explanation=STR, research_need=STR, why_this_method=STR, expected_progress=STR, simplest_alternative=STR, necessity_test=STR)
 POSITIONING = obj(paper_id=STR, addressed_problem=STR, remaining_question=STR, contribution=STR, evidence_ids=STRINGS)
 FEASIBILITY_SKETCH = obj(inputs=STR, available_path=STR, key_assumption=STR, first_check=STR)
-IDEA_CORE = obj(concrete_target=STR, construction_path=STR, capability_bridge=STR, essential_difference=STR)
+INFORMATION_PATH = obj(information=STR, source=STR, construction=STR,
+    reliability_basis=STR, error_handling=STR, applicability=STR, evidence_ids=STRINGS)
+IDEA_CORE = obj(concrete_target=STR, construction_path=STR, information_path=array(INFORMATION_PATH),
+                capability_bridge=STR, essential_difference=STR)
+COMPARISON_SEARCH = obj(method_family=STR, comparison_need=STR,
+    queries=array(obj(query=STR, rationale=STR, time_scope=string(['recent', 'lineage']))))
 PROPOSE = obj(candidates=array(obj(opportunity_id=STR, selection_reason=STR, title=STR,
     motivation=MOTIVATION, problem=STR, hypothesis=STR, idea_core=IDEA_CORE,
+    comparison_search=COMPARISON_SEARCH,
     mechanism=STR, intervention=STR, prediction=STR, falsifier=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS, why_it_matters=STR,
     positioning=array(POSITIONING), feasibility_sketch=FEASIBILITY_SKETCH)), no_candidate_reason=STR)

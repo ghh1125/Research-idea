@@ -61,6 +61,10 @@ def config_scope(config: dict, purpose='strategy') -> dict:
         until = end.isoformat()
         months = config.get('novelty_months', 6) if purpose == 'novelty' else config.get('strategy_months', 12)
         since = months_before(end, months).isoformat()
+        if purpose == 'lineage':
+            # A named mechanism's earlier literature can precede the rolling
+            # discovery window. Explicit fixed date ranges remain unchanged.
+            since = ''
     elif purpose == 'novelty':
         end = date.fromisoformat(until) if until else date.today()
         since = max(since, months_before(end, config.get('novelty_months', 6)).isoformat())
