@@ -72,8 +72,14 @@ class FakeController:
     def initial_paper_ids(self):
         return ['paper1']
 
+    def reading_papers(self):
+        return [{'id': 'paper1'}]
+
     def retrieve_full_texts(self, ids):
         self.calls.append('retrieve_full_texts')
+
+    def orient_papers(self, ids):
+        self.calls.append('orient_papers')
 
     def read_papers(self, ids):
         self.calls.append('read_papers')
@@ -142,6 +148,7 @@ class QuestionWorkflowTests(unittest.TestCase):
     def test_two_durable_discussions_then_research_claim(self):
         self.pause_direction()
         self.assertNotIn('discover_problems', self.calls)
+        self.assertFalse({'read_papers', 'audit_papers', 'paper_card'} & set(self.calls))
         checkpoint = self.store.get('problem_checkpoint')
         checkpoint['current']['problem_seeds'][0]['question'] = '用户纠正后的方向'
         checkpoint['revision'] = 2
@@ -170,8 +177,8 @@ class QuestionWorkflowTests(unittest.TestCase):
         self.assertEqual(self.store.get('workflow'), 'question')
         self.assertEqual(self.store.get('status'), 'completed')
         self.assertEqual(self.store.rows('candidates')[0]['id'], 'old')
-        self.assertEqual(self.calls, ['initial_search', 'retrieve_full_texts', 'read_papers',
-            'audit_papers', 'explore_problems', 'discover_problems', 'frame_question'])
+        self.assertEqual(self.calls, ['initial_search', 'retrieve_full_texts', 'orient_papers',
+            'explore_problems', 'discover_problems', 'frame_question'])
         before = list(self.calls)
         run_questions(self.controller())
         self.assertEqual(self.calls, before)

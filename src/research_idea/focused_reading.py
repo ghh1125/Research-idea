@@ -42,13 +42,18 @@ def _pattern(term):
 
 
 def _body_ranges(text):
+    from .paper_reading import heading_text
+    headings = [(line.start(), heading_text(line.group().strip()))
+                for line in re.finditer(r'(?m)^[ \t]*[^\n\r]{1,120}\r?$', text)]
     references = []
-    for heading in _REFERENCE_HEADING.finditer(text):
-        following = _AFTER_REFERENCES.search(text, heading.end())
-        end = following.start() if following else len(text)
-        if references and heading.start() < references[-1][1]:
+    for index, (start, title) in enumerate(headings):
+        if not _REFERENCE_HEADING.fullmatch(title):
             continue
-        references.append((heading.start(), end))
+        end = next((pos for pos, name in headings[index + 1:]
+                    if _AFTER_REFERENCES.fullmatch(name)), len(text))
+        if references and start < references[-1][1]:
+            continue
+        references.append((start, end))
     body, start = [], 0
     for left, right in references:
         if start < left:
@@ -102,7 +107,7 @@ def _operative_sections(text, body_ranges):
     Methodology and Implementation can be separate unnumbered lines after a
     PDF puts the section number on the preceding line.
     """
-    from .paper_reading import NUMBERING
+    from .paper_reading import NUMBERING, heading_text
     families = {
         "method": r"(?:(?:our|proposed)\s+)?(?:methods?|methodology|approach|framework)\b|(?:overall|system)\s+(?:architecture|overview)\b|(?:研究)?方法|模型架构",
         "algorithm": r"algorithms?\b|算法",
@@ -113,7 +118,7 @@ def _operative_sections(text, body_ranges):
         title = line.group().strip()
         clean = re.sub(r"^#{1,6}\s*", "", title)
         explicit = bool(NUMBERING.match(clean) or title.startswith("#"))
-        clean = NUMBERING.sub("", clean).strip()
+        clean = heading_text(title).strip()
         family = next((name for name, pattern in families.items() if re.match(pattern, clean, re.I)), None)
         if not family or len(clean.split()) > 10 or re.search(r"[.!?。！？]$", clean):
             continue

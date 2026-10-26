@@ -216,7 +216,8 @@ class PaperReadingIntegrationTests(unittest.TestCase):
         card = controller.context()["paper_cards"][0]
         self.assertEqual(card["status"], "analyzed")
         self.assertEqual(card["inventory"]["characters_supplied"], 1024)
-        self.assertEqual(card["inventory"]["sections"][1]["text_coverage"], "unread")
+        self.assertGreater(card["inventory"]["sections_coverage_counts"].get("unread", 0), 0)
+        self.assertTrue(self.store.get("paper_readings")["p1"]["inventory"]["sections"])
         self.assertEqual(card["followup_attempts"][0]["status"], "additional_text_supplied")
         self.assertEqual(len(self.store.rows("evidence")), 2)
         card_payload = [data for stage, data in backend.calls if stage == 'paper_card'][-1]

@@ -101,6 +101,7 @@ class IdeaWorkflowTests(unittest.TestCase):
     def test_ideation_context_removes_source_ideas_but_preserves_science_and_storage(self):
         card = self.seed_reading_context()
         controller = Controller(self.store, RecordingBackend(), self.config)
+        archived_evidence = self.store.rows('evidence')
         complete = controller.context()
         view = controller.ideation_context()
         retained = view['paper_cards'][0]
@@ -116,7 +117,7 @@ class IdeaWorkflowTests(unittest.TestCase):
         retained['components'][0]['function'] = 'Changed only in this returned view.'
         view['evidence'][0]['quote'] = 'Changed only in this returned view.'
         self.assertEqual(self.store.get('paper_cards'), {card['paper_id']: card})
-        self.assertEqual(self.store.rows('evidence'), complete['evidence'])
+        self.assertEqual(self.store.rows('evidence'), archived_evidence)
         self.assertEqual(controller.context(), complete)
 
     def test_map_and_propose_receive_isolated_sources_while_design_receives_full_cards(self):

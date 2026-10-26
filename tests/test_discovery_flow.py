@@ -180,7 +180,12 @@ class DiscoveryFlowTests(unittest.TestCase):
         self.assertEqual(by_route['c']['selected_paper_ids'], [])
         self.assertEqual(self.store.get('paper_selections')[-1]['route_coverage'], coverage)
         contextual = self.controller().ideation_context()['discovery_coverage']
-        self.assertEqual([{key: route[key] for key in saved} for route, saved in zip(contextual, coverage)], coverage)
+        for route, saved in zip(contextual, coverage):
+            self.assertEqual(route['recalled_paper_count'], len(saved['recalled_paper_ids']))
+            self.assertNotIn('recalled_paper_ids', route)
+            self.assertEqual({key: route[key] for key in saved if key != 'recalled_paper_ids'},
+                             {key: value for key, value in saved.items() if key != 'recalled_paper_ids'})
+        self.assertEqual(self.store.get('discovery_coverage'), coverage)
 
     def test_later_discovery_keeps_existing_paper_routes_and_accumulated_coverage(self):
         self.seed_searches()

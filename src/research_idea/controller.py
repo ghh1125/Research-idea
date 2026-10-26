@@ -451,6 +451,7 @@ class Controller:
         context['search_coverage'] = [{key: entry.get(key) for key in
             ('query', 'source', 'venues', 'status', 'coverage')}
             for entry in self.store.get('search_ledger', {}).values() if entry.get('query') in queries]
+        context.setdefault('context_summary', {})['searches_recorded'] = len(context['search_coverage'])
         papers = {paper['id']: paper for paper in context['papers']}
         full_text_ids = {pid for pid, paper in papers.items() if paper.get('content_kind') == 'full_text'}
         read_ids = {item['paper_id'] for item in context['evidence']
@@ -481,7 +482,7 @@ class Controller:
             return False
         changed = False
         ledger = self.store.get("full_text_ledger", {})
-        for paper in self.reading_papers():
+        for paper in (self.store.rows('papers') if selected_ids is not None else self.reading_papers()):
             if selected_ids is not None and paper["id"] not in selected_ids:
                 continue
             if paper.get("content_kind") != "abstract":
@@ -527,6 +528,10 @@ class Controller:
                 self.store.event("full_text_retrieval", entry)
                 self.checkpoint_time()
         return changed
+
+    def orient_papers(self, selected_ids):
+        from .orientation import orient_papers
+        return orient_papers(self, selected_ids)
 
     def read_papers(self, selected_ids=None):
         deep = self.config.get("deep_reading", True) and self.config["backend"] != "demo"
@@ -740,7 +745,8 @@ class Controller:
         """Read source details that answer a specific question about the idea."""
         closest = list(dict.fromkeys(candidate.get("retrieved_work_ids", []) + candidate["proposal"].get("closest_work_ids", [])))
         design = self.phase == 'design'
-        self.progress('[design] 定向阅读：原方法怎样作用、迁移需要什么条件、哪种简单对照最有区分力。' if design else
+        self.progress('[read] 背景初读：引言、相关工作和结论，理解主要思路已经取得的进展。' if self.phase == 'orientation' else
+                      '[design] 定向阅读：原方法怎样作用、迁移需要什么条件、哪种简单对照最有区分力。' if design else
                       '[read] 第一阶段 · 读取最接近的方法，以及关键信息如何取得和核对。')
         papers = {p["id"]: p for p in self.store.rows("papers")}
         selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
@@ -755,10 +761,17 @@ class Controller:
             excerpt = select_excerpt(text, self.config["source_chars"])
             requests = [item for item in (acquisition_requests or [])
                         if not item['paper_ids'] or paper['id'] in item['paper_ids']]
-            question = '\n'.join(dict.fromkeys([reading_question or
-                paper.get('selection', {}).get('reading_question', ''), *[item['question'] for item in requests]]))
+            question = '\n'.join(dict.fromkeys(line for value in [reading_question or
+                paper.get('selection', {}).get('reading_question', ''), *[item['question'] for item in requests]]
+                for line in value.splitlines() if line.strip()))
+            if self.phase == 'problem' and paper.get('selection', {}).get('phase') == 'problem':
+                question = paper['selection'].get('reading_question') or question
             selection = None
-            if requests:
+            if self.phase == 'orientation':
+                from .orientation import orientation_excerpt
+                selection = orientation_excerpt(paper, min(12000, self.config['source_chars']))
+                excerpt = selection['excerpt']
+            elif requests:
                 from .focused_reading import select_focused_excerpt
                 selection = select_focused_excerpt(text, self.config['source_chars'],
                     [term for item in requests for term in item['search_terms']], question)
@@ -776,6 +789,8 @@ class Controller:
             if self.phase == 'problem':
                 payload.update(purpose='problem_research', reading_question=question,
                                acquisition_requests=requests)
+            if self.phase == 'orientation':
+                payload.update(purpose='background_orientation', reading_question=question)
             if design:
                 payload.update(purpose='technical_design',
                     reading_question=reading_question or candidate.get('design_followup_question') or paper.get('selection', {}).get('reading_question', ''),
@@ -1052,7 +1067,7 @@ class Controller:
         expression = arxiv_query_expression(query) if self.config["search_source"] == "arxiv" else query
         scope = config_scope(self.config, purpose)
         recall = self.config.get('search_results_per_query', 20)
-        key = digest([expression, self.config["search_source"], venues, scope, recall])
+        key = digest(["recall-v2", expression, self.config["search_source"], venues, scope, recall])
         ledger = self.store.get("search_ledger", {})
         previous = ledger.get(key, {})
         if previous.get("status") == "completed" or previous.get("attempts", 0) >= 2:
@@ -1076,6 +1091,9 @@ class Controller:
             self.store.set("search_ledger", ledger)
             self.store.event("search", {k: v for k, v in ledger[key].items() if k != 'metadata'})
             coverage = getattr(found, 'coverage', {})
+            arxiv_coverage = coverage.get('providers', {}).get('arxiv', coverage)
+            if len(arxiv_coverage.get('query_attempts', [])) > 1:
+                self.progress('[search] arXiv 长查询结果较少，已补充一次关键词扩展；保留原来的领域与日期范围，接下来按相关性筛选。')
             conference_coverage = coverage.get('providers', {}).get('openalex', coverage)
             editions = conference_coverage.get('conference_editions', {})
             if editions:

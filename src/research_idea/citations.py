@@ -86,16 +86,20 @@ class Citations:
             return EVIDENCE_GROUP.sub(papers_for_group, text)
         return EVIDENCE_ID.sub(lambda match: self.reference(match[0]), text)
 
-    def block(self, evidence, *, markdown=False):
+    def block(self, evidence, *, markdown=False, compact=False):
         lines = [self.paper(evidence['paper_id']), '', '支持的判断：' + evidence.get('statement', ''), '',
                  '原文位置：' + self.location(evidence)]
+        if compact:
+            # Findings were just displayed in the reading summary. Keep the
+            # complete quote and link here; the full record remains /evidence.
+            lines = [self.paper(evidence['paper_id']), '', '原文位置：' + self.location(evidence)]
         paper = self.papers.get(evidence['paper_id'], {})
         origin = paper.get('full_text_origin') or {}
         if origin.get('version'):
             lines.append('实际阅读版本：arXiv ' + origin['version'])
         excerpt = evidence.get('quote', '')
         lines.extend(['', '> ' + excerpt.replace('\n', '\n> ') if markdown else '原文：' + excerpt])
-        if evidence.get('conditions'):
+        if evidence.get('conditions') and not compact:
             lines.extend(['', '成立条件：' + evidence['conditions']])
         if evidence.get('kind') in KINDS:
             lines.extend(['', '依据类型：' + KINDS[evidence['kind']]])

@@ -12,11 +12,13 @@ PROMPT_VERSION = "41"
 def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
     if stage in {'frame_question', 'discuss_direction', 'discuss_question', 'plan_problem_reading'}:
-        return '50'
+        return '51'
+    if stage in {'explore_problems', 'deepen_problem', 'map', 'screen_papers'}:
+        return '51'
     if stage == 'discuss_problem':
         return '42'
     if stage == 'inspect_source':
-        return '10'
+        return '11'
     if stage == 'paper_card':
         return '10'
     if stage == 'review':
@@ -168,14 +170,14 @@ INSTRUCTIONS['plan_problem_reading'] = """
 围绕 problem_seed 找真正最接近的已有回应，帮助理解这个问题是否有意义、已有主要方法为什么仍可能留下它。
 先看已有资料是否已经回答疑问；足够则 requests=[]，不要为每个方向机械补搜。
 有具体缺口时给最多两条 requests：question 说明要查清什么、哪种结果会改变问题判断；
-query 为简短英文学术检索词，查已知论文可包含论文标题；paper_ids 为已有需补读的论文，未知论文用查询查找。
+query 每条只用 2–4 个核心英文概念或短语，不要把 question 翻译成一长串 AND 关键词。把现象与最强已有回应分开检索，必要时用 OR 表达同义说法；已知原作可直接检索标题，不因论文较早就忽略。paper_ids 为已有需补读的论文，未知论文用查询查找。
 问题可以被新资料重述，不能把检索设计成只证明自己的猜想。查方法细节是为了理解已有能力与新困难，
 不是设计新算法。reason 简要说明补读用途或为何现有资料足够。不安排实验或技术方案。
 """
 from .conversation import MEMORY_INSTRUCTIONS
 
 INSTRUCTIONS['discuss_direction'] = """
-当前是文献梳理后的方向讨论。用平实中文先回答用户真正困惑的地方。
+当前是背景与主要方法的初步梳理之后，尚未为所有方向精读机制与实验。讨论可先调整研究重点；不要把初读覆盖范围当成全领域结论。用平实中文先回答用户真正困惑的地方。
 problem_model 包含背景、主要方法和初步问题方向。允许修订背景理解、改问题、合并方向或重新扩大范围；
 不是让用户审批固定表格。updated_pool=[] 表示本轮只解释；需要修订时返回一个完整的新pool并保留仍相关的方向。
 用户追问不是同意；助手建议不能记成用户决定。明确说明当前判断改了什么。
@@ -216,7 +218,16 @@ serves problem discovery and discussion, not constructing a new solution or atta
 """
 INSTRUCTIONS['screen_papers'] += """
 For purpose=problem_research, select papers that could answer or change the supplied candidate.problem, including
-strongest existing responses. Prefer direct substantive relevance over background repetition; use route_ids=[].
+strongest existing responses. Use comparison_search.questions to choose a complementary set: include the actual strongest response as well as the hypothesized difficulty when distinct sources are needed. A paper may answer both; do not spend both slots on descriptions of the difficulty while omitting an available direct response. State which question each selection will resolve in reading_question; explain uncovered questions in selection_summary without filling slots with irrelevant sources. Compare the proposed problem and motivation, not just related technique names. Prefer direct substantive relevance over background repetition; use route_ids=[].
+"""
+
+INSTRUCTIONS['inspect_source'] += """
+For purpose=background_orientation, read only to establish the broad need, principal approach families,
+their actual contributions and promising questions for discussion. The supplied source is introduction,
+related-work and conclusion text, not an exhaustive method/results read. Attribute surveys of other papers
+to this source. This purpose replaces the candidate-comparison and implementation-detail objectives above.
+Extract at most four grounded quotes with conditions; do not request full paper cards,
+audit every result, or propose technical solutions. Subsequent problem-directed reading inspects mechanisms.
 """
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:

@@ -3,6 +3,8 @@ name: research-idea-compare-methods
 description: Compare a research candidate with the closest supplied methods at the mechanism and claim level. Use for novelty checks, related-work concerns, or a reviewer claiming that an idea has already been done.
 ---
 
+**背景初读：** purpose=background_orientation 时只理解背景、主要思路与已取得进展，不执行下面的方法规格比较。问题讨论后的补读再读最接近工作的关键机制与结果。
+
 **任务范围：** v0.5 的 `plan_problem_reading/deepen_problem/discuss_question/frame_question` 只使用文末 Problem-focused discussion 的研究问题比较规则，以及相似标题不等于具体贡献重叠的原则。下列 propose/develop/refine 输出字段和六维方法规格仅服务历史方案任务，不用于当前问题与动机输出。
 
 

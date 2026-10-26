@@ -15,15 +15,21 @@ FACET_LABELS = dict(zip(FACETS, ("研究问题", "研究动机", "核心洞见",
 FAMILIES = {
     "introduction": r"abstract\b|introduction\b|摘要|引言|介绍",
     "related_work": r"related\s+work\b|background\b|preliminar|相关工作|背景|预备",
-    "method": r"(?:(?:our|proposed)\s+)?(?:method|approach|framework|algorithm|model)\b|方法|算法|模型",
+    "method": r"(?:(?:our|proposed)\s+)?(?:methods?|methodology|approach|framework|algorithm|model)\b|方法|算法|模型",
     "experiments": r"experiment|evaluation|setup\b|implementation|实验|评测|评估|实现细节",
     "results": r"(?:(?:main|additional)\s+)?results?\b|ablation|analysis\b|结果|消融|分析",
     "limitations": r"limitation|discussion|conclusion|局限|讨论|结论",
     "appendix": r"appendi(?:x|ces)|supplement|附录|补充",
-    "references": r"references?\b|bibliography|参考文献",
+    "references": r"(?:references?|bibliography|参考文献)\s*[:：]?$",
 }
 NUMBERING = re.compile(r"^(?:\d+(?:\.\d+)*(?:[.)、．:]\s*|\s+)|[A-Z](?:\.\d+)*(?:[.)、:]\s*|\s+)|第[一二三四五六七八九十0-9]+[章节]\s*|[一二三四五六七八九十]+、\s*)")
 CAPTION = re.compile(r"^(Figure|Fig\.|Table|图|表)\s*([A-Z]?\d+(?:\.\d+)*)(?:\s*[:：.]\s*|\s*$)", re.I)
+
+
+def heading_text(title):
+    clean = re.sub(r'^#{1,6}\s*', '', title)
+    clean = re.sub(r'\b([A-Z])\s+(?=[A-Z]{2,}\b)', r'\1', clean)
+    return NUMBERING.sub('', clean)
 
 
 def source_text(paper):
@@ -48,12 +54,19 @@ def inventory(paper):
                 "visual_status": "not_inspected"})
             continue
         clean = re.sub(r"^#{1,6}\s*", "", title)
+        clean = re.sub(r'\b([A-Z])\s+(?=[A-Z]{2,}\b)', r'\1', clean)
         numbered = NUMBERING.match(clean)
         clean = NUMBERING.sub("", clean)
+        # Common PDF small-cap extraction: I NTRODUCTION / M ETHODOLOGY.
         family = next((name for name, pattern in FAMILIES.items() if re.match(pattern, clean, re.I)), None)
-        explicit = bool((numbered and clean and not clean[0].isdigit()) or title.startswith("#"))
+        prose = bool(re.search(r'[.!?。！？;=∑∂∇]|\\(?:frac|sum|math)', clean)
+                     or re.match(r'\d{4}\b', title)
+                     or re.search(r'\b(?:we|they|show|shows|is|are|was|were|can|that)\b', clean, re.I))
+        named = bool(clean and (clean[0].isupper() or re.search(r'[\u4e00-\u9fff]', clean)))
+        explicit = bool((numbered and named and len(clean.split()) <= 12 and not prose)
+                        or title.startswith('#'))
         # Plain prose that starts with 'Results show ...' is not a known heading.
-        if len(title) <= 120 and ((family and len(clean.split()) <= 9 and not re.search(r"[.!?。！？]$", clean)) or explicit):
+        if len(title) <= 120 and ((family and (named or len(clean.split()) == 1) and len(clean.split()) <= 9 and not prose) or explicit):
             headings.append((line.start(), title, family or "other"))
     if not headings or headings[0][0] != 0:
         headings.insert(0, (0, "Opening text / unclassified", "other"))
@@ -109,7 +122,7 @@ def initial_chunks(parts, source_inventory, count, reading_role="method"):
             # a preliminaries section when both are available.
             pattern = r"introduction\b|引言|介绍" if family == "introduction" else r"related\s+work\b|background\b|相关工作|背景"
             preferred = [s for s in sections if re.match(pattern,
-                NUMBERING.sub("", re.sub(r"^#{1,6}\s*", "", s["title"])), re.I)]
+                heading_text(s["title"]), re.I)]
             sections = preferred or sections
         section = sections[0] if sections else None
         if section:

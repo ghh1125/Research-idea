@@ -28,6 +28,10 @@ STAGE_LABELS = {
 
 def stage_label(stage, phase='ideation'):
     tag, label = STAGE_LABELS.get(stage, ('analysis', stage))
+    if phase == 'orientation':
+        return ('read' if stage in {'inspect_source', 'extract'} else tag), '梳理背景与主要方法'
+    if phase == 'problem' and stage == 'inspect_source':
+        return 'read', '问题补读 · 弄清最接近工作的实际回应'
     if phase == 'neighbor':
         return ('read' if stage == 'inspect_source' else 'search'), '第一阶段 · 弄清最接近的方法与关键信息来源'
     if phase == 'ideation_draft' and stage == 'propose':
@@ -192,7 +196,8 @@ def activity_summary(stage, result, citations=None):
     elif stage in {'extract', 'read_section', 'inspect_source'}:
         for item in result.get('observations', []):
             add('读到的内容', item['statement'])
-            add('成立条件', item.get('conditions'))
+        if lines:
+            lines.append('完整条件与分析见 /details；原文可通过 /evidence 查看。')
         if not lines:
             lines.append('这段没有新增引用，继续分析其他材料。')
     elif stage == 'plan_problem_reading':

@@ -179,9 +179,10 @@ def run_questions(controller, interactive=False, continue_problem=False):
                         controller.initial_search()
                         cycle['search_complete'] = True
                     initial_ids = controller.initial_paper_ids()
+                    initial_ids = [paper['id'] for paper in controller.reading_papers()
+                                   if paper['id'] in initial_ids]
                     controller.retrieve_full_texts(initial_ids)
-                    controller.read_papers(initial_ids)
-                    controller.audit_papers(initial_ids)
+                    controller.orient_papers(initial_ids)
                 finally:
                     cycle = _sync_sources(controller, cycle)
                 cycle['stage'] = 'explore'

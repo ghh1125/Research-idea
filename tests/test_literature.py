@@ -87,6 +87,47 @@ class LiteratureTests(unittest.TestCase):
                 lit.discover(query)
                 self.assertEqual(parse_qs(urlparse(request.call_args.args[0]).query)["search_query"], [query])
 
+    def test_sparse_long_query_expands_once_without_losing_scope(self):
+        def entry(identifier, title, category='cs.AI', published='2026-09-20'):
+            return (f'<entry><id>http://arxiv.org/abs/{identifier}</id><title>{title}</title>'
+                    f'<summary>{title}</summary><category term="{category}"/>'
+                    f'<published>{published}</published></entry>')
+        empty = b'<feed xmlns="http://www.w3.org/2005/Atom"/>'
+        expanded = ('<feed xmlns="http://www.w3.org/2005/Atom">' +
+            entry('2609.10001', 'Adaptive preferences and memory') +
+            entry('2609.10002', 'Adaptive memory in cells', category='q-bio.NC') +
+            entry('2501.10003', 'Adaptive preferences', published='2025-01-01') +
+            entry('2609.10004', 'Memory hardware') + '</feed>').encode()
+        with patch.object(lit, '_request_bytes', side_effect=[empty, expanded]) as request, \
+             patch.object(lit.time, 'sleep'):
+            papers = lit.discover('adaptive preferences agent memory context feedback', limit=5,
+                                  cs_only=True, since='2026-04-01', until='2026-10-26')
+        self.assertEqual([p['title'] for p in papers], ['Adaptive preferences and memory'])
+        self.assertEqual(request.call_count, 2)
+        expressions = [parse_qs(urlparse(c.args[0]).query)['search_query'][0]
+                       for c in request.call_args_list]
+        self.assertIn('all:adaptive AND all:preferences', expressions[0])
+        self.assertIn('all:adaptive OR all:preferences', expressions[1])
+        for expression in expressions:
+            self.assertIn('cat:cs.*', expression)
+            self.assertIn('submittedDate:[202604010000 TO 202610262359]', expression)
+        self.assertEqual(papers.coverage['query_attempts'][1]['mode'], 'recall')
+        self.assertEqual(papers.coverage['query_attempts'][1]['retained_by_keyword_overlap'], 1)
+
+    def test_recall_failure_retains_strict_results_and_records_gap(self):
+        with patch.object(lit, '_request_bytes', side_effect=[ATOM, lit.LiteratureError('HTTP 429')]), \
+             patch.object(lit.time, 'sleep'):
+            papers = lit.discover('adaptive preferences agent memory context feedback')
+        self.assertEqual(len(papers), 1)
+        self.assertEqual(papers.coverage['query_attempts'][1]['status'], 'failed')
+        self.assertIn('Recall expansion failed: HTTP 429', papers.coverage['gaps'])
+
+    def test_explicit_queries_and_quoted_titles_are_never_broadened(self):
+        for query in ['one AND two AND three AND four AND five',
+                      'ti:"a long exact title with many words"',
+                      '"a long exact title with many words"']:
+            self.assertEqual(lit.arxiv_query_variants(query), [lit.arxiv_query_expression(query)])
+
     def test_arxiv_error_and_entity_rejected(self):
         for data in [b"not xml", b"<!DOCTYPE foo><feed/>", b'<feed xmlns="http://www.w3.org/2005/Atom"><entry><id>http://arxiv.org/api/errors#1</id></entry></feed>']:
             lit._last_arxiv_request = 0

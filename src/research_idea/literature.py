@@ -542,6 +542,21 @@ def arxiv_query_expression(query: str) -> str:
     return " ".join(expression)
 
 
+def arxiv_query_variants(query):
+    """Keep explicit syntax exact; offer one recall query for long free text.
+
+    The second query is used only after a sparse valid response, not on API
+    errors. It keeps every phrase and relies on the source's relevance ranking;
+    candidate screening still decides which papers actually answer the question.
+    """
+    strict = arxiv_query_expression(query)
+    if re.search(r'\b(?:all|ti|au|abs|co|jr|cat|rn|id|submittedDate):|\b(?:AND|OR|ANDNOT)\b|[()]', query):
+        return [strict]
+    terms = re.findall(r'"[^\"]+"|[\w*?]+(?:[-./\'][\w*?]+)*', query)
+    terms = list(dict.fromkeys(terms))
+    return [strict, ' OR '.join('all:' + term for term in terms)] if len(terms) > 4 else [strict]
+
+
 def _filter_scope(papers, scope, coverage, source):
     kept = []
     excluded = coverage.setdefault("excluded", [])
@@ -622,7 +637,7 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
         return DiscoveryResults(papers[:limit], coverage=coverage)
     if source == "arxiv":
         global _last_arxiv_request
-        expression = arxiv_query_expression(query)
+        variants = arxiv_query_variants(query)
         filters = []
         if scope["cs_only"]:
             filters.append("cat:cs.*")
@@ -630,44 +645,67 @@ def discover(query: str, source: str = "arxiv", limit: int = 10,
             filters.append("(" + " OR ".join("cat:" + c for c in scope["arxiv_categories"]) + ")")
         if since or until:
             filters.append(f"submittedDate:[{(since or '1991-01-01').replace('-', '')}0000 TO {(until or date.today().isoformat()).replace('-', '')}2359]")
-        if filters:
-            expression = "(" + expression + ") AND " + " AND ".join(filters)
-        coverage["query_expression"] = expression
-        url = ARXIV_ENDPOINT + "?" + urlencode({"search_query": expression, "start": 0, "max_results": limit, "sortBy": "relevance", "sortOrder": "descending"})
-        # arXiv asks serial clients to leave >=3 seconds between requests.
-        with _arxiv_lock:
-            wait = 3 - (time.monotonic() - _last_arxiv_request)
-            if wait > 0:
-                if wait >= _remaining(deadline):
-                    raise LiteratureError("arXiv courtesy delay exceeds the remaining retrieval budget")
-                time.sleep(wait)
-            _last_arxiv_request = time.monotonic()
-            data = _request_bytes(url, _remaining(deadline))
-        if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
-            raise LiteratureError("Unexpected XML declarations in literature response")
-        try:
-            root = ET.fromstring(data)
-        except ET.ParseError:
-            raise LiteratureError("arXiv returned invalid Atom XML") from None
-        ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
-        if root.tag != "{http://www.w3.org/2005/Atom}feed":
-            raise LiteratureError("arXiv response is not an Atom feed")
         papers = []
-        for entry in root.findall("a:entry", ns)[:limit]:
-            identifier = entry.findtext("a:id", "", ns)
-            if "/api/errors" in identifier:
-                raise LiteratureError("arXiv rejected the search query")
-            published = entry.findtext("a:published", "", ns)
-            papers.append(normalize_paper({"id": identifier, "title": entry.findtext("a:title", "", ns),
-                "authors": [a.findtext("a:name", "", ns) for a in entry.findall("a:author", ns)],
-                "year": published[:4], "url": identifier, "doi": entry.findtext("x:doi", "", ns),
-                "publication_date": published[:10], "updated_date": entry.findtext("a:updated", "", ns)[:10],
-                "categories": [category.get("term", "") for category in entry.findall("a:category", ns)],
-                "abstract": entry.findtext("a:summary", "", ns), "source": "arxiv", "content_kind": "abstract",
-                "journal_ref": entry.findtext("x:journal_ref", "", ns), "venue": None,
-                "pdf_url": next((link.get("href") for link in entry.findall("a:link", ns)
-                                  if link.get("type") == "application/pdf"), None)}))
-        return DiscoveryResults(_filter_scope(deduplicate(papers), scope, coverage, "arxiv"), coverage=coverage)
+        coverage['query_attempts'] = []
+        for index, variant in enumerate(variants):
+            expression = '(' + variant + ') AND ' + ' AND '.join(filters) if filters else variant
+            if index == 0:
+                coverage['query_expression'] = expression
+            elif len(papers) >= min(3, limit):
+                break
+            try:
+                url = ARXIV_ENDPOINT + "?" + urlencode({"search_query": expression, "start": 0, "max_results": limit if index == 0 else min(100, max(20, limit * 3)), "sortBy": "relevance", "sortOrder": "descending"})
+                # arXiv asks serial clients to leave >=3 seconds between requests.
+                with _arxiv_lock:
+                    wait = 3 - (time.monotonic() - _last_arxiv_request)
+                    if wait > 0:
+                        if wait >= _remaining(deadline):
+                            raise LiteratureError("arXiv courtesy delay exceeds the remaining retrieval budget")
+                        time.sleep(wait)
+                    _last_arxiv_request = time.monotonic()
+                    data = _request_bytes(url, _remaining(deadline))
+                if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
+                    raise LiteratureError("Unexpected XML declarations in literature response")
+                try:
+                    root = ET.fromstring(data)
+                except ET.ParseError:
+                    raise LiteratureError("arXiv returned invalid Atom XML") from None
+                ns = {"a": "http://www.w3.org/2005/Atom", "x": "http://arxiv.org/schemas/atom"}
+                if root.tag != "{http://www.w3.org/2005/Atom}feed":
+                    raise LiteratureError("arXiv response is not an Atom feed")
+                page = []
+                for entry in root.findall("a:entry", ns)[:limit if index == 0 else min(100, max(20, limit * 3))]:
+                    identifier = entry.findtext("a:id", "", ns)
+                    if "/api/errors" in identifier:
+                        raise LiteratureError("arXiv rejected the search query")
+                    published = entry.findtext("a:published", "", ns)
+                    page.append(normalize_paper({"id": identifier, "title": entry.findtext("a:title", "", ns),
+                        "authors": [a.findtext("a:name", "", ns) for a in entry.findall("a:author", ns)],
+                        "year": published[:4], "url": identifier, "doi": entry.findtext("x:doi", "", ns),
+                        "publication_date": published[:10], "updated_date": entry.findtext("a:updated", "", ns)[:10],
+                        "categories": [category.get("term", "") for category in entry.findall("a:category", ns)],
+                        "abstract": entry.findtext("a:summary", "", ns), "source": "arxiv", "content_kind": "abstract",
+                        "journal_ref": entry.findtext("x:journal_ref", "", ns), "venue": None,
+                        "pdf_url": next((link.get("href") for link in entry.findall("a:link", ns)
+                                          if link.get("type") == "application/pdf"), None)}))
+            except LiteratureError as exc:
+                if index == 0:
+                    raise
+                coverage['query_attempts'].append({'query_expression': expression, 'status': 'failed', 'error': str(exc)})
+                coverage['gaps'].append('Recall expansion failed: ' + str(exc))
+                break
+            page = _filter_scope(deduplicate(page), scope, coverage, 'arxiv')
+            coverage['query_attempts'].append({'query_expression': expression, 'status': 'completed',
+                                               'found': len(page), 'mode': 'strict' if index == 0 else 'recall'})
+            if index:
+                terms = set(re.findall(r'\w{3,}', query.casefold()))
+                def overlap(paper):
+                    words = set(re.findall(r'\w{3,}', (paper['title'] + ' ' + paper.get('abstract', '')).casefold()))
+                    return len(terms & words)
+                page = sorted((p for p in page if overlap(p) >= 2), key=overlap, reverse=True)
+                coverage['query_attempts'][-1]['retained_by_keyword_overlap'] = len(page)
+            papers = deduplicate(papers + page)
+        return DiscoveryResults(papers[:limit], coverage=coverage)
     headers = {}
     if api_key_env and (not venues or any(venue != "COLM" for venue in venues)):
         key = os.environ.get(api_key_env, "").strip()

@@ -41,6 +41,16 @@ class CitationTests(unittest.TestCase):
         self.assertNotIn('http', citations.reference('ev_123'))
         self.assertEqual(citations.text('ev_missing'), '原文来源未找到')
 
+    def test_live_evidence_avoids_duplicate_summary_but_keeps_original_source(self):
+        citations = Citations([self.paper], [self.evidence])
+        rendered = citations.block(self.evidence, compact=True)
+        self.assertIn(self.evidence['quote'], rendered)
+        self.assertIn('https://arxiv.org/pdf/2501.12345v2#page=4', rendered)
+        self.assertNotIn(self.evidence['statement'], rendered)
+        full = citations.block(self.evidence)
+        self.assertIn(self.evidence['statement'], full)
+        self.assertIn(self.evidence['conditions'], full)
+
     def test_compact_citations_merge_adjacent_sources_but_preserve_claim_links(self):
         second = dict(self.evidence, id='ev_456', page=6, line=102)
         other = dict(self.paper, id='p2', title='Another paper', url='https://example.org/another')

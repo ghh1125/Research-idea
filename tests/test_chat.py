@@ -452,6 +452,9 @@ raise SystemExit(worker.main())
         self.assertNotIn('技术路线', text)
         self.assertEqual(activity_summary('frame_question', brief, citations), text)
         self.assertEqual(stage_label('frame_question')[0], 'concept')
+        self.assertNotIn('方案设计', stage_label('inspect_source', 'problem')[1])
+        self.assertIn('问题补读', stage_label('inspect_source', 'problem')[1])
+        self.assertIn('背景', stage_label('inspect_source', 'orientation')[1])
 
     async def test_discussion_activity_shows_reply_without_dumping_updated_artifact(self):
         from research_idea.presentation import activity_summary

@@ -268,7 +268,7 @@ def research(project, *, continue_problem=False):
                 for evidence in store.rows('evidence'):
                     if evidence['id'] in ids and evidence['id'] not in shown_evidence:
                         shown_evidence.add(evidence['id'])
-                        event('evidence', citations.block(evidence))
+                        event('evidence', citations.block(evidence, compact=True))
             shown_evidence = {e['id'] for e in store.rows('evidence')}
             controller = Controller(store, make_backend(cfg, project), cfg,
                 progress=lambda message: progress(message, controller.phase), activity=findings)

@@ -17,7 +17,8 @@ def _coverage(value):
     gaps = list(dict.fromkeys(str(gap) for gap in value.get('gaps', [])))
     if gaps:
         result.update(gaps=[gap if len(gap) <= 240 else gap[:240] + '…' for gap in gaps[:3]],
-                      gap_count=len(gaps), gaps_are_examples=len(gaps) > 3 or any(len(g) > 240 for g in gaps))
+                      gap_count=max(len(gaps), value.get('gap_count', 0)),
+                      gaps_are_examples=value.get('gaps_are_examples', False) or len(gaps) > 3 or any(len(g) > 240 for g in gaps))
     if isinstance(value.get('providers'), dict):
         result['providers'] = {name: _coverage(coverage) for name, coverage in value['providers'].items()}
     return result
@@ -32,22 +33,34 @@ def compact_research_context(context):
         if not isinstance(inventory, dict):
             continue
         for key in ('sections', 'assets'):
-            items = inventory.get(key, [])
-            # Keep section/asset identities and unread coverage, so a later
-            # targeted reading can still name the missing source location.
-            fields = ('id', 'title', 'family', 'text_coverage') if key == 'sections' else ('id', 'label', 'kind', 'text_coverage', 'visual_status')
-            inventory[key] = [{field: item[field] for field in fields if field in item} for item in items]
-            inventory[key + '_count'] = len(items)
+            items = inventory.pop(key, None)
+            # Reasoning needs coverage, not hundreds of PDF headings. The
+            # source reader still receives the full inventory when locating text.
+            if items is not None:
+                inventory[key + '_count'] = len(items)
+                counts = {}
+                for item in items:
+                    status = item.get('text_coverage', 'unknown')
+                    counts[status] = counts.get(status, 0) + 1
+                inventory[key + '_coverage_counts'] = counts
             if key == 'sections':
-                removed_sections += len(items)
+                removed_sections += inventory.get(key + '_count', 0)
             else:
-                removed_assets += len(items)
+                removed_assets += inventory.get(key + '_count', 0)
         inventory['detail_location'] = 'Full inventory retained in the stored paper reading, available for targeted reading.'
+    for evidence in result.get('evidence', []):
+        for key in ('source_hash', 'guidance_key', 'chunk_id'):
+            evidence.pop(key, None)
+    for coverage in result.get('discovery_coverage', []):
+        recalled = coverage.pop('recalled_paper_ids', None)
+        if recalled is not None:
+            coverage['recalled_paper_count'] = len(recalled)
     searches = result.get('search_coverage', [])
     result['search_coverage'] = [{**entry, 'coverage': _coverage(entry.get('coverage', {}))}
                                  for entry in searches[-12:]]
     result['context_summary'] = {
-        'searches_recorded': len(searches), 'recent_searches_shown': min(12, len(searches)),
+        'searches_recorded': max(len(searches), context.get('context_summary', {}).get('searches_recorded', 0)),
+        'recent_searches_shown': min(12, len(searches)),
         'section_inventory_entries_stored': removed_sections,
         'asset_inventory_entries_stored': removed_assets,
         'evidence_quotes': 'All supplied evidence quotes and their conditions are preserved verbatim.',

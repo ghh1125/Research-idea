@@ -1,13 +1,13 @@
 ---
 name: research-idea-motivation
-description: Derive consequential research problems from literature, choose them before constructing solutions, and carry that rationale into LLM/NLP ideas and technical design.
+description: Develop important research questions and convincing motivations from literature and iterative discussion, without prescribing technical solutions.
 ---
 
 ## Input and role
 
 Use the supplied topic, user_notes, constraints, evidence and task schema. This skill guides reasoning; it is not scientific evidence. Work within the current task without tools or scripts.
 
-The first phase develops alternatives before choosing one. **explore_problems opens different directions; deepen_problem gives each direction an independent, substantive argument; map compares those arguments and chooses; propose constructs an idea and communicates the resulting argument.** Preserve depth in problem_cases; use propose to select and explain the decisive reasoning rather than repeat the whole analysis. Think boldly about plausible new difficulties, beyond repairs already suggested by source papers.
+Background orientation reads introductions, related work and conclusions to open directions for discussion. After /continue, focused reading examines the closest actual responses, deepen_problem develops each argument independently, map compares them, and frame_question explains the research claim. Full nine-part paper cards and experimental audits are not prerequisites for the first discussion.
 
 ## Form the problem before the solution
 
@@ -42,6 +42,12 @@ Use discovery_plan and discovery_coverage to see which different approaches were
 **deepen_problem：** 独立深入每个问题。先在 response_analysis 说明主要方法正常发挥、合理适应后做到了什么，再推导仍会产生的困难。prior_art_delta 保存已有回应；bottleneck_hypothesis 解释可能原因；derivation 连接对原目标的影响；why_it_matters 解释重要性；research_need 提炼动机。既有回应解决了最初猜想，就沿其进展重新理解问题，不靠否定贡献保留切口。不能把研究中最困难的能力改写为“让agent准确判断”的操作要求来充当解法。本产品在这里研究问题，并不生成解决方案。
 
 **map：** 比较所有深入的问题，解释各自最有力的研究理由、关键障碍与相对优先性。选择有洞见且影响原目标的问题，不因某个技术容易实现而选题。保留其他方向的完整论证，不通过改写它们来突出偏好。不要求分数或证明全领域最重要。
+
+## Explain why the difficulty survives
+
+“如果没发现重要关系就会失败”“如果反馈不足就无法更新”只重述了困难。把推演往前移：正常使用、推广或持续发展的什么过程造成了这项限制？已有最强方法怎样获取信息、利用反馈、改变判断，它发挥这些能力后为什么仍可能留下困难？从这个具体过程连接回背景目标，再说明研究动机。原因可以是合理的新猜想，不要求先有实验，也不把提供难点本身当成对 agent 的操作要求。
+
+每个问题找直接回应其动机的原作，不能只与初始背景论文比。检索使用每条 2–4 个核心概念、必要的同义词或已知标题；不同查询分别寻找已有回应与问题现象。较早的直接回应也值得读。不要通过否认原贡献或仅换措辞保留问题；可以沿已有进展继续提出新的重要疑问。
 
 ## Discussion changes the research
 

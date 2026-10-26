@@ -6,6 +6,23 @@ from research_idea.focused_reading import select_focused_excerpt
 
 
 class FocusedReadingTests(unittest.TestCase):
+    def test_pdf_small_caps_locate_method_and_exclude_bibliography_only(self):
+        from research_idea.focused_reading import _body_ranges
+        text = ('I NTRODUCTION\nBroad goal.\n\nM ETHODOLOGY\n'
+                'Preference acquisition uses explicit feedback.\n\n'
+                'P REFERENCE-DRIVEN UPDATES\nThe update retains the feedback source.\n\n'
+                'R EFERENCES\nBibliography-only feedback terms.\n\n'
+                'A PPENDIX\nDetailed preference acquisition procedure.\n')
+        ranges = _body_ranges(text)
+        kept = '\n'.join(text[start:end] for start, end in ranges)
+        self.assertIn('The update retains', kept)
+        self.assertIn('Detailed preference acquisition', kept)
+        self.assertNotIn('Bibliography-only', kept)
+        result = select_focused_excerpt(text, 2000, ['preference acquisition'])
+        self.assert_exact_spans(text, result, 2000)
+        self.assertIn('M ETHODOLOGY', [s['title'] for s in result['section_context']])
+        self.assertNotIn('Bibliography-only', result['excerpt'])
+
     def assert_exact_spans(self, text, result, limit):
         self.assertIsNotNone(result)
         self.assertLessEqual(len(result['excerpt']), limit)

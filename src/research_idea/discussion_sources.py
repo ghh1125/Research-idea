@@ -63,7 +63,9 @@ def research_requests(controller, requests, *, key):
         question = '\n'.join(r['question'] for r in requests)
         candidate = {'id': 'question_' + fingerprint[:12], 'proposal': {
             'title': question, 'problem': question, 'closest_work_ids': [],
-            'comparison_search': {'comparison_need': question}}, 'retrieved_work_ids': []}
+            'comparison_search': {'comparison_need': question,
+                                  'questions': [{'question': r['question'], 'query': r['query']} for r in requests]}},
+            'retrieved_work_ids': []}
         if 'selected_ids' not in entry:
             selected = list(dict.fromkeys(pid for r in requests for pid in r['paper_ids']))[:2]
             keys = []

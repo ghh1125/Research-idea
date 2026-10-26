@@ -208,7 +208,10 @@ class PaperPipelineTests(unittest.TestCase):
             with self.assertRaises(KeyboardInterrupt):
                 self.controller(first, max_papers=6).initial_search()
         self.assertEqual(len(self.store.rows("papers")), 0)
-        self.assertEqual(len(next(iter(self.store.get("search_ledger").values()))["metadata"]), 1)
+        completed = [entry for entry in self.store.get("search_ledger").values()
+                     if entry['status'] == 'completed']
+        self.assertEqual(len(completed), 1)
+        self.assertEqual(len(completed[0]["metadata"]), 1)
         resumed = PipelineBackend()
         with patch("research_idea.literature.discover", side_effect=[[paper("second")], [paper("third")]]) as search:
             self.controller(resumed, max_papers=6).initial_search()
