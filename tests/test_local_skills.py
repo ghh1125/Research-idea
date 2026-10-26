@@ -1,12 +1,13 @@
 import hashlib
 import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from research_idea.local_skills import (ALL_STAGES, BUILTIN_NAMES, discover_skills, discovery_roots,
-                                      builtin_skill_paths, load_selected_skills, LocalSkillError)
+                                      builtin_skill_paths, load_selected_skills, LocalSkillError, BUILTIN_ROOT)
 
 
 class LocalSkillsTests(unittest.TestCase):
@@ -54,6 +55,7 @@ class LocalSkillsTests(unittest.TestCase):
     def test_builtin_discovery_and_explicit_selection(self):
         self.assertEqual(builtin_skill_paths(), [])
         path = self.skill(self.builtin / "research-idea-motivation", name="research-idea-motivation")
+        shutil.copytree(BUILTIN_ROOT / 'research-idea-motivation' / 'references', path.parent / 'references')
         found = discover_skills(self.project)
         self.assertEqual(found[0]["origin"], "builtin")
         self.assertEqual(builtin_skill_paths(), [str(path)])

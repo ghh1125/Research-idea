@@ -61,10 +61,13 @@ class DemoBackend:
                 why_priority='；'.join(c['selection_reason'] for c in model['selected_problems']),
                 closest_work_ids=papers, evidence_ids=refs)
         elif task.stage == 'plan_problem_reading':
-            output = {'reason': '合成演示不执行真实检索。', 'requests': []}
+            output = {'reason': '合成演示不执行真实检索。', 'requests': [], 'citation_targets': []}
+        elif task.stage == 'reconsider_problems':
+            output = {'pool': deepcopy(payload['previous_pool']), 'changes': []}
+            output['pool'].setdefault('cross_paper_synthesis', [])
         elif task.stage in {'discuss_direction', 'discuss_question'}:
             output = {'answer': '已保留当前问题，可以继续讨论或 /continue。',
-                      'memory_updates': [], 'research_requests': []}
+                      'memory_updates': [], 'research_requests': [], 'reasoning_updates': []}
             output.update({'updated_pool': []} if task.stage == 'discuss_direction' else
                           {'updated_problems': [], 'selected_problems': [], 'updated_background': []})
         elif task.stage == 'plan_search':
@@ -82,6 +85,7 @@ class DemoBackend:
             base = DemoBackend.generate(self, replace(task, stage='map')).output
             if task.stage == 'explore_problems':
                 output = {'background_logic': base['research_frame']['literature_logic'],
+                          'cross_paper_synthesis': [],
                           'approach_landscape': base['approach_landscape'],
                           'problem_seeds': [{key: item[key] for key in (
                               'id', 'question', 'problem_origin', 'research_route_ids')}
@@ -91,7 +95,11 @@ class DemoBackend:
                 case = deepcopy(next((item for item in base['opportunities'] if item['id'] == seed['id']),
                                      base['opportunities'][0]))
                 case.update({key: seed[key] for key in ('id', 'question', 'problem_origin', 'research_route_ids')})
-                output = {'opportunity': case, 'response_analysis': [dict(approach='合成资料获取方法',
+                output = {'opportunity': case, 'revision_reason': '', 'explanation_comparison': [
+                    dict(explanation='信息仍然缺少', how_it_arises='输入未覆盖所需条件',
+                         strongest_response='补充相关来源', remaining_obstacle='来源之间的条件可能不同',
+                         implication='区分资料不足和已有资料的使用困难', evidence_ids=refs)],
+                    'response_analysis': [dict(approach='合成资料获取方法',
                     effective_response='补充最初缺少的资料', remaining_difficulty='怎样使用相互冲突的内容',
                     why_it_remains='获取内容本身不决定冲突时采用哪个条件；这里只演示数据流。')]}
         elif task.stage == "map":

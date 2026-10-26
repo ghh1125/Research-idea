@@ -278,9 +278,8 @@ class Controller:
         return with_retries(invoke, progress=self.progress, before_wait=before_wait, on_failure=failure)
 
     def task(self, stage, payload, checker=None, *, publish=True):
-        guidance = [s for s in self.skills if stage in s["stages"]]
-        if stage == 'plan_search' and payload.get('purpose') != 'technical_design':
-            guidance = [s for s in guidance if s['name'] != 'research-idea-build-mechanism']
+        from .local_skills import task_guidance
+        guidance = task_guidance(self.skills, stage, payload)
         manifest = [{k: s[k] for k in ("path", "sha256", "stages")} for s in guidance]
         fingerprint = [stage_version(stage), stage, payload, self.config["backend"], self.config.get("model"), self.config.get("api_provider"), self.config.get("base_url"), self.config.get("codex_bin"), self.config.get("codex_profile"), manifest]
         if self.config.get("reasoning_effort"):
@@ -433,7 +432,9 @@ class Controller:
     def ideation_context(self):
         """Use discovery readings, not explanations generated for an older idea."""
         source_context = self.context()
+        from .reasoning_memory import reasoning_context
         context = problem_discovery_context(source_context, selected_ids=self.initial_paper_ids())
+        context['reasoning_notes'] = reasoning_context(self.store)
         # Problem-directed readings are separate from old technical-design
         # readings. Explicitly carry their source quotes into later judgments.
         question_refs = set(self.store.get('question_source_evidence', []))
@@ -1171,9 +1172,14 @@ class Controller:
             if any(not item['selection_reason'].strip() for item in decisions):
                 raise ValueError('Explain the research value of the problem choice before constructing a method')
         problem = self.task("map", {**context, "problem_cases": cases,
+            "cross_paper_synthesis": pool.get('cross_paper_synthesis', []),
+            "explanation_comparisons": self.store.get('problem_explanations', {}),
+            "argument_revisions": self.store.get('problem_argument_revisions', {}),
             "response_analyses": self.store.get("problem_response_analyses", {}),
             "background_logic": pool['background_logic'], "approach_landscape": pool['approach_landscape'],
             "max_candidates": self.config["max_candidates"]}, validate_problem)
+        problem = {**problem, 'cross_paper_synthesis': pool.get('cross_paper_synthesis', []),
+                   'explanation_comparisons': self.store.get('problem_explanations', {})}
         self.store.set("problem_model", problem)
         return problem
 

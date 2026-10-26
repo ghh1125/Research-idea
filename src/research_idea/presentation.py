@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 STAGE_LABELS = {
+    "reconsider_problems": ("analysis", "新材料后的方向调整"),
     'plan_search': ('search', '第一阶段 · 文献构思 · 找论文'),
     'screen_papers': ('search', '第一阶段 · 文献构思 · 选择论文'),
     'extract': ('read', '第一阶段 · 文献构思 · 阅读论文'),
@@ -202,6 +203,10 @@ def activity_summary(stage, result, citations=None):
             lines.append('这段没有新增引用，继续分析其他材料。')
     elif stage == 'plan_problem_reading':
         add('这次补读要弄清什么', result.get('reason'))
+        for target in result.get('citation_targets', []):
+            add('沿引用查找代表工作', target['title'])
+            add('要弄清什么', target['question'])
+            source(target['source_paper_id'])
         for request in result.get('requests', []):
             section(request['question'])
             add('检索', request.get('query'))
@@ -242,6 +247,13 @@ def activity_summary(stage, result, citations=None):
         for seed in result.get('problem_seeds', []):
             section('值得深入的问题 · ' + seed['question'])
             add('为什么考虑它', seed['entry_reason'])
+    elif stage == 'reconsider_problems':
+        for change in result.get('changes', []):
+            add('新材料带来的调整', change['reason'])
+        if not result.get('changes'):
+            add('新材料与当前方向', '已重新考虑问题方向，继续深入当前问题。')
+        for seed in result['pool']['problem_seeds']:
+            add('接下来深入', seed['question'])
     elif stage == 'deepen_problem':
         item = result['opportunity']
         section(item['question'])
@@ -252,6 +264,10 @@ def activity_summary(stage, result, citations=None):
                            ('derivation', '由此怎样引出问题'), ('why_it_matters', '解决它有什么价值'),
                            ('research_need', '因此需要研究什么'), ('evidence_ids', '原文依据')):
             add(label, item.get(key))
+        for explanation in result.get('explanation_comparison', []):
+            add('另一种需要区分的解释', explanation['explanation'])
+            add('它会怎样改变研究重点', explanation['implication'])
+        add('这次改变了什么判断', result.get('revision_reason'))
     elif stage == 'map':
         frame = result.get('research_frame', {})
         add('我们要解决的大问题', frame.get('user_goal'))

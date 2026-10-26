@@ -58,7 +58,7 @@ class DiscoveryBackend:
                 'conditions': 'Synthetic fixture only.', 'source_section': 'Supplied text'}]}
         elif task.stage == 'explore_problems':
             output = {'background_logic': 'Compare the supplied mechanisms.',
-                      'approach_landscape': [], 'problem_seeds': []}
+                      'approach_landscape': [], 'problem_seeds': [], 'cross_paper_synthesis': []}
         elif task.stage == 'map':
             output = {'approach_landscape': [], 'problem_comparisons': [], 'research_frame': {'user_goal': payload['topic'],
                 'literature_logic': 'Compare the supplied mechanisms.',

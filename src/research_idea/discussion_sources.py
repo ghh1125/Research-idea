@@ -72,10 +72,15 @@ def research_requests(controller, requests, *, key):
             enabled = bool(controller.config['auto_search'] and controller.config['backend'] != 'demo')
             if enabled:
                 for request in requests:
+                    if request.get('existing_search_keys'):
+                        keys.extend(request['existing_search_keys'])
+                        continue
+                    if request.get('citation_target') and request['paper_ids']:
+                        continue
                     if request['query'].strip():
                         controller.progress('[search] 围绕当前问题补查：' + request['question'])
                         keys.append(controller.search_once(request['query'], request['question'], candidate=candidate,
-                                                           max_new=0, purpose='novelty'))
+                                                           max_new=0, purpose=request.get('time_scope', 'novelty')))
             if keys and len(selected) < 2:
                 controller.select_search_results(keys, 2 - len(selected), candidate=candidate,
                                                   selection_phase='problem')
@@ -115,10 +120,22 @@ def investigate_problem(controller, seed):
     fingerprint = digest([seed, _reading_scope(controller), controller.config.get('constraints'),
                           getattr(controller, 'skill_key', '')])
     if fingerprint not in plans:
+        from .citation_discovery import reference_passages, validate_targets
         context = controller.ideation_context()
-        plan = controller.task('plan_problem_reading', {**context, 'problem_seed': seed},
-            lambda value: validate_requests(value['requests'], {p['id'] for p in context['papers']}),
-            publish=False)
+        relevant_ids = {p['id'] for p in context['papers']}
+        passages = reference_passages([p for p in store.rows('papers') if p['id'] in relevant_ids])
+        def check_plan(value):
+            validate_requests(value['requests'], {p['id'] for p in context['papers']})
+            validate_targets(value.get('citation_targets', []), passages)
+        plan = controller.task('plan_problem_reading', {**context, 'problem_seed': seed,
+            'reference_passages': passages}, check_plan, publish=False)
         plans[fingerprint] = plan
         store.set('problem_reading_plans', plans)
-    return research_requests(controller, plans[fingerprint]['requests'], key=['problem', fingerprint])
+    from .citation_discovery import target_requests
+    # Citation targets and conceptual searches share the existing two-source budget.
+    if 'resolved_requests' not in plans[fingerprint]:
+        targets = plans[fingerprint].get('citation_targets', [])
+        requests = target_requests(controller, targets) + plans[fingerprint]['requests']
+        plans[fingerprint]['resolved_requests'] = requests[:2]
+        store.set('problem_reading_plans', plans)
+    return research_requests(controller, plans[fingerprint]['resolved_requests'], key=['problem', fingerprint])

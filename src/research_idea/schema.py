@@ -51,18 +51,30 @@ DISCUSS_PROBLEM = obj(answer=STR, memory_updates=MEMORY_UPDATES,
     selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
 RESEARCH_FRAME = obj(user_goal=STR, literature_logic=STR, research_question=STR, scope_connection=STR)
 APPROACH = obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS, evidence_ids=STRINGS)
+CROSS_PAPER = obj(approach_names=STRINGS, shared_premise=STR, achieved_progress=STR,
+    changing_condition=STR, possible_consequence=STR, paper_ids=STRINGS, evidence_ids=STRINGS)
 PROBLEM_POOL = obj(background_logic=STR, approach_landscape=array(APPROACH),
+    cross_paper_synthesis=array(CROSS_PAPER),
     problem_seeds=array(obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS),
         entry_reason=STR, research_route_ids=STRINGS)))
 RESEARCH_REQUEST = obj(question=STR, query=STR, paper_ids=STRINGS)
-PROBLEM_READING = obj(reason=STR, requests=array(RESEARCH_REQUEST))
+REFERENCE_TARGET = obj(title=STR, source_paper_id=STR, source_quote=STR, question=STR)
+PROBLEM_READING = obj(reason=STR, requests=array(RESEARCH_REQUEST), citation_targets=array(REFERENCE_TARGET))
+REASONING_NOTE = obj(kind=string(['user_objection', 'analysis_revision', 'open_question']),
+    problem_id=STR, user_quote=STR, judgment=STR, reason=STR, revisit_when=STR,
+    evidence_ids=STRINGS, replaces=STRINGS)
 DISCUSS_DIRECTION = obj(answer=STR, memory_updates=MEMORY_UPDATES,
-    updated_pool=array(PROBLEM_POOL), research_requests=array(RESEARCH_REQUEST))
+    updated_pool=array(PROBLEM_POOL), research_requests=array(RESEARCH_REQUEST),
+    reasoning_updates=array(REASONING_NOTE))
 DISCUSS_QUESTION = obj(**DISCUSS_PROBLEM['properties'], research_requests=array(RESEARCH_REQUEST),
+    reasoning_updates=array(REASONING_NOTE),
     updated_background=array(obj(research_frame=RESEARCH_FRAME, approach_landscape=array(APPROACH))))
 FRAME_QUESTION = obj(title=STR, background=STR, existing_methods=STR, problem=STR,
     motivation=STR, research_claim=STR, why_priority=STR, closest_work_ids=STRINGS, evidence_ids=STRINGS)
-PROBLEM_CASE = obj(opportunity=OPPORTUNITY, response_analysis=array(obj(
+PROBLEM_CASE = obj(opportunity=OPPORTUNITY, revision_reason=STR,
+    explanation_comparison=array(obj(explanation=STR, how_it_arises=STR,
+        strongest_response=STR, remaining_obstacle=STR, implication=STR, evidence_ids=STRINGS)),
+    response_analysis=array(obj(
     approach=STR, effective_response=STR, remaining_difficulty=STR, why_it_remains=STR)))
 PROBLEM_COMPARISON = obj(opportunity_id=STR, strongest_case=STR, remaining_obstacle=STR, priority_reason=STR)
 MAP = obj(approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
@@ -143,6 +155,8 @@ SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract"
     "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 SCHEMAS.update(plan_problem_reading=PROBLEM_READING, discuss_direction=DISCUSS_DIRECTION,
                discuss_question=DISCUSS_QUESTION, frame_question=FRAME_QUESTION)
+SCHEMAS['reconsider_problems'] = obj(pool=PROBLEM_POOL,
+    changes=array(obj(previous_ids=STRINGS, current_ids=STRINGS, reason=STR, evidence_ids=STRINGS)))
 
 
 def validate(value, schema, path="$", depth=0):

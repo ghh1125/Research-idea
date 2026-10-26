@@ -81,6 +81,13 @@ def problem_text(store, detail=False):
             lines += ['', '**相关论文：** ' + '；'.join(citations.paper(pid) for pid in case['closest_work_ids'])]
         if case['id'] in chosen:
             lines += ['', '**优先考虑这个问题的理由：** ' + chosen[case['id']]]
+        if detail:
+            for explanation in problem.get('explanation_comparisons', {}).get(case['id'], []):
+                lines += ['', '**考虑过的原因：** ' + explanation['explanation'],
+                          explanation['how_it_arises'],
+                          '**已有回应：** ' + explanation['strongest_response'],
+                          '**仍值得追问：** ' + explanation['remaining_obstacle'],
+                          '**对研究重点的影响：** ' + explanation['implication']]
     lines += ['', '直接输入你的意见，可以追问、纠正或换一个问题。输入 /continue 后，按当前讨论结果整理动机与研究主张。/problems detail 查看完整推导。']
     return citations.text('\n'.join(lines), compact=not detail)
 
@@ -156,6 +163,12 @@ def direction_text(store, pool, detail=False):
     lines = ['## 方向讨论 · 先看看哪些问题值得深入', '', '**背景：** ' + pool['background_logic']]
     for route in pool['approach_landscape']:
         lines += ['', '**现有思路 · ' + route['name'] + '**', route['principle'], route['achieved_progress']]
+    if detail:
+        for synthesis in pool.get('cross_paper_synthesis', []):
+            lines += ['', '**把这些研究连起来看：** ' + synthesis['achieved_progress'],
+                      '**共同依赖的条件：** ' + synthesis['shared_premise'],
+                      '**条件如何变化：** ' + synthesis['changing_condition'],
+                      '**由此可能发生什么：** ' + synthesis['possible_consequence']]
     for seed in pool['problem_seeds']:
         lines += ['', '### ' + seed['id'] + ' · ' + seed['question'], '', seed['entry_reason']]
     lines += ['', '可以纠正背景、补充你关心的困难，或调整要深入的方向。/continue 后逐个深入比较这些问题。']
@@ -223,6 +236,7 @@ def apply_discussion(controller, checkpoint, result, context):
 
 
 def discuss(controller, message):
+    from .reasoning_memory import revised_reasoning
     store = controller.store
     checkpoint = deepcopy(store.get('problem_checkpoint'))
     if store.get('workflow') != 'question':
@@ -238,6 +252,7 @@ def discuss(controller, message):
     token = digest([checkpoint['checkpoint_id'], checkpoint['revision'], message['id']]) if checkpoint.get('checkpoint_id') else digest([checkpoint, message['id']])
     def checked(value):
         apply_discussion(controller, checkpoint, value, context)
+        revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
         revised_memory(store, value['memory_updates'], supplied)
     if pending.get('key') == token:
         result = pending['result']
@@ -261,13 +276,14 @@ def discuss(controller, message):
         working_checkpoint = {**checkpoint, 'current': working}
         def checked_followup(value):
             apply_discussion(controller, working_checkpoint, value, context)
+            revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
             if value['research_requests']:
                 raise ValueError("Use this turn's reading results; further questions belong to the next discussion turn")
             revised_memory(store, value['memory_updates'], supplied)
         followup = controller.task(stage, {**context, **memory, 'discussion_kind': kind,
             'problem_model': working, 'current_user_message': message, 'source_work_done': True,
             'reading_result': work, 'previous_discussion': result,
-            'memory_instruction': 'Return the final complete memory updates for this turn against active_memory. Replace the preliminary suggestions; do not concatenate them.'}, checked_followup, publish=False)
+            'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them.'}, checked_followup, publish=False)
         working = apply_discussion(controller, working_checkpoint, followup, context)
         result = followup
     checkpoint.update(current=working, revision=checkpoint['revision'] + 1,
@@ -275,6 +291,7 @@ def discuss(controller, message):
     checkpoint['revisions'].append({'revision': checkpoint['revision'], 'source_message_id': message['id'],
                                     'answer': result['answer'], 'current': deepcopy(working), 'time': now()})
     state = {'problem_checkpoint': checkpoint, 'pending_discussion': None,
+             'reasoning_notes': revised_reasoning(store, result.get('reasoning_updates', []), message, checkpoint),
              'status': WAITING_BY_KIND[kind]}
     state['problem_exploration' if kind == 'direction' else 'problem_model'] = working
     finish_turn(store, result, supplied, model=controller.config['model'],

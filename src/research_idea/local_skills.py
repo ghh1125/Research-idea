@@ -15,7 +15,7 @@ from typing import Any
 MAX_FILE_BYTES = 32 * 1024
 MAX_DISCOVERY_ENTRIES = 5000
 MAX_DEPTH = 3
-ALL_STAGES = ("frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "plan_search", "screen_papers", "extract", "read_section", "paper_card", "audit_claims", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "review", "refine", "inspect_source", "design_transfer")
+ALL_STAGES = ("reconsider_problems", "frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "plan_search", "screen_papers", "extract", "read_section", "paper_card", "audit_claims", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "review", "refine", "inspect_source", "design_transfer")
 BUILTIN_ROOT = Path(__file__).parent / "builtin_skills"
 BUILTIN_NAMES = (
     "research-idea-read-evidence", "research-idea-motivation", "research-idea-compare-methods",
@@ -26,7 +26,7 @@ BUILTIN_NAMES = (
 STAGE_MAP = {
     "research-idea-read-evidence": ("plan_search", "extract", "read_section", "inspect_source"),
     "research-idea-analyze-paper": ("read_section", "paper_card"),
-    "research-idea-motivation": ("frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "refine", "review"),
+    "research-idea-motivation": ("reconsider_problems", "frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "refine", "review"),
     "research-idea-compare-methods": ("plan_problem_reading", "deepen_problem", "discuss_question", "frame_question", "propose", "inspect_source", "develop", "refine", "review"),
     "research-idea-build-mechanism": ("plan_search", "propose", "design_transfer", "develop", "refine"),
     "research-idea-check-feasibility": ("propose", "develop", "refine", "review"),
@@ -242,4 +242,51 @@ def load_selected_skills(selectors: list[str], project: Path, extra_roots: list[
         snapshots.append({"name": name, "path": str(path), "sha256": hashlib.sha256(raw).hexdigest(),
                           "content": content, "stages": list(STAGE_MAP.get(name, ALL_STAGES)),
                           "origin": _origin(path)})
+        if _origin(path) == 'builtin' and name == 'research-idea-motivation':
+            refs = {}
+            contents = {}
+            for filename in set(MOTIVATION_REFERENCES.values()) | {'legacy.md'}:
+                reference = path.parent / 'references' / filename
+                try:
+                    data = reference.read_bytes()
+                    contents[filename] = data.decode('utf-8')
+                except (OSError, UnicodeError) as exc:
+                    raise LocalSkillError(f'Cannot read built-in skill reference: {reference}') from exc
+                if len(data) > MAX_FILE_BYTES:
+                    raise LocalSkillError('Built-in reference exceeds the reading limit')
+                refs[filename] = hashlib.sha256(data).hexdigest()
+            snapshots[-1]['sha256'] = hashlib.sha256(raw + json.dumps(refs, sort_keys=True).encode()).hexdigest()
+            snapshots[-1]['reference_contents'] = contents
     return snapshots
+
+
+MOTIVATION_REFERENCES = {
+    'explore_problems': 'synthesis.md', 'deepen_problem': 'explanations.md',
+    'reconsider_problems': 'reconsider.md', 'frame_question': 'framing.md',
+    'discuss_direction': 'discussion.md', 'discuss_question': 'discussion.md',
+    'map': 'discussion.md', 'plan_problem_reading': 'discussion.md',
+}
+
+
+def task_guidance(skills, stage, payload):
+    """Load only the trusted built-in reference for this task; local skills stay intact."""
+    result = []
+    for skill in skills:
+        if stage not in skill['stages']:
+            continue
+        name = skill['name']
+        if skill['origin'] == 'builtin' and stage == 'plan_search' and payload.get('purpose') != 'technical_design' and name == 'research-idea-build-mechanism':
+            continue
+        if skill['origin'] == 'builtin' and payload.get('purpose') == 'background_orientation' and name in {
+                'research-idea-compare-methods', 'research-idea-audit-claims'}:
+            continue
+        item = {k: v for k, v in skill.items() if k != 'reference_contents'}
+        if skill['origin'] == 'builtin' and name == 'research-idea-motivation':
+            filename = MOTIVATION_REFERENCES.get(stage, 'legacy.md')
+            path = Path(skill['path']).parent / 'references' / filename
+            content = skill['reference_contents'][filename]
+            item['content'] += '\n\nLOADED REFERENCE: ' + filename + '\n' + content
+            item['sha256'] = hashlib.sha256(item['content'].encode()).hexdigest()
+            item['loaded_reference'] = str(path)
+        result.append(item)
+    return result

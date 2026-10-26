@@ -12,9 +12,11 @@ PROMPT_VERSION = "41"
 def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
     if stage in {'frame_question', 'discuss_direction', 'discuss_question', 'plan_problem_reading'}:
-        return '51'
+        return '52'
     if stage in {'explore_problems', 'deepen_problem', 'map', 'screen_papers'}:
-        return '51'
+        return '52'
+    if stage == 'reconsider_problems':
+        return '1'
     if stage == 'discuss_problem':
         return '42'
     if stage == 'inspect_source':
@@ -228,6 +230,26 @@ related-work and conclusion text, not an exhaustive method/results read. Attribu
 to this source. This purpose replaces the candidate-comparison and implementation-detail objectives above.
 Extract at most four grounded quotes with conditions; do not request full paper cards,
 audit every result, or propose technical solutions. Subsequent problem-directed reading inspects mechanisms.
+"""
+
+INSTRUCTIONS['explore_problems'] += """
+cross_paper_synthesis 保存跨论文的认识：approach_names 对应已概括的主要思路，shared_premise 是它们共同依赖的条件，achieved_progress 承接贡献，changing_condition 与 possible_consequence 解释发展怎样改变条件及可能后果。原文只支撑前提，推演不冒充观察事实。没有实际联系时为空，不强凑共同障碍。
+"""
+INSTRUCTIONS['deepen_problem'] += """
+explanation_comparison 比较同一困难真正不同的可能原因，说明每个原因怎样产生、最强已有回应能改变什么、为什么还可能留有障碍及对研究必要性的含义。可以只有一个有内容的解释，不强凑数量。opportunity 给出由比较推导的当前判断；revision_reason 解释相对 problem_seed 的变化，不变则空。problem_origin 可以在两类来源之间改变，ID 沿用以追踪演化。不要为了原分类把问题改窄。
+"""
+INSTRUCTIONS['reconsider_problems'] = """
+补读后重新开放一次构思。结合新原文、用户明确要求、reasoning_notes 和 previous_pool，判断新材料怎样改变共同前提、原因与问题方向。可以保留、重述、合并、拆分或替换方向；先承接已有贡献再推导重要困难。pool 返回完整工作版本，changes 用前后 ID 与理由记录变动，无变化时为空。保持仍相关方向的 ID，替代方向用新 ID；最多四个方向，用户已聚焦时不用扩展数量。保留用户明确选择，助手自己的猜想可以修订。这一步不选技术，不启动搜索循环，也不打分或设通过门槛。
+""" + PROBLEM_ORIGIN_RULES
+INSTRUCTIONS['plan_problem_reading'] += """
+reference_passages 是已有论文的相关工作与参考文献原文。若其中明确提到可能直接回应当前问题的代表工作，可在 citation_targets 给出完整标题、source_paper_id、包含标题的连续 source_quote 和要查清的问题。最多两个，按意义选择，不见标题就全部追踪。程序先检查是否已被召回，再按原题补查；requests 与 citation_targets 共用两个阅读名额，优先代表工作。只有作者年份或缩写、没有完整原题时，用普通 query 搜索，不猜标题。
+"""
+for _stage in ('discuss_direction', 'discuss_question'):
+    INSTRUCTIONS[_stage] += """
+reasoning_notes 保存既往异议和判断理由，与用户要求分开。reasoning_updates 仅记录本轮重要的 user_objection、analysis_revision 或 open_question：judgment 具体说明判断，reason 解释原因，revisit_when 指出什么信息会改变它，replaces 指向已解决或被替代的旧 note ID。user_objection 的 user_quote 必须摘自 current_user_message；助手分析用另两类，不当作用户认可。问题可关联 problem_id，不针对某方向时留空。没有变化返回 []，不要机械添加风险或待办。
+"""
+INSTRUCTIONS['map'] += """
+使用 cross_paper_synthesis 与 explanation_comparisons 比较问题的解释力和研究意义，argument_revisions 说明判断为何改变。不凭某个解释写得长或技术容易就选它。
 """
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:

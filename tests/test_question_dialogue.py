@@ -27,7 +27,7 @@ class Backend(DemoBackend):
     def generate(self, task):
         self.calls.append(task.stage)
         if task.stage in {'discuss_direction', 'discuss_question'} and self.answer:
-            return BackendResult(self.answer(payload(task)))
+            return BackendResult({'reasoning_updates': [], **self.answer(payload(task))})
         return super().generate(task)
 
 

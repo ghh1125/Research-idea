@@ -326,6 +326,15 @@ def memory_text(store):
         lines += [f"\n• {item['content']}（{scope}）", f"  出处：{source.get('content', item['source_message_id'])}"]
     if len(lines) == 1:
         lines.append('尚无提炼的要点。')
+    from .reasoning_memory import reasoning_context
+    for note in reasoning_context(store):
+        label = {'user_objection': '用户提出的疑问', 'analysis_revision': '研究判断的调整',
+                 'open_question': '继续讨论的问题'}[note['kind']]
+        lines += [f"\n• {label}：{note['judgment']}", f"  理由：{note['reason']}"]
+        if note['user_quote']:
+            lines.append('  用户原话：' + note['user_quote'])
+        if note['revisit_when']:
+            lines.append('  何时再看：' + note['revisit_when'])
     if context['unreviewed_user_messages']:
         lines.append('\n尚待处理的用户原话会分批带入后续讨论。')
     if context['unreviewed_deferred_count']:

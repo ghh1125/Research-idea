@@ -1,5 +1,16 @@
 # 工作流借鉴与接口资料
 
+## K-Dense scientific-agent-skills：综合、构思与讨论
+
+参考其工作方法，在现有控制器中实现状态传递与恢复，没有引入该框架依赖：
+
+- [scientific-brainstorming](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/SKILL.md) 和 [facilitation_workflows](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/references/facilitation_workflows.md)：借鉴生成与选择分开、新材料后重新构思、保留合并和修订理由。对应独立问题深入、一次 `reconsider_problems`、前后版本记录。
+- [hypothesis-generation](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/SKILL.md)：借鉴区分现象与解释、比较不同原因。对应 `explanation_comparison`，与已有回应和研究意义一起进入问题选择。
+- [literature_search_strategies](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/references/literature_search_strategies.md)：借鉴沿引用追溯代表原作。对应题名出处、召回检查、必要时按题名补查，共用现有补读预算。
+- [literature-review core_workflow](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/literature-review/references/core_workflow.md)：借鉴围绕主题综合研究。对应跨论文前提、进展、条件变化和可能后果，避免逐篇摘要直接变成局部改进。
+
+动机 skill 按综合、原因比较、重新构思、讨论和表达拆分加载。讨论理由与用户决定分别持久保存。产品仍只交付问题和动机，不采用评分淘汰、实验注册或额外审批流程。
+
 > v0.5.0 当前流程专注研究问题与动机。本文保留历次设计来源记录；早期技术方案相关条目属于历史实现，当前主流程不再执行。当前讨论与记忆设计见文末 v0.5.0 一节。
 
 

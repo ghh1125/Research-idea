@@ -27,7 +27,7 @@ problem_seeds 通常提出三个、最多四个值得认真研究的方向。每
 """ + PROBLEM_ORIGIN_RULES
 
 DEEPEN_PROBLEM_INSTRUCTIONS = """
-本次只为 problem_seed 深入建立一个研究问题的论证。其他方向会有相同的独立思考机会；这里不猜哪一个会被选中，也不设计方法或实验。保留分配的 id 和 problem_origin，可以把问题表达得更具体，但不悄悄换成某项技术容易处理的问题。
+本次只为 problem_seed 深入建立一个研究问题的论证。其他方向会有相同的独立思考机会；这里不猜哪一个会被选中，也不设计方法或实验。保留分配的 id；新材料可以改变问题表达和 problem_origin，在 revision_reason 说明改变的原因，不为某项容易实现的技术缩小问题。
 
 先写 response_analysis，给出主要回应在这个问题上的简明研究判断（不是隐藏思维过程）：
 每项 approach 指一个主要思路；effective_response 说明它正常使用、合理调整后实际解决了什么；

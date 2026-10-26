@@ -18,4 +18,4 @@ where = ["src"]
 include = ["research_idea*"]
 
 [tool.setuptools.package-data]
-research_idea = ["builtin_skills/*/SKILL.md", "builtin_skills/*/agents/openai.yaml"]
+research_idea = ["builtin_skills/*/SKILL.md", "builtin_skills/*/references/*.md", "builtin_skills/*/agents/openai.yaml"]

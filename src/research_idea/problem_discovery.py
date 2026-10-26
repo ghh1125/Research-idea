@@ -6,6 +6,36 @@ checks identity, provenance and handoff completeness; no scores or vetoes.
 from __future__ import annotations
 
 from copy import deepcopy
+from .store import digest
+
+
+def reconsider_after_reading(controller, pool, context, work):
+    """One resumable reconsideration when focused reading supplied evidence."""
+    if not any(entry and entry.get('readings') for entry in work):
+        return pool
+    from .controller import check_references
+    previous_ids = {seed['id'] for seed in pool['problem_seeds']}
+    def check(value):
+        revised = value['pool']
+        current_ids = {seed['id'] for seed in revised['problem_seeds']}
+        if not current_ids or len(current_ids) != len(revised['problem_seeds']) or len(current_ids) > 4:
+            raise ValueError('Keep one to four distinct research directions')
+        check_references(value, {e['id'] for e in context['evidence']}, {p['id'] for p in context['papers']})
+        routes = {r['id'] for r in context.get('discovery_plan', {}).get('research_routes', [])}
+        for seed in revised['problem_seeds']:
+            if not set(seed['research_route_ids']) <= routes:
+                raise ValueError('Use supplied research routes')
+        for change in value['changes']:
+            if not set(change['previous_ids']) <= previous_ids or not set(change['current_ids']) <= current_ids:
+                raise ValueError('Revision links must name the before and after directions')
+    controller.progress('[analysis] 把新读到的材料带回构思：保留、重述或更换问题方向。')
+    result = controller.task('reconsider_problems', {**context, 'previous_pool': pool,
+        'reading_results': work}, check)
+    record = {'before': deepcopy(pool), 'after': deepcopy(result['pool']), 'changes': result['changes']}
+    journal = controller.store.get('problem_reconsiderations', {})
+    journal[digest(record)] = record
+    controller.store.set_many({'problem_reconsiderations': journal, 'problem_exploration': result['pool']})
+    return result['pool']
 
 
 def argument_handoff(problem):
@@ -32,6 +62,8 @@ def argument_handoff(problem):
             'selection_reason': choice['selection_reason'],
             'evidence_ids': list(case.get('evidence_ids', [])),
             'closest_work_ids': list(case.get('closest_work_ids', [])),
+            'explanations': deepcopy(problem.get('explanation_comparisons', {}).get(case['id'], [])),
+            'cross_paper_synthesis': deepcopy(problem.get('cross_paper_synthesis', [])),
         })
     return arguments
 
@@ -56,7 +88,8 @@ def explore_problem_pool(controller, context, check_refs):
                 raise ValueError('Explain the main approaches and their achieved progress')
 
     pool = controller.task('explore_problems', context, check_pool)
-    controller.store.set('problem_exploration', pool)
+    controller.store.set_many({'problem_exploration': pool,
+                              'cross_paper_synthesis': pool.get('cross_paper_synthesis', [])})
     return pool
 
 
@@ -66,15 +99,16 @@ def develop_problem_pool(controller, context, check_refs, pool=None):
     pool = pool or explore_problem_pool(controller, context, check_refs)
     cases = []
     responses = {}
-    controller.store.set('problem_response_analyses', responses)
-    controller.store.set('problem_cases', cases)
+    explanations = {}
+    controller.store.set_many({'problem_response_analyses': responses, 'problem_cases': cases,
+                              'problem_explanations': {}, 'problem_argument_revisions': {}})
     # Complete focused acquisition for every direction before comparing any,
     # so later candidates do not receive a systematically richer source set.
     if supplied_pool:
         from .discussion_sources import investigate_problem
-        for seed in pool['problem_seeds']:
-            investigate_problem(controller, seed)
+        work = [investigate_problem(controller, seed) for seed in pool['problem_seeds']]
         context = controller.ideation_context()
+        pool = reconsider_after_reading(controller, pool, context, work)
         from .controller import check_references
         check_refs = lambda value: check_references(value,
             {e['id'] for e in context['evidence']}, {p['id'] for p in context['papers']})
@@ -84,8 +118,6 @@ def develop_problem_pool(controller, context, check_refs, pool=None):
             case = value['opportunity']
             if case['id'] != seed['id']:
                 raise ValueError('Develop the assigned problem ID')
-            if case['problem_origin'] != seed['problem_origin']:
-                raise ValueError('Keep the assigned problem origin')
             if not set(case['research_route_ids']) <= routes:
                 raise ValueError('Use supplied research route IDs')
             if any(not case[key].strip() for key in (
@@ -98,10 +130,18 @@ def develop_problem_pool(controller, context, check_refs, pool=None):
         controller.progress(f"[analysis] 深入问题 {index}/{len(pool['problem_seeds'])} · {seed['question']}")
         result = controller.task('deepen_problem', {
             **context, 'background_logic': pool['background_logic'],
+            'cross_paper_synthesis': pool.get('cross_paper_synthesis', []),
             'approach_landscape': pool['approach_landscape'], 'problem_seed': deepcopy(seed),
         }, check_case)
         case = result['opportunity']
         responses[case['id']] = result['response_analysis']
+        explanations[case['id']] = result.get('explanation_comparison', [])
+        revisions = controller.store.get('problem_argument_revisions', {})
+        revisions[case['id']] = {'before': deepcopy(seed), 'after': deepcopy(case),
+                                'reason': result.get('revision_reason', '')}
+        controller.store.set_many({'problem_explanations': dict(explanations),
+                                  'problem_argument_revisions': revisions,
+                                  'cross_paper_synthesis': pool.get('cross_paper_synthesis', [])})
         controller.store.set('problem_response_analyses', dict(responses))
         cases.append(case)
         controller.store.set('problem_cases', list(cases))

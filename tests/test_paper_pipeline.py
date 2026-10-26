@@ -88,7 +88,7 @@ class PipelineBackend:
                     "support_judgment": "supported_within_tested_scope", "next_reading": ["Read additional appendix controls."]}]}
         elif task.stage == "explore_problems":
             output = {"background_logic": "Separate feedback quality from access.",
-                      "approach_landscape": [], "problem_seeds": []}
+                      "approach_landscape": [], "problem_seeds": [], "cross_paper_synthesis": []}
         elif task.stage == "map":
             output = {"approach_landscape": [], "research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
                       "observations": ["A narrow reported result does not establish the broad claim."],
