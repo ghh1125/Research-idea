@@ -7,6 +7,7 @@ are deliberately not modified by this package.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -60,12 +61,7 @@ def _codex_command(config: dict[str, Any]) -> list[str]:
     return command
 
 
-def _check_codex_mcp(command: list[str], options: list[str], cwd: Path, timeout_s: float) -> None:
-    """Fail closed if external MCP tools remain, without reading credentials.
-
-    Do not use mcp_servers={} as a clear operation: TOML configuration layers
-    may merge the table and leave inherited servers active.
-    """
+def _codex_mcp_inventory(command: list[str], options: list[str], cwd: Path, timeout_s: float) -> list[dict]:
     raw = run_cli([*command, *options, "mcp", "list", "--json"], "", cwd, timeout_s)
     try:
         servers = json.loads(raw)
@@ -73,11 +69,42 @@ def _check_codex_mcp(command: list[str], options: list[str], cwd: Path, timeout_
         raise BackendError("Could not verify Codex MCP isolation from its JSON inventory") from exc
     if not isinstance(servers, list) or any(not isinstance(server, dict) for server in servers):
         raise BackendError("Codex returned an unsupported MCP inventory format")
-    if any(server.get("enabled") is not False for server in servers):
+    return servers
+
+
+def _codex_mcp_options(command: list[str], options: list[str], cwd: Path, deadline: float) -> list[str]:
+    """Disable inherited MCP servers for this invocation, keeping user settings intact.
+
+    Desktop-injected servers may lack a transport in the file-based config.
+    Supply a valid, disabled stdio entry so a CLI override can be parsed even
+    then. Its inert command is never started. Do not copy URLs, env or secrets
+    from the inventory into argv. A quoted root table also supports dotted names.
+    """
+    def inventory(overrides):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise BackendError("Codex task timed out during configuration preflight")
+        return _codex_mcp_inventory(command, overrides, cwd, remaining)
+
+    servers = inventory(options)
+    enabled = [server for server in servers if server.get('enabled') is not False]
+    if not enabled:
+        return options
+    entries = []
+    for server in enabled:
+        name = server.get('name')
+        if not isinstance(name, str) or not name or any(ord(c) < 32 for c in name):
+            raise BackendError('Codex MCP inventory has an invalid server name')
+        entry = (json.dumps(name, ensure_ascii=False) + '={enabled=false,command='
+                 + json.dumps(sys.executable, ensure_ascii=False)
+                 + ',args=["-c","raise SystemExit(0)"]}')
+        entries.append(entry)
+    overrides = [*options, '--config', 'mcp_servers={' + ','.join(entries) + '}']
+    if any(server.get('enabled') is not False for server in inventory(overrides)):
         raise BackendError(
-            "Codex has external MCP servers enabled. Choose a Codex profile or configuration "
-            "with external MCP servers disabled; existing settings and credentials were not changed"
+            'Codex 未应用本次调用的 MCP 设置，请更新 Codex CLI 后重试；日常配置未修改。'
         )
+    return overrides
 
 
 class CodexBackend:
@@ -97,8 +124,7 @@ class CodexBackend:
             schema = cwd / "schema.json"
             output = cwd / "result.json"
             schema.write_text(json.dumps(task.output_schema, ensure_ascii=False), encoding="utf-8")
-            options = _codex_inference_options()
-            _check_codex_mcp(command, options, cwd, max(0.001, deadline - time.monotonic()))
+            options = _codex_mcp_options(command, _codex_inference_options(), cwd, deadline)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise BackendError("Codex task timed out during configuration preflight")

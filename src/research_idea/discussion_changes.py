@@ -98,6 +98,12 @@ def saved_changes(before, after, old_memory, new_memory, old_reasons, new_reason
                      'open_question': '已记录讨论中的疑问'}.get(item['kind'], '已记录讨论理由')
             changed.append(f'{label}：{item["judgment"]}；原因：{item["reason"]}')
 
+    # Keep changes to the research ahead of local formatting in the short notice.
+    old_ids = {item['id'] for item in old_memory}
+    for item in new_memory:
+        if item['id'] not in old_ids and item.get('scope') == 'turn':
+            changed.append('仅本轮采用（不延续到后续）：' + item['content'])
+
     return {'changed': changed, 'unchanged': unchanged, 'focus': _focus(new),
             'kind': after.get('kind', 'chat'), 'revision': after.get('revision')}
 

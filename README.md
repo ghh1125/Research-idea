@@ -270,7 +270,9 @@ Enter sends a message. Press Esc, then Enter to insert a newline. Tab completes 
 
 The complete conversation is stored in the project's SQLite database, with a stable ID for every message. `/history` shows recent original messages, while `/history KEYWORD` searches earlier content across the project. Each discussion updates the active user notes and their source messages. When a decision changes, the old entry is replaced in the active view but remains traceable.
 
-Temporary instructions belong to the discussion in which they were given. `/continue` ends those stage-specific instructions while retaining research scope, resource constraints, and ongoing preferences. Assistant hypotheses do not automatically become user decisions. Later calls receive active notes, their original messages, the current problem version, and relevant earlier conversation—not the entire history in every prompt. The full record remains stored locally.
+Instructions have three lifetimes. **Reply instructions** such as “at most 250 words,” “use three sentences,” or “do not search this turn” end after that reply succeeds. **Discussion instructions** such as “do not finalize until I say `/continue`” end when that discussion advances. **Research requirements** such as resource limits, “no experiment plans throughout this research,” or “use plain language in every reply” persist. Local length and formatting requests do not become permanent preferences unless you make that intent clear; “keep the final report under 250 words” still constrains the report. `/memory` shows active notes and identifies instructions used only for the last reply. Earlier misclassified reply-format notes are checked against their original messages when the project is reopened.
+
+Assistant hypotheses do not automatically become user decisions. Later calls receive active notes, their original messages, the current problem version, and relevant earlier conversation—not the entire history in every prompt. Expired instructions remain traceable without becoming active again. The full record remains stored locally.
 
 `/open PROJECT_DIR` restores the pause point and next-step guidance. Closing the window, restarting the CLI, or switching models does not discard these records. Time spent waiting for user input does not count toward the research budget; discussion calls and additional reading do.
 
@@ -493,6 +495,8 @@ Use `/model` and `/reasoning` inside the window to change these settings. Accept
 `/models` reads the local model cache. `/account` shows the backend, model, profile, and sign-in method. The cache is not a live list of account permissions; the backend determines access when called. Reasoning-effort overrides currently apply only to Codex; use `--reasoning-effort inherit` with other backends.
 
 Add `--codex-profile research` to use an existing Codex profile, or `--codex-bin /path/to/codex` to choose the executable. Codex manages authentication; Research-idea does not copy sign-in files or display secret keys.
+
+**You can keep MCP tools enabled in your normal Codex setup.** Research-idea automatically disables inherited MCP servers for its own inference calls and verifies the temporary setting before sending research materials. Your regular Codex configuration, tools, and sign-in remain unchanged; a separate profile or launch wrapper is not needed. Literature retrieval stays with the research controller. If an older Codex CLI cannot apply the setting, update that CLI and retry.
 
 ### API configuration
 

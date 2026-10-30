@@ -44,7 +44,7 @@ OPPORTUNITY = obj(id=STR, question=STR, problem_origin=string(PROBLEM_ORIGINS), 
     derivation=STR, bottleneck_hypothesis=STR, why_it_matters=STR, prior_art_delta=STR, research_need=STR,
     evidence_ids=STRINGS, closest_work_ids=STRINGS, research_route_ids=STRINGS)
 MEMORY_UPDATES = array(obj(action=string(['add', 'replace', 'remove']),
-    entry_id=STR, content=STR, source_message_id=STR, scope=string(['research', 'discussion'])))
+    entry_id=STR, content=STR, source_message_id=STR, scope=string(['research', 'discussion', 'turn'])))
 CHAT = obj(answer=STR, memory_updates=MEMORY_UPDATES)
 DISCUSS_PROBLEM = obj(answer=STR, memory_updates=MEMORY_UPDATES,
     updated_problems=array(OPPORTUNITY),

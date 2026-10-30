@@ -224,7 +224,7 @@ backend = "codex"
 model = ""
 ```
 
-模型为空时沿用 CLI 的模型选择，也可 `research-idea run --project PATH --model MODEL_ID`。适配器使用非交互执行、只读沙箱和结构化输出；禁用研究任务不需要的内置执行/搜索能力。发送研究材料前检查 MCP 清单：存在启用或未知的外部 MCP 配置时明确停止，请通过 `--codex-profile` 选择禁用外部 MCP 的配置，或在自己的 Codex 配置中明确禁用它们。程序不修改现有认证或全局设置。不兼容的 CLI 版本会报错，不会退化为假结果。
+模型为空时沿用 CLI 的模型选择，也可 `research-idea run --project PATH --model MODEL_ID`。适配器使用非交互执行、只读沙箱和结构化输出；禁用研究任务不需要的内置执行/搜索能力。日常配置可以开启 MCP：适配器读取服务清单，为本次调用添加 `enabled=false` 的覆盖，再检查一次有效清单后发送研究材料。桌面注入的服务也会获得有效但不启动的传输配置，不复制服务地址、环境变量或凭据。无需修改全局配置或另建 profile。相关配置字段见 [Codex 配置说明](https://learn.chatgpt.com/docs/config-file/config-reference)。不兼容的 CLI 会提示更新，不会退化为假结果。
 
 ### Claude Code CLI
 

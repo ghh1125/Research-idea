@@ -12,6 +12,7 @@ Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目�
 | `problem_dialogue.py` | 方向/问题讨论、增量修订、原子保存对话与研究版本 |
 | `discussion_sources.py` | 具体问题触发的有界检索/补读、选择记录与恢复 |
 | `conversation.py` | 原始历史、有效要求、旧消息检索、阶段作用域与迁移 |
+| `memory_scope.py` | 根据用户原话校正局部表达要求的期限，兼容旧会话 |
 | `discussion_changes.py` | 对比成功保存前后的讨论稿和要点，生成可查看的实际修改提示 |
 | `controller.py` | 来源与模型任务、结构/引用校验、缓存、预算 |
 | `paper_reading.py` / `claims.py` | 分块阅读、九维论文卡、作者主张和结果的联系 |
@@ -46,6 +47,8 @@ flowchart TD
 ## 对话事务与记忆
 
 用户原话先入库，再调用模型。讨论结果中的 `memory_updates` 只允许引用实际提供给模型的用户消息。更新支持 add/replace/remove；保留失效记录和替代关系。助手答复、研究版本、记忆和处理成功标记通过 `Store.set_many` 一起提交。
+
+记忆作用域包括 `turn`、`discussion`、`research`。单次答复的字数、格式等要求默认 `turn`；明确的长期偏好和最终报告要求继续保留。局部校正只处理表达要求，并核对对应原话，避免同一句中的长期研究约束被一起改短。`finish_turn` 在成功提交时结束本轮要求，`last_turn_changes` 标为仅本轮采用。读取旧会话时应用相同校正，下一次成功保存时写回；原始消息不变。过期记录保留出处，但不加入 `research_notes`。
 
 `finish_turn` 同时计算并保存 `last_turn_changes`：根据实际数据比较背景、方法梳理、问题与选择、要点替换及讨论理由，不读取模型答复来推断修改。工作进程在提交后输出 `update` 事件，完整说明可由 `/memory` 重读。没有结构化修改的答复不改写问题稿。
 

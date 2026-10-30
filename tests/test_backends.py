@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import time
 import threading
+import tomllib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -168,14 +169,54 @@ class BackendTests(unittest.TestCase):
                 with patch("research_idea.backends.cli.run_cli", side_effect=execute), self.assertRaises(BackendError):
                     CodexBackend({}, self.root).generate(task(self.root))
 
-    def test_codex_enabled_mcp_stops_before_task_is_sent(self):
+    def test_codex_enabled_mcp_is_disabled_only_for_this_invocation(self):
+        inventory = [{'name': 'remote.tools', 'enabled': True, 'url': 'https://example.test/?secret=never-copy'},
+                     {'name': 'local "tool"', 'enabled': True, 'env': {'API_KEY': 'never-copy'}},
+                     {'name': 'already-off', 'enabled': False}]
+        calls = []
+        def execute(argv, prompt, cwd, timeout):
+            calls.append(argv)
+            settings = [arg for arg in argv if arg.startswith('mcp_servers=')]
+            if len(calls) == 1:
+                self.assertEqual(settings, [])
+                self.assertEqual(prompt, '')
+                return json.dumps(inventory)
+            self.assertNotIn('never-copy', ' '.join(argv))
+            overrides = tomllib.loads(settings[0])['mcp_servers']
+            self.assertEqual(set(overrides), {'remote.tools', 'local "tool"'})
+            self.assertTrue(all(item['enabled'] is False for item in overrides.values()))
+            self.assertTrue(all(item['command'] == sys.executable for item in overrides.values()))
+            if 'mcp' in argv:
+                self.assertEqual(prompt, '')
+                return json.dumps([{**server, 'enabled': False} for server in inventory])
+            self.assertEqual(prompt, task(self.root).prompt)
+            Path(argv[argv.index('--output-last-message') + 1]).write_text('{"answer":"yes"}')
+            return '{"type":"turn.completed"}'
+        with patch('research_idea.backends.cli.run_cli', side_effect=execute):
+            result = CodexBackend({}, self.root).generate(task(self.root))
+        self.assertEqual(result.output, {'answer': 'yes'})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([arg for arg in calls[1] if arg.startswith('mcp_servers=')],
+                         [arg for arg in calls[2] if arg.startswith('mcp_servers=')])
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_codex_mcp_override_must_take_effect_before_task_is_sent(self):
         for inventory in [[{"name": "external", "enabled": True}], [{"name": "unknown"}]]:
             with self.subTest(inventory=inventory), patch("research_idea.backends.cli.run_cli", return_value=json.dumps(inventory)) as call:
-                with self.assertRaisesRegex(BackendError, "MCP servers enabled"):
+                with self.assertRaisesRegex(BackendError, "MCP 设置"):
+                    CodexBackend({}, self.root).generate(task(self.root))
+                self.assertEqual(call.call_count, 2)
+                for invocation in call.call_args_list:
+                    self.assertEqual(invocation.args[1], "")
+                    self.assertIn("mcp", invocation.args[0])
+
+    def test_codex_malformed_mcp_inventory_never_sends_task(self):
+        for raw in ['not json', '{}', '[1]', '[{"enabled":true}]']:
+            with self.subTest(raw=raw), patch('research_idea.backends.cli.run_cli', return_value=raw) as call:
+                with self.assertRaises(BackendError):
                     CodexBackend({}, self.root).generate(task(self.root))
                 self.assertEqual(call.call_count, 1)
-                self.assertEqual(call.call_args.args[1], "")
-                self.assertIn("mcp", call.call_args.args[0])
+                self.assertEqual(call.call_args.args[1], '')
 
     def test_claude_structured_envelope_and_disabled_tools(self):
         envelope = {"subtype": "success", "is_error": False,

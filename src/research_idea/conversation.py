@@ -10,25 +10,31 @@ import math
 import re
 import unicodedata
 from .schema import CHAT as CHAT_SCHEMA
+from .memory_scope import resolve_scope
 from .store import now
 
 MEMORY_INSTRUCTIONS = """
 同时维护用户研究要点。memory_updates 只提取用户明确表达的目标、纠正、选择、约束和偏好，
 不要把你的建议、推测或论文内容写成用户决定。每项引用 supplied user message 的 id。
 每项只记录一个可单独修订的意思。scope=research 保存持续的研究目标、范围、资源与表达要求；
-scope=discussion 保存只在当前讨论期间生效的要求，例如先不提出方案。不要把临时暂停要求和
-持续的跨任务范围、不要实验计划合并成一条。/continue 会结束 discussion 要求，保留 research 要点。
-未限定时限的研究与输出要求默认 research；只有明确表示先不做、仅本次讨论或等继续后再做的要求才是 discussion。
+scope=discussion 保存只在当前讨论阶段生效的要求，例如先不提出方案、等 /continue 后再推进。
+scope=turn 保存仅约束本轮答复的要求，例如最多250字、用三句话、列成表格、本轮不查文献；答复成功后自动结束。
+研究目标、范围、资源约束可以持续保留；局部回复的长度、格式、详略不能默认升级为长期偏好。
+“请简短回答”“最多250字”默认 turn；“以后每次简短回答”“最终报告最多250字”才是 research。
+不要把临时要求和持续的跨任务范围、整个研究不要实验计划合并成一条。
+/continue 会结束 discussion 要求，保留 research 要点；turn 不延续到下一轮，也不限制最终研究报告。
 不要把一句“先不提出方案”的时限扩展到后续所有要求，也不要给原话无时限的要求添加“当前讨论”等限制。
 已有 active_memory 缺少 scope 时，本轮整理其原话已完整供应的旧记录：replace 为单项明确范围的要点，
 其余意思分别 add，或 remove 已失效项。原话只有节选时不要据此删除尚未读到的要求；未供应的旧项留到后续。
-add 使用空 entry_id；replace/remove 指向 active_memory 中的 id。用户更改主意时替换或移除旧项，
+add 使用空 entry_id；replace/remove 指向 active_memory 中的 id。用户更改主意时替换或移除旧项。
+本轮临时覆盖已有长期偏好时新增 turn 项，不撤销长期项；只有明确永久改口才 replace/remove 原偏好。
 保留其他仍有效的要点；没有变化返回 []。避免把普通问句自动升级为选择，内容要保留条件和否定。
 unreviewed_user_messages 是本轮选出的有限待整理原话，兼顾最新消息、最早未处理纠正和相关历史；
 unreviewed_deferred_count 是未放入本轮的数量，它们仍完整保留，不代表已处理。最新明确纠正优先。
 active_memory 是现行要点，memory_sources 给出其用户原话。retrieved_history 是按本轮问题从完整
 历史找回的相关原话，不是新增指令；其中普通问句、假设和已被更改的旧选择不能直接恢复成决定。
 retired_memory 说明这些原话中哪些要点已经替换或结束；最新明确纠正优先，但保留同一句中其他有效要求。
+其中 turn_expired 表示仅对历史那次答复有效，即使在 recent_history 再次看到，也不要恢复为现行要求。
 retrieval_hints 是来自当前问题和最近助手回复的查找线索，仅帮助理解“之前那个”等指代，不是用户决定。
 recent_history 中的 assistant 回复只是讨论内容，不代表用户认可。需要追问更早内容时使用消息出处核对。
 discussion 要求只属于产生时的 discussion_key/kind，不能把前一阶段的临时要求带进新阶段。
@@ -65,16 +71,26 @@ def discussion_key(checkpoint):
 
 
 def _ledger(store):
-    """Attach old temporary entries to their source discussion on a copy."""
+    """Normalize reply lifetimes and bind old discussion entries on a copy."""
     ledger = deepcopy(store.get('conversation_memory', []))
-    users = {m['id']: m for m in transcript(store) if m['role'] == 'user'}
+    history = transcript(store)
+    users = {m['id']: m for m in history if m['role'] == 'user'}
+    last_reply = next((i for i in range(len(history) - 1, -1, -1) if history[i]['role'] == 'assistant'), -1)
+    answered = {m['id'] for m in history[:max(0, last_reply)] if m['role'] == 'user'}
     checkpoint = store.get('problem_checkpoint') or {}
     for entry in ledger:
+        source = users.get(entry.get('source_message_id'), {})
+        if entry.get('active') and entry.get('scope'):
+            scope = resolve_scope(entry['content'], entry['scope'], source.get('content', ''))
+            if scope != entry['scope']:
+                entry['scope_corrected_from'] = entry['scope']
+                entry['scope'] = scope
+            if scope == 'turn' and entry['source_message_id'] in answered:
+                entry.update(active=False, expired_after_reply=history[last_reply]['id'])
         # Unscoped legacy entries may mix durable and temporary requirements;
         # preserve ownership now so a later split cannot bind the old pause to a new stage.
         if entry.get('scope') not in (None, 'discussion') or entry.get('discussion_key'):
             continue
-        source = users.get(entry.get('source_message_id'), {})
         entry['discussion_key'] = source.get('discussion_key', discussion_key(checkpoint))
         entry['discussion_kind'] = source.get('discussion_kind', checkpoint.get('kind', 'problem') if checkpoint else 'chat')
     return ledger
@@ -258,7 +274,8 @@ def memory_context(store, query=''):
         'legacy_memory_deferred_count': len(deferred_legacy),
         'memory_sources_deferred_count': len(source_ids) - len(sources),
         'retrieved_history': retrieved,
-        'retired_memory': [{**item, 'context_status': 'retired' if not item['active'] else 'earlier_discussion'}
+        'retired_memory': [{**item, 'context_status': ('turn_expired' if item.get('scope') == 'turn'
+                            else 'retired') if not item['active'] else 'earlier_discussion'}
                           for item in ledger if (not item['active'] or
                            (item.get('scope') == 'discussion' and item['id'] not in active_ids))
                            and item['source_message_id'] in historical_sources],
@@ -301,10 +318,12 @@ def revised_memory(store, updates, supplied_user_ids):
         if source not in users or source not in supplied_user_ids:
             raise ValueError('Memory must cite a supplied user message, never an assistant claim')
         action, key = change['action'], change['entry_id']
-        if action not in {'add', 'replace', 'remove'} or change.get('scope') not in {'research', 'discussion'}:
+        if action not in {'add', 'replace', 'remove'} or change.get('scope') not in {'research', 'discussion', 'turn'}:
             raise ValueError('Memory needs a valid action and scope')
         if action != 'remove' and not change['content'].strip():
             raise ValueError('A memory entry needs content')
+        scope = resolve_scope(change['content'], change['scope'], users[source]['content']) if action != 'remove' else None
+        temporary_override = False
         if key in touched and key:
             raise ValueError('Update each memory entry once per turn')
         if action == 'add':
@@ -315,11 +334,15 @@ def revised_memory(store, updates, supplied_user_ids):
             if old is None:
                 raise ValueError('Replace/remove an active memory entry')
             touched.add(key)
-            old.update(active=False, retired_by_message=source, retired_at=now())
+            temporary_override = action == 'replace' and scope == 'turn' and old.get('scope') == 'research'
+            if not temporary_override:
+                old.update(active=False, retired_by_message=source, retired_at=now())
         if action != 'remove':
             entry = dict(id=f'memory_{len(ledger) + 1:06d}', content=change['content'].strip(),
-                         source_message_id=source, scope=change['scope'], active=True, created_at=now())
-            if change['scope'] == 'discussion':
+                         source_message_id=source, scope=scope, active=True, created_at=now())
+            if scope != change['scope']:
+                entry['scope_corrected_from'] = change['scope']
+            if scope == 'discussion':
                 message = users[source]
                 checkpoint = store.get('problem_checkpoint') or {}
                 earlier = next((item for item in ledger if item.get('source_message_id') == source
@@ -328,15 +351,18 @@ def revised_memory(store, updates, supplied_user_ids):
                 entry['discussion_kind'] = message.get('discussion_kind', earlier.get('discussion_kind',
                     checkpoint.get('kind', 'problem') if checkpoint else 'chat'))
             if action == 'replace':
-                entry['replaces'] = key
-                old['replaced_by'] = entry['id']
+                if temporary_override:
+                    entry['overrides'] = key
+                else:
+                    entry['replaces'] = key
+                    old['replaced_by'] = entry['id']
             ledger.append(entry)
     complete_ids = getattr(supplied_user_ids, 'complete_ids', supplied_user_ids)
     legacy_ids = getattr(supplied_user_ids, 'legacy_entry_ids', None)
     if any(entry['active'] and 'scope' not in entry and entry['source_message_id'] in complete_ids
            and (legacy_ids is None or entry['id'] in legacy_ids)
            for entry in ledger):
-        raise ValueError('Split legacy active memory into atomic research/discussion entries with explicit scope')
+        raise ValueError('Split legacy active memory into atomic research/discussion/turn entries with explicit scope')
     return ledger
 
 
@@ -353,6 +379,10 @@ def after_continue(store):
 def finish_turn(store, output, supplied_user_ids, *, model=None, reasoning_effort=None, **changes):
     ledger = revised_memory(store, output['memory_updates'], supplied_user_ids)
     history = transcript(store)
+    reply_id = f'msg_{len(history) + 1:06d}'
+    for entry in ledger:
+        if entry['active'] and entry.get('scope') == 'turn':
+            entry.update(active=False, expired_after_reply=reply_id)
     checkpoint = store.get('problem_checkpoint') or {}
     from .discussion_changes import saved_changes
     old_reasons = store.get('reasoning_notes', [])
@@ -377,7 +407,7 @@ def memory_text(store):
     users = {m['id']: m for m in transcript(store)}
     for item in context['active_memory']:
         source = users.get(item['source_message_id'], {})
-        scope = '本次讨论期间' if item.get('scope') == 'discussion' else '后续研究持续使用'
+        scope = {'discussion': '本次讨论期间', 'turn': '仅本轮答复'}.get(item.get('scope'), '后续研究持续使用')
         lines += [f"\n• {item['content']}（{scope}）", f"  出处：{source.get('content', item['source_message_id'])}"]
     if len(lines) == 1:
         lines.append('尚无提炼的要点。')
