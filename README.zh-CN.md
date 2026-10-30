@@ -10,7 +10,7 @@
 
 最终内容聚焦五件事：**背景中的需要是什么 → 现有方法已经做到了什么 → 为什么还会遇到重要问题 → 为什么值得研究它 → 一句核心研究主张。** 研究主张说明想推进什么认识或能力。当前流程到这里结束，不继续展开技术路线、实现方案或实验计划。
 
-当前版本 **v0.5.0**，支持对话式 CLI、文献检索与正文分析、方向和问题两处讨论、`/continue` 推进、带出处的持久会话记忆、论文链接与原文依据、预算管理和中断恢复。详见[版本更新](CHANGELOG.md)。
+当前版本 **v0.6.0**，支持对话式 CLI、文献检索与正文分析、方向和问题两处讨论、`/continue` 推进、带出处的持久会话记忆、论文链接与原文依据、预算管理和中断恢复。这一版让反复讨论更容易：每轮答复后展示实际保存了哪些修改，追问时结合当前讨论找回早期意见，所有 CLI 命令都有使用说明。详见[版本更新](CHANGELOG.md)。
 
 ## 2. 找 idea 的核心要求
 
@@ -140,6 +140,28 @@ research-idea doctor
 `doctor` 会检查模型 CLI 与 `pdftotext` 是否可找到。如果仍提示找不到 `research-idea`，macOS/Linux 再运行 `pipx ensurepath`，Windows 再运行 `py -3 -m pipx ensurepath`，然后重新打开终端。
 
 安装使用本地仓库的可编辑模式，请保留仓库目录。已有可用的虚拟环境或本地启动命令可以继续使用，无需重复安装。开发用的虚拟环境安装方式见 [进阶使用](docs/advanced-usage.md#虚拟环境安装)。
+
+### 升级到 v0.6.0
+
+先退出正在运行的 Research-idea 窗口，再**进入原来的仓库目录**执行。
+
+macOS / Linux：
+
+```bash
+git pull --ff-only
+pipx reinstall research-idea
+research-idea --version
+```
+
+Windows（PowerShell）：
+
+```powershell
+git pull --ff-only
+py -3 -m pipx reinstall research-idea
+research-idea --version
+```
+
+版本应显示 `0.6.0`。如果使用虚拟环境安装，激活环境后，将 pipx 那一行替换为 `python -m pip install -e .`。重新输入 `research-idea` 启动，用 `/open 项目目录` 继续原来的讨论；对话、研究要点和进度保存在项目里。
 
 ### 打开对话窗口
 

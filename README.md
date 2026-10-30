@@ -10,7 +10,7 @@ Start with a research direction. You can also provide initial ideas, reference p
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-The current version, **v0.5.0**, includes a conversational CLI, literature search and full-text analysis, two discussion pauses, `/continue` to advance, persistent conversation memory with message sources, paper links and source evidence, budgets, and resumable runs. See the [changelog (Chinese)](CHANGELOG.md).
+The current version, **v0.6.0**, includes a conversational CLI, literature search and full-text analysis, two discussion pauses, `/continue` to advance, persistent conversation memory with message sources, paper links and source evidence, budgets, and resumable runs. This release makes repeated discussion easier: each reply shows what actually changed in the saved draft, follow-up questions recall earlier feedback using the current discussion context, and every CLI command has usage help. See the [changelog (Chinese)](CHANGELOG.md).
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
@@ -142,6 +142,28 @@ research-idea doctor
 `doctor` checks whether the model CLIs and `pdftotext` are available. If `research-idea` is still not found, run `pipx ensurepath` on macOS/Linux or `py -3 -m pipx ensurepath` on Windows, then reopen the terminal.
 
 This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage (Chinese)](docs/advanced-usage.md#虚拟环境安装).
+
+### Upgrade to v0.6.0
+
+Close the running Research-idea window, then run these commands **inside your existing repository directory**.
+
+macOS / Linux:
+
+```bash
+git pull --ff-only
+pipx reinstall research-idea
+research-idea --version
+```
+
+Windows (PowerShell):
+
+```powershell
+git pull --ff-only
+py -3 -m pipx reinstall research-idea
+research-idea --version
+```
+
+The version should show `0.6.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
 
 ### Open the conversation window
 
