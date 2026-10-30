@@ -35,6 +35,7 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
    /problems 看当前讨论，/problems detail 看完整论证；/memory 看保留的要点和出处。
    /history 看原始对话，/history 关键词 找较早的讨论。纠正会带入后续构思。
    同一个问题可以反复讨论：直接指出哪里不清楚、哪里需要改，等回复后继续追问。
+   每轮 [update] 显示实际保存的改动；/memory 可看完整改动，没有修改会明确说明。
    不用每轮都输入 /run；用 /problems 看当前版本，满意后再 /continue。
    方向讨论后 /continue 深入问题；问题讨论后 /continue 整理动机与研究主张。
 7. 最后 [idea] 串起背景、现有方法、问题、动机与研究主张；/evidence 查看原文。
@@ -54,8 +55,8 @@ COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta'
           'review': 'ansimagenta', 'idea': 'ansigreen', 'error': 'ansired',
           'gap': 'ansired', 'stopped': 'ansiyellow', 'saved': 'ansicyan'}
 COLORS.update(strategy='ansicyan', novelty='ansimagenta', budget='ansicyan', detail='ansicyan', gap='ansiyellow',
-              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan', problem='ansicyan', direction='ansicyan', history='ansicyan')
-TAG_LABELS = {'direction': '方向讨论', 'problem': '问题讨论', 'history': '原始对话', 'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
+              concept='ansimagenta', design='ansicyan', retry='ansiyellow', recovered='ansigreen', context='ansicyan', problem='ansicyan', direction='ansicyan', history='ansicyan', update='ansicyan')
+TAG_LABELS = {'update': '本轮修改', 'direction': '方向讨论', 'problem': '问题讨论', 'history': '原始对话', 'system': '使用与设置', 'assistant': '研究讨论', 'skill': '分析方法',
     'search': '检索文献', 'strategy': '寻找方法', 'novelty': '对比研究动机',
     'paper': '论文', 'read': '阅读', 'analysis': '分析', 'thinking': '正在思考',
     'review': '研究讨论', 'idea': '研究主张', 'concept': '研究构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',

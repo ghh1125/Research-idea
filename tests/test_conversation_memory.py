@@ -55,6 +55,89 @@ class ConversationMemoryTests(unittest.TestCase):
         self.assertIn(first, context['retrieved_history'])
         self.assertEqual(context['retrieval_query'], '模型梯度这个约束你还记得吗？')
 
+    def test_vague_followup_recalls_correction_from_current_selected_problem(self):
+        early = self.turn('共享状态的更新时间必须考虑，不能把过期状态当成可靠依据。')
+        self.later_turns()
+        checkpoint = self.checkpoint('problem', 'stage2')
+        checkpoint['current'] = {
+            'opportunities': [{'id': 'p1', 'question': '共享状态的更新时间怎样影响协作？'}],
+            'selected_problems': [{'opportunity_id': 'p1', 'selection_reason': '重要'}]}
+        self.store.set('problem_checkpoint', checkpoint)
+        context = memory_context(self.store, '之前那个解释不对，再想想')
+        self.assertIn(early, context['retrieved_history'])
+        self.assertEqual(context['retrieval_query'], '之前那个解释不对，再想想')
+        self.assertEqual(context['retrieval_hints'][0]['source'], 'current_problem')
+        self.assertEqual(context['active_memory'], [])
+        self.assertIn(early['id'], supplied_user_ids(context))
+
+    def test_recent_reply_helps_recall_but_is_not_a_user_decision(self):
+        early = self.turn('Do not assume the feedback delay is fixed across environments.')
+        self.later_turns()
+        reply = append_message(self.store, 'assistant', 'We are discussing feedback delay across environments.')
+        context = memory_context(self.store, 'That earlier explanation is wrong. Why?')
+        self.assertIn(early, context['retrieved_history'])
+        self.assertNotIn(reply['id'], supplied_user_ids(context))
+        self.assertEqual(context['active_memory'], [])
+        self.assertEqual(context['retrieval_hints'][-1]['message_id'], reply['id'])
+        # Explicit /history searches stay literal, rather than silently expanding.
+        self.assertIn('没有找到', history_text(self.store, 'unrelated-quasar'))
+
+    def test_explicit_request_keeps_priority_over_contextual_matches(self):
+        explicit = self.turn('GPU memory is limited to 24 GB; keep this resource constraint.')
+        for index in range(12):
+            self.turn(f'关于共享状态的更新时间，条件 {index} 不同。')
+        self.later_turns()
+        checkpoint = self.checkpoint('problem', 'stage2')
+        checkpoint['current'] = {'problem': '共享状态的更新时间'}
+        self.store.set('problem_checkpoint', checkpoint)
+        context = memory_context(self.store, 'GPU memory resource constraint')
+        self.assertEqual(context['retrieved_history'][0], explicit)
+        self.assertLessEqual(len(context['retrieved_history']), 6)
+        self.assertTrue(any('共享状态' in m['content'] for m in context['retrieved_history'][1:]))
+
+    def test_contextual_long_excerpt_preserves_correction_and_retired_status(self):
+        original = '排版说明。' * 600 + '取消固定反馈延迟的假设，要考虑反馈延迟随环境变化。' + '附注。' * 800
+        early = self.turn(original)
+        self.later_turns()
+        checkpoint = self.checkpoint('problem', 'stage2')
+        checkpoint['current'] = {'problem': '反馈延迟随环境变化'}
+        self.store.set('problem_checkpoint', checkpoint)
+        context = memory_context(self.store, '之前那个解释不对')
+        recalled = next(m for m in context['retrieved_history'] if m['id'] == early['id'])
+        self.assertIn('取消固定反馈延迟', recalled['content'])
+        self.assertTrue(recalled['content_truncated'])
+        self.assertLessEqual(len(recalled['content']), 1800)
+        self.assertEqual(transcript(self.store)[0]['content'], original)
+        self.assertNotIn(early['id'], supplied_user_ids(context).complete_ids)
+
+    def test_explicit_excerpt_is_not_displaced_by_a_richer_problem_context(self):
+        text = '共享状态的更新时间、反馈延迟、跨任务迁移与原因识别。' * 200
+        early = self.turn(text + '设备只有一张 GPU，显存 24 GB。')
+        self.later_turns()
+        checkpoint = self.checkpoint('problem', 'stage2')
+        checkpoint['current'] = {'problem': '共享状态的更新时间、反馈延迟、跨任务迁移与原因识别。'}
+        self.store.set('problem_checkpoint', checkpoint)
+        context = memory_context(self.store, 'GPU 24 GB')
+        recalled = next(m for m in context['retrieved_history'] if m['id'] == early['id'])
+        self.assertIn('显存 24 GB', recalled['content'])
+
+    def test_contextual_recall_keeps_replaced_choices_retired_and_hints_bounded(self):
+        early = self.turn('只研究固定反馈延迟。', [('research', '只研究固定反馈延迟。')])
+        correction = append_message(self.store, 'user', '更正，要研究变化的反馈延迟。')
+        finish_turn(self.store, dict(answer='已更正。', memory_updates=[dict(action='replace',
+            entry_id='memory_000001', scope='research', content='研究变化的反馈延迟。',
+            source_message_id=correction['id'])]), {correction['id']})
+        self.later_turns()
+        checkpoint = self.checkpoint('problem', 'stage2')
+        checkpoint['current'] = {'problem': '固定反馈延迟的假设为什么不适用？' * 1000}
+        self.store.set('problem_checkpoint', checkpoint)
+        append_message(self.store, 'assistant', '固定反馈延迟的解释。' * 1000)
+        context = memory_context(self.store, '之前那个解释')
+        self.assertIn(early, context['retrieved_history'])
+        self.assertEqual([m['content'] for m in context['active_memory']], ['研究变化的反馈延迟。'])
+        self.assertTrue(any(m['context_status'] == 'retired' for m in context['retired_memory']))
+        self.assertLessEqual(sum(len(h['text']) for h in context['retrieval_hints']), 2400)
+
     def test_active_memory_carries_original_source_outside_recent_window(self):
         first = self.turn('不是单个数据集的涨分，要讨论可跨任务使用的能力。',
                           [('research', '研究跨任务的能力。')])

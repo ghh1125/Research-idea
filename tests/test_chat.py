@@ -198,6 +198,33 @@ raise SystemExit(worker.main())
         self.assertGreater(store.get('elapsed_s'), 0)
         store.close()
 
+    async def test_update_event_describes_committed_memory_without_an_extra_model_call(self):
+        class Backend:
+            calls = 0
+            def generate(self, spec):
+                self.calls += 1
+                return BackendResult({'answer': '记住了。', 'memory_updates': [dict(action='add',
+                    entry_id='', scope='research', content='保留跨任务的研究范围。', source_message_id='msg_000001')]})
+        backend = Backend()
+        events = []
+        def capture(tag, text):
+            events.append((tag, text))
+            if tag == 'update':
+                store = Store(self.project, readonly=True)
+                try:
+                    self.assertIn('保留跨任务的研究范围', str(store.get('last_turn_changes')))
+                    self.assertEqual(store.get('conversation_memory')[0]['content'], '保留跨任务的研究范围。')
+                finally:
+                    store.close()
+        with patch('research_idea.chat_worker.make_backend', return_value=backend), \
+                patch('research_idea.chat_worker.event', side_effect=capture):
+            chat_turn(self.project, '以后始终保留跨任务的研究范围。')
+        self.assertEqual(backend.calls, 1)
+        notices = [text for tag, text in events if tag == 'update']
+        self.assertEqual(len(notices), 1)
+        self.assertIn('已记住（持续研究）', notices[0])
+        self.assertLess([tag for tag, _ in events].index('assistant'), [tag for tag, _ in events].index('update'))
+
     async def test_memory_repair_keeps_one_user_turn_and_cites_its_source(self):
         class Backend:
             calls = 0

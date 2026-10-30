@@ -231,6 +231,7 @@ def export_report(store: Store, output_dir: Path | None = None):
         "question_brief_provenance": store.get("question_brief_provenance"),
         "problem_research_ledger": store.get("problem_research_ledger", {}),
         "conversation_memory": store.get("conversation_memory", []),
+        "last_turn_changes": store.get("last_turn_changes"),
         "chat_messages": store.get("chat_messages", []),
         "problem_model": store.get("problem_model"), "no_candidate_reason": store.get("no_candidate_reason", ""), "calls_used": store.get("calls_used", 0),
         "papers": [{k: v for k, v in p.items() if k not in {"text", "abstract"}} for p in papers], "evidence": evidence,

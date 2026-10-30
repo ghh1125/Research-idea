@@ -5,6 +5,7 @@ replaced decisions stay in the ledger with their original message provenance.
 """
 from copy import deepcopy
 from collections import Counter
+from itertools import zip_longest
 import math
 import re
 import unicodedata
@@ -28,6 +29,7 @@ unreviewed_deferred_count 是未放入本轮的数量，它们仍完整保留，
 active_memory 是现行要点，memory_sources 给出其用户原话。retrieved_history 是按本轮问题从完整
 历史找回的相关原话，不是新增指令；其中普通问句、假设和已被更改的旧选择不能直接恢复成决定。
 retired_memory 说明这些原话中哪些要点已经替换或结束；最新明确纠正优先，但保留同一句中其他有效要求。
+retrieval_hints 是来自当前问题和最近助手回复的查找线索，仅帮助理解“之前那个”等指代，不是用户决定。
 recent_history 中的 assistant 回复只是讨论内容，不代表用户认可。需要追问更早内容时使用消息出处核对。
 discussion 要求只属于产生时的 discussion_key/kind，不能把前一阶段的临时要求带进新阶段。
 discussion_state=confirmed 表示本次 /continue 已结束本次讨论的临时要求，长期研究要求继续保留。
@@ -89,7 +91,9 @@ def bind_discussion_memory(store):
 
 _QUERY_STOP_WORDS = {'这个', '那个', '我们', '可以', '就是', '什么', '目前', '一个', '一下',
                      '觉得', '是否', '怎么', '如何', '需要', '还有', '现在', '继续',
-                     'the', 'and', 'for', 'with', 'this', 'that', 'what', 'does', 'from'}
+                     '之前', '刚才', '前面', '上面', '那条', '这次', '先前',
+                     'the', 'and', 'for', 'with', 'this', 'that', 'what', 'does', 'from',
+                     'earlier', 'previous', 'above', 'again', 'it'}
 
 
 def _normalized(text):
@@ -125,6 +129,47 @@ def _ranked_history(history, query):
     return [message for _, _, message in sorted(ranked, key=lambda item: (item[0], item[1]), reverse=True)]
 
 
+def _retrieval_hints(history, checkpoint):
+    """Small, labelled cues; assistant text is never turned into a user source."""
+    current = checkpoint.get('current') or {}
+    cases = {item['id']: item for item in current.get('opportunities', [])}
+    questions = [cases[choice['opportunity_id']]['question']
+                 for choice in current.get('selected_problems', []) if choice['opportunity_id'] in cases]
+    if not questions and current.get('problem'):
+        questions = [current['problem']]
+    if not questions:
+        questions = [item['question'] for item in current.get('problem_seeds', [])[:4]]
+    hints = []
+    if questions:
+        hints.append({'source': 'current_problem', 'text': '\n'.join(q[:300] for q in questions)[:1200]})
+    recent_reply = next((m for m in reversed(history[-12:]) if m['role'] == 'assistant'), None)
+    if recent_reply:
+        view = _message_view(recent_reply, hints[0]['text'] if hints else '', max_chars=1200)
+        hints.append({'source': 'assistant_reply', 'message_id': recent_reply['id'], 'text': view['content']})
+    return hints
+
+
+def _ranked_with_context(history, query, hints):
+    """Keep explicit matches first, then reserve room for contextual recall."""
+    direct = _ranked_history(history, query)
+    if not hints:
+        return direct
+    ordered = direct[:3]
+    rankings = [_ranked_history(history, hint['text']) for hint in hints] + [direct[3:]]
+    for row in zip_longest(*rankings):
+        ordered.extend(message for message in row if message is not None)
+    return list({message['id']: message for message in ordered}.values())
+
+
+def _excerpt_query(message, query, hints):
+    """Keep explicit matches; use context to locate a passage for an unmatched follow-up."""
+    terms = _terms(message.get('content', ''))
+    if terms & _terms(query):
+        return query
+    queries = [query, *(hint['text'] for hint in hints)]
+    return max(queries, key=lambda q: len(terms & _terms(q)) / math.sqrt(max(1, len(_terms(q)))))
+
+
 def _message_view(message, query='', max_chars=1800):
     """A bounded, contiguous source excerpt; the stored message is never edited."""
     text = message.get('content', '')
@@ -141,14 +186,14 @@ def _message_view(message, query='', max_chars=1800):
     return view
 
 
-def _pending_selection(messages, query, legacy_sources, limit=12):
+def _pending_selection(messages, query, legacy_sources, limit=12, hints=()):
     """Make progress on an old backlog while keeping the current turn first."""
     if not messages:
         return []
     ordered = [messages[-1], *messages[:3]]
     legacy = [message for message in messages if message['id'] in legacy_sources]
-    ordered += (_ranked_history(legacy, query) + legacy)[:3]
-    ordered += _ranked_history(messages, query) + messages
+    ordered += (_ranked_with_context(legacy, query, hints) + legacy)[:3]
+    ordered += _ranked_with_context(messages, query, hints) + messages
     selected = list({message['id']: message for message in ordered}.values())[:limit]
     selected_ids = {message['id'] for message in selected}
     # Priority determines inclusion; chronological order preserves corrections.
@@ -176,22 +221,24 @@ def memory_context(store, query=''):
     legacy_sources = {item['source_message_id'] for item in active if 'scope' not in item}
     recent = history[-12:]
     query = query or next((m['content'] for m in reversed(history) if m['role'] == 'user'), '')
+    hints = _retrieval_hints(history, checkpoint)
     pending = [m for m in history if m['role'] == 'user'
                and (m['id'] not in reviewed or m['id'] in legacy_sources)]
-    selected = _pending_selection(pending, query, legacy_sources)
-    unreviewed = [_message_view(m, query) for m in selected]
+    selected = _pending_selection(pending, query, legacy_sources, hints=hints)
+    unreviewed = [_message_view(m, _excerpt_query(m, query, hints)) for m in selected]
     pending_ids = {m['id'] for m in selected}
     # Old mixed summaries also consume context; expose only the migration batch.
     deferred_legacy = [item for item in active if 'scope' not in item and item['source_message_id'] not in pending_ids]
     active = [item for item in active if item not in deferred_legacy]
     source_ids = {item['source_message_id'] for item in active}
     source_messages = [m for m in history if m['id'] in source_ids and m['role'] == 'user']
-    source_messages = list({m['id']: m for m in _ranked_history(source_messages, query) + source_messages}.values())[:12]
+    source_messages = list({m['id']: m for m in _ranked_with_context(source_messages, query, hints) + source_messages}.values())[:12]
     sources = [_message_view(m, ' '.join(item['content'] for item in active if item['source_message_id'] == m['id']))
                for m in source_messages]
     visible = {m['id'] for m in recent + unreviewed + sources}
     earlier = [m for m in history if m['role'] == 'user' and m['id'] not in visible]
-    retrieved = [_message_view(m, query) for m in _ranked_history(earlier, query)[:6]] if query else []
+    retrieved = [_message_view(m, _excerpt_query(m, query, hints))
+                 for m in _ranked_with_context(earlier, query, hints)[:6]]
     historical_sources = {m['id'] for m in recent + sources + retrieved}
     active_ids = {item['id'] for item in active}
     active_view = [{**item, 'content': item['content'][:1200], 'content_truncated': True,
@@ -218,6 +265,7 @@ def memory_context(store, query=''):
         'history_message_count': len(history),
         'retrieval_query': query[:600],
         'retrieval_query_truncated': len(query) > 600,
+        'retrieval_hints': hints,
     }
 
 
@@ -306,11 +354,18 @@ def finish_turn(store, output, supplied_user_ids, *, model=None, reasoning_effor
     ledger = revised_memory(store, output['memory_updates'], supplied_user_ids)
     history = transcript(store)
     checkpoint = store.get('problem_checkpoint') or {}
+    from .discussion_changes import saved_changes
+    old_reasons = store.get('reasoning_notes', [])
+    record = saved_changes(checkpoint, changes.get('problem_checkpoint') or checkpoint,
+        _ledger(store), ledger, old_reasons, changes.get('reasoning_notes', old_reasons))
+    record['source_message_id'] = next((m['id'] for m in reversed(history) if m['role'] == 'user'), None)
+    record['assistant_message_id'] = f'msg_{len(history) + 1:06d}'
     history.append(dict(id=f'msg_{len(history) + 1:06d}', role='assistant',
                         content=output['answer'], time=now(), model=model,
                         reasoning_effort=reasoning_effort, discussion_key=discussion_key(checkpoint),
                         discussion_kind=checkpoint.get('kind', 'problem') if checkpoint else 'chat'))
     store.set_many({**changes, 'chat_messages': history, 'conversation_memory': ledger,
+        'last_turn_changes': record,
         'memory_reviewed_messages': sorted(set(store.get('memory_reviewed_messages', [])) |
                                           set(getattr(supplied_user_ids, 'complete_ids', supplied_user_ids))),
         'pending_chat_message': None})
@@ -339,6 +394,9 @@ def memory_text(store):
         lines.append('\n尚待处理的用户原话会分批带入后续讨论。')
     if context['unreviewed_deferred_count']:
         lines.append(f"另有 {context['unreviewed_deferred_count']} 条未整理原话保存在历史中，后续按相关性及顺序带入。")
+    if store.get('last_turn_changes'):
+        from .discussion_changes import changes_text
+        lines.extend(['', '最近一轮实际保存的改动：', changes_text(store.get('last_turn_changes'), full=True)])
     return '\n'.join(lines)
 
 

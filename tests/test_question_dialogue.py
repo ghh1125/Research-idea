@@ -70,6 +70,7 @@ class QuestionDialogueTests(unittest.TestCase):
         self.store.set('conversation_memory', revised_memory(self.store, [old], {msg['id']}))
         memory_id = self.store.get('conversation_memory')[0]['id']
         self.store.set('pending_chat_message', msg['id'])
+        previous_notice = deepcopy(self.store.get('last_turn_changes'))
         fail = [True]
         def answer(data):
             if data['source_work_done'] and fail[0]:
@@ -89,6 +90,7 @@ class QuestionDialogueTests(unittest.TestCase):
                 discuss(self.controller(), msg)
             self.assertEqual(self.store.get('conversation_memory')[0]['content'], '旧理解')
             self.assertEqual(self.store.get('problem_checkpoint')['revision'], 1)
+            self.assertEqual(self.store.get('last_turn_changes'), previous_notice)
             self.assertEqual(self.store.get('problem_checkpoint')['source_key'], source_key(self.controller()))
             fail[0] = False
             discuss(self.controller(), msg)
@@ -98,6 +100,8 @@ class QuestionDialogueTests(unittest.TestCase):
         self.assertIsNone(self.store.get('pending_chat_message'))
         self.assertIsNone(self.store.get('pending_discussion'))
         self.assertEqual(self.backend.calls.count('discuss_direction'), 3)
+        self.assertIn('最终理解', str(self.store.get('last_turn_changes')['changed']))
+        self.assertNotIn('初步理解', str(self.store.get('last_turn_changes')['changed']))
 
     def test_early_user_reference_is_allowed_after_many_turns(self):
         first = append_message(self.store, 'user', '研究重点是环境交互，不要限定游戏')
@@ -113,6 +117,20 @@ class QuestionDialogueTests(unittest.TestCase):
         discuss(self.controller(), message)
         self.assertEqual(self.store.get('conversation_memory')[0]['source_message_id'], first['id'])
 
+    def test_saved_change_notice_does_not_trust_verbal_claims(self):
+        self.controller().run_questions(interactive=True, continue_problem=True)
+        previous = deepcopy(self.store.get('problem_checkpoint')['current'])
+        self.backend.answer = lambda data: dict(answer='已经修改了背景和优先问题。',
+            updated_problems=[], updated_background=[], selected_problems=[], memory_updates=[], research_requests=[])
+        message = append_message(self.store, 'user', '请解释刚才的判断')
+        discuss(self.controller(), message)
+        self.assertEqual(self.store.get('problem_checkpoint')['current'], previous)
+        changes = self.store.get('last_turn_changes')
+        self.assertEqual(changes['changed'], [])
+        self.assertEqual(changes['source_message_id'], message['id'])
+        from research_idea.discussion_changes import changes_text
+        self.assertIn('未修改', changes_text(changes))
+
     def test_question_selection_updates_following_brief(self):
         self.controller().run_questions(interactive=True, continue_problem=True)
         msg = append_message(self.store, 'user', '优先看第二个问题')
@@ -122,6 +140,9 @@ class QuestionDialogueTests(unittest.TestCase):
                 selected_problems=[dict(opportunity_id=selected['id'], selection_reason='新的研究重点')], memory_updates=[])
         self.backend.answer = answer
         discuss(self.controller(), msg)
+        changes = self.store.get('last_turn_changes')
+        self.assertIn('优先问题调整', changes['changed'][0])
+        self.assertEqual(changes['focus'], self.store.get('problem_model')['opportunities'][1]['question'])
         self.controller().run_questions(interactive=True, continue_problem=True)
         self.assertIn('新的研究重点', self.store.get('research_brief')['why_priority'])
 
@@ -140,6 +161,9 @@ class QuestionDialogueTests(unittest.TestCase):
         working = self.store.get('problem_checkpoint')['current']
         self.assertIn('共同形成新认识', working['research_frame']['literature_logic'])
         self.assertEqual(working['approach_landscape'][0]['principle'], '合并互补材料')
+        changes = self.store.get('last_turn_changes')['changed']
+        self.assertIn('已更新：背景与研究范围。', changes)
+        self.assertIn('已更新：现有方法梳理。', changes)
         self.controller().run_questions(interactive=True, continue_problem=True)
         self.assertIn('共同形成新认识', self.store.get('research_brief')['background'])
         self.assertIn('已能利用互补信息', self.store.get('research_brief')['existing_methods'])

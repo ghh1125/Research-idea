@@ -128,7 +128,9 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(self.store.get('known_http_attempts'), 2)
         self.assertEqual(len(self.store.get('chat_messages')), 2)
         events = [json.loads(line) for line in output.getvalue().splitlines()]
-        self.assertEqual([e['tag'] for e in events], ['thinking', 'retry', 'thinking', 'recovered', 'assistant'])
+        self.assertEqual([e['tag'] for e in events], ['thinking', 'retry', 'thinking', 'recovered', 'assistant', 'update'])
+        self.assertIn('未修改', events[-1]['text'])
+        self.assertEqual(self.store.get('last_turn_changes')['changed'], [])
         self.assertIn('[model]', events[1]['text'])
 
     def test_worker_returns_failure_after_exhaustion_without_losing_input(self):
@@ -140,6 +142,7 @@ class RetryTests(unittest.TestCase):
             self.assertEqual(worker_main(), 1)
         events = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(events[-1]['tag'], 'error')
+        self.assertNotIn('update', [e['tag'] for e in events])
         self.assertIn('10 次', events[-1]['text'])
         self.assertEqual(self.store.get('chat_messages')[-1]['content'], '保存我的方向')
 

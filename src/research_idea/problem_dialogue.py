@@ -207,6 +207,8 @@ def apply_discussion(controller, checkpoint, result, context):
             frame['user_goal'] = controller.store.get('topic') or ''
             working.update(research_frame=frame,
                            approach_landscape=deepcopy(background[0]['approach_landscape']))
+        if not result['updated_problems'] and not result['selected_problems'] and not background:
+            return working
         cases = {c['id']: c for c in working['opportunities']}
         updates = result['updated_problems']
         if len({p['id'] for p in updates}) != len(updates):

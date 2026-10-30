@@ -129,6 +129,7 @@ COMMAND_HELP = (
         ('/details', '/details on', '/details off')),
     CommandHelp('记录与结果', '/memory', '查看持续保留的研究要点和讨论理由。',
         '展示现行要求、原话出处，以及已保存的异议和判断修改理由。\n'
+        '也显示最近一轮实际保存的完整改动；窗口中的 [update] 是这些改动的简短提示。\n'
         '要修改这些要点，直接在对话中说明；要查原始消息，用 /history。',
         ('/memory',)),
     CommandHelp('记录与结果', '/history [关键词]', '查看原始对话，或查找较早的讨论。',

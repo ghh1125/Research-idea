@@ -16,6 +16,7 @@ from .report import export_report
 from .schema import validate
 from .conversation import (CHAT_SCHEMA, MEMORY_INSTRUCTIONS, append_message, memory_context,
                            revised_memory, finish_turn, supplied_user_ids)
+from .discussion_changes import changes_text
 from .problem_dialogue import WAITING, WAITING_BY_KIND, discuss, problem_text
 from .store import Store, now
 from .presentation import STAGE_LABELS, stage_label, activity_summary, skill_label, error_summary
@@ -170,6 +171,7 @@ def chat_turn(project, message):
                     'result': {'answer': answer, 'problem_model': store.get('problem_model')}})
                 export_report(store)
                 event('assistant', answer)
+                event('update', changes_text(store.get('last_turn_changes')))
                 event('problem', '讨论已保存。可以继续追问和纠正；/problems 看当前版本，/continue 推进下一步。')
                 return
             memory = memory_context(store, message)
@@ -237,6 +239,7 @@ def chat_turn(project, message):
             answer = result.output['answer']
             finish_turn(store, result.output, supplied, model=cfg['model'], reasoning_effort=cfg['reasoning_effort'])
             event('assistant', answer)
+            event('update', changes_text(store.get('last_turn_changes')))
         except BackendError as exc:
             if elapsed + time.monotonic() - started >= cfg['max_seconds']:
                 raise BudgetExhausted('累计时间预算已用完；用 /budget max_seconds 增加后继续。') from exc

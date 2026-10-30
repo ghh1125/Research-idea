@@ -193,6 +193,7 @@ While a task runs, the input box is hidden and step output appears with a spinne
 | `[problem]` | Discussion after deeper analysis; waiting for `/continue` to develop the research proposition |
 | `[concept]` | Organizing the background, existing approaches, problem, motivation, and research proposition |
 | `[history]` | Original conversation messages with message IDs |
+| `[update]` | Changes actually saved this turn, retained content, and the current focus; independent of the model's verbal assurances |
 | `[evidence]` / `[idea]` | Paper evidence and the final research proposition |
 
 Paper citations in the main window show **titles and article links** directly. There is no need to look up internal evidence IDs. `/evidence` expands source quotations, page numbers, and locations. The display shows progress and analysis results, not a token-by-token stream of the model's internal reasoning.
@@ -275,6 +276,10 @@ Update the working version from our discussion and explain what changed and why.
 These are ordinary messages you can send directly. Then use `/problems detail` to review the revision and send `/continue` separately when ready. **A question is not approval of the model's recommendation.** The system may explain or revise the problems and priorities; later steps use the current version.
 
 **You can revise a completed proposition too.** Send new feedback to reopen problem discussion. Review the working draft with `/problems`, then use `/continue` to update the final proposition and `/report` to read it. There is no need to restart the entire literature review.
+
+**See what actually changed after each reply.** The `[update]` notice compares successfully saved versions to show changes to the question, background, priority, or research notes, along with retained content. If nothing was changed, it says so; a reply saying “updated” is not enough. The window shows a short notice, `/memory` expands the latest changes, and `/problems detail` shows the working draft. Failed calls do not publish partial changes.
+
+**Vague follow-ups use the current discussion to find earlier messages.** For a message such as “that earlier explanation is wrong,” retrieval also considers the current problem and the latest assistant reply. Explicit keywords retain priority. At most six earlier messages are added; replaced or withdrawn requirements remain marked as such, and assistant replies serve only as search cues. Both change notices and historical retrieval run locally without additional model calls.
 
 **To pick up later, reopen the same project.** Find its path with `/status`, then use `/open PROJECT_DIR` or `research-idea chat --project PROJECT_DIR`. Original messages, active notes, and discussion versions are preserved. Use `/new` when starting a separate topic. Discussion turns consume model calls, and additional reading can require more; time spent waiting for your reply does not count toward runtime.
 
