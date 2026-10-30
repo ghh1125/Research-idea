@@ -1,6 +1,6 @@
 # 进阶使用与实现说明
 
-[返回 README](../README.md)。首次使用请先看安装启动与 CLI 操作；本页保留文献来源、skill、后端协议、预算与报告的详细说明。
+[返回中文 README](../README.zh-CN.md) · [English README](../README.md)。首次使用请先看安装启动与 CLI 操作；本页保留文献来源、skill、后端协议、预算与报告的详细说明。
 
 ## 虚拟环境安装
 
