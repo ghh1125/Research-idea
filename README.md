@@ -253,6 +253,31 @@ Temporary instructions belong to the discussion in which they were given. `/cont
 
 The command-line `start/run/resume` commands use automatic completion for new projects. Projects paused in the interactive window retain their discussion state and need `/continue` from that window.
 
+### Refine the same question through multiple discussion rounds
+
+**You do not have to accept the first version. Keep asking questions, adding sources, and correcting the reasoning until the discussion is ready to move forward.** Send feedback as ordinary messages; you do not need to restart `/run` or create a project for each round.
+
+1. **Start the review.** Enter a direction and use `/run`. The system proposes several problem directions and pauses, then pauses again after deeper comparison.
+2. **Say what needs to change.** Ask how the problem follows from the background, compare more important questions, examine the closest prior work, or request a clearer explanation. Wait for the reply and follow up. A stage can contain many discussion turns.
+3. **Review the current version.** `/problems` shows the working discussion; `/problems detail` expands the argument. Use `/memory` to check which points were retained and `/history KEYWORD` to find original messages. If the model misunderstood you, state what to keep and what to change.
+4. **Request supporting reading within the discussion.** Ask it to check the closest paper's actual approach or find literature bearing on a specific judgment. Targeted search and reading are guided by the question and remaining budget, with findings brought back into the discussion.
+5. **Use `/continue` when ready.** After direction discussion, it starts deeper comparison; after problem discussion, it develops the final proposition. Ordinary messages—even “keep discussing”—do not advance past the pause.
+
+For example, send the following as separate messages while paused for problem discussion. Wait for each reply, then decide what to ask next:
+
+```text
+Why does this problem obstruct the original research goal? Explain it plainly.
+You said existing approaches still cannot resolve it. Which approaches, and why does the difficulty remain?
+Keep the background, but do not limit the question to one dataset. Compare two other important problems.
+Update the working version from our discussion and explain what changed and why.
+```
+
+These are ordinary messages you can send directly. Then use `/problems detail` to review the revision and send `/continue` separately when ready. **A question is not approval of the model's recommendation.** The system may explain or revise the problems and priorities; later steps use the current version.
+
+**You can revise a completed proposition too.** Send new feedback to reopen problem discussion. Review the working draft with `/problems`, then use `/continue` to update the final proposition and `/report` to read it. There is no need to restart the entire literature review.
+
+**To pick up later, reopen the same project.** Find its path with `/status`, then use `/open PROJECT_DIR` or `research-idea chat --project PROJECT_DIR`. Original messages, active notes, and discussion versions are preserved. Use `/new` when starting a separate topic. Discussion turns consume model calls, and additional reading can require more; time spent waiting for your reply does not count toward runtime.
+
 ### Literature scope and dates
 
 | Setting | Command |
