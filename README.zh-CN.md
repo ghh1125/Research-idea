@@ -195,30 +195,53 @@ research-idea start "如何设计帮助 LLM agent 持续学习的交互环境" \
 
 主窗口中的论文引用直接显示**标题和文章链接**，不需要查后台证据编号；`/evidence` 可展开原文、页码与位置。当前显示的是步骤进展与分析结果，不是逐 token 的模型思考流。
 
-### 最常用的操作
+### 全部窗口命令
 
-| 想做什么 | 在窗口中输入 |
-| --- | --- |
-| 看使用介绍 / 全部命令 | `/intro` / `/help`，介绍入口常驻底部 |
-| 选择模型 / 思考强度 | `/model` / `/reasoning`，打开选择菜单 |
-| 直接设置模型与强度 | `/model gpt-6.1-sol`，然后 `/reasoning high` |
-| 沿用 Codex 配置 | `/model inherit` / `/reasoning inherit` |
-| 看模型目录 / 登录方式 | `/models` / `/account` |
-| 查看或修改研究主题 | `/topic` / `/topic 新方向` |
-| 导入多行研究说明 | `/input /path/to/brief.txt` |
-| 添加已有论文 | `/papers /path/to/paper.pdf`，支持带引号的空格路径 |
-| 保存资源条件 | `/constraints 单张24GB GPU，两周，允许小规模微调` |
-| 开始调研或恢复中断 | `/run`；运行时按 Ctrl+C 停止 |
-| 讨论后推进 | `/continue`；方向讨论后深入问题，问题讨论后整理研究主张 |
-| 查看当前讨论 / 完整论证 | `/problems` / `/problems detail` |
-| 查看现行研究要点及原话出处 | `/memory` |
-| 查看原始会话 / 查找更早的内容 | `/history` / `/history 关键词` |
-| 查看研究主张 / 论文依据 | `/report` / `/evidence`；`/evidence 1` 展开指定依据 |
-| 看详细过程 | `/details` 展开上一步，`/details on` 持续显示完整输出 |
-| 查看设置 / 进度 | `/config` / `/status` |
-| 查看 / 修改保存位置 | `/output` / `/output /path/to/results`；`/output default` 恢复默认 |
-| 新建研究 / 打开旧项目 | `/new 新方向` / `/open 项目目录` |
-| 退出 | `/exit` 或 Ctrl+D |
+**窗口里的 `/命令` 与系统终端里的 `research-idea 子命令` 是两种入口。** 下表中的命令都在研究对话窗口中输入。直接输入普通文字会和模型讨论；查帮助不调用模型，也不改变配置。
+
+不知道参数怎么填时，可以直接查：
+
+```text
+/help                  按用途查看全部命令
+/help date             查看日期设置的参数和示例
+/help budget           查看预算设置项与单位
+/date --help           同样查看说明，不执行日期设置
+/help all              展开每个命令的完整说明
+```
+
+每个命令都支持 `/help 命令名`、`/命令 --help` 和 `/命令 -h`。Tab 补全菜单也显示用途。下表中的方括号表示可选参数，竖线表示选一项，实际输入时不用写这些符号。
+
+| 命令 | 用来做什么 | 示例 |
+| --- | --- | --- |
+| `/intro` | 看从输入方向到交付研究主张的操作步骤。 | `/intro` |
+| `/help [命令\|all]` | 查看全部命令，或某个命令的参数与示例。 | `/help`<br>`/help date`<br>`/help /budget`<br>`/help all`<br>`/model --help` |
+| `/topic [研究方向]` | 查看主题，或在研究开始前设置主题。 | `/topic`<br>`/topic 多智能体如何持续改进协作` |
+| `/input 路径` | 把文本文件作为一条讨论消息发送给模型。 | `/input ./brief.txt` |
+| `/constraints [文字]` | 查看或保存设备、时间、数据等资源条件。 | `/constraints`<br>`/constraints 单张24GB GPU，两周，可小规模微调` |
+| `/run [研究方向]` | 开始调研，或从已保存的进度继续。 | `/run`<br>`/run 多智能体如何持续改进协作` |
+| `/continue` | 结束当前讨论，进入底部提示的下一步。 | `/continue` |
+| `/stop` | 停止当前任务，保留已完成的进度。 | `/stop` |
+| `/problems [detail]` | 重看当前方向或问题讨论。 | `/problems`<br>`/problems detail` |
+| `/model [模型ID\|inherit]` | 选择模型，或直接指定模型 ID。 | `/model`<br>`/model gpt-6.1-sol`<br>`/model inherit` |
+| `/reasoning [强度\|inherit]` | 选择 Codex 模型的思考强度。 | `/reasoning`<br>`/reasoning high`<br>`/reasoning inherit` |
+| `/models` | 查看本地模型目录和已记录的思考档位。 | `/models` |
+| `/account` | 查看后端、模型、配置档和登录方式。 | `/account` |
+| `/papers [路径…]` | 列出已有论文，或导入论文文件与目录。 | `/papers`<br>`/papers ./papers`<br>`/papers "./my papers/paper.pdf" ./notes.md` |
+| `/scope [ai-recent\|local\|起始日期 截止日期]` | 查看文献范围，或选择联网检索与本地资料。 | `/scope`<br>`/scope ai-recent`<br>`/scope local`<br>`/scope 2025-01-01 2026-10-23` |
+| `/date [操作 参数…]` | 调整 arXiv 时间窗口和会议届次。 | `/date`<br>`/date rolling 12 6`<br>`/date fixed 2025-01-01 2026-10-23`<br>`/date conference latest`<br>`/date conference window` |
+| `/venues [预设或会议列表]` | 查看已选会议，或替换会议名单。 | `/venues`<br>`/venues ACL EMNLP COLM ICLR`<br>`/venues ai-recommended`<br>`/venues core-astar-ai-2026` |
+| `/status` | 查看当前进度、累计用量和下一步。 | `/status` |
+| `/report` | 查看当前保存的研究主张。 | `/report` |
+| `/evidence [序号或证据ID]` | 查看论文依据，并展开对应原文。 | `/evidence`<br>`/evidence 1` |
+| `/details [on\|off]` | 展开上一步分析，或调整后续过程输出。 | `/details`<br>`/details on`<br>`/details off` |
+| `/memory` | 查看持续保留的研究要点和讨论理由。 | `/memory` |
+| `/history [关键词]` | 查看原始对话，或查找较早的讨论。 | `/history`<br>`/history 研究范围` |
+| `/config` | 查看当前项目的模型、范围、预算等配置。 | `/config` |
+| `/budget [设置项 数值]` | 查看或修改调用、时间和选文上限。 | `/budget`<br>`/budget max_calls 100`<br>`/budget max_seconds 7200`<br>`/budget max_papers 6` |
+| `/output [目录\|default]` | 查看或更改结果保存的父目录。 | `/output`<br>`/output ~/research-results`<br>`/output "D:\Research Results"`<br>`/output default` |
+| `/new [研究方向]` | 新建空白研究，沿用设置并从零计数。 | `/new`<br>`/new 多智能体如何持续改进协作` |
+| `/open 项目目录` | 打开项目，恢复对话、设置和讨论位置。 | `/open ./research-projects/my-idea` |
+| `/exit`（别名 `/quit`） | 退出窗口，保留项目记录。 | `/exit`<br>`/quit` |
 
 Enter 发送；先按 Esc 再按 Enter 换行；Tab 补全命令；↑↓ 浏览输入历史。多行粘贴作为一条输入处理。
 
@@ -308,6 +331,34 @@ Windows 也可以直接输入 `/output D:\ResearchResults`；带空格的路径�
 
 文件夹包含 `report.md`（研究问题与动机）、`report.json`（结构化结果与讨论记录）和 `papers/`（论文分析卡）。配置、原始材料、完整对话和 SQLite 检查点仍保存在研究项目目录。旧版报告仍可查看。非源码安装没有代码仓库时，默认使用启动目录；可以用 `/output` 指定固定位置。
 
+### 系统终端的全部子命令
+
+下面这些在 macOS 终端、Linux shell 或 Windows PowerShell 中运行，不要把整条命令发进研究对话窗口。`TOPIC` 替换成研究方向，示例目录替换成自己的项目路径。
+
+每个子命令都有用途、参数说明和示例：`research-idea --help` 看总览，`research-idea search --help` 看检索详情，`research-idea skills use --help` 看 skill 选择详情。`-h` 与 `--help` 相同，`--version` 查看安装版本。
+
+| 子命令 | 作用 | 示例 |
+| --- | --- | --- |
+| `chat` | 打开持续对话窗口；省略子命令直接运行 research-idea 也可。 | `research-idea chat --project ./research-projects/my-idea` |
+| `launch` | 逐项询问设置，完成后开始研究；加 --setup-only 只保存。 | `research-idea launch` |
+| `init` | 只初始化项目和主题，不调用模型。 | `research-idea init "TOPIC" --project ./research-projects/my-idea` |
+| `start` | 配置主题和材料后直接运行；需要暂停讨论时使用 chat。 | `research-idea start "TOPIC" --project ./research-projects/my-idea` |
+| `run` | 按项目设置开始或继续研究；--replan 用当前材料重新探索方向。 | `research-idea run --project ./research-projects/my-idea` |
+| `resume` | 恢复已有项目并复用成功步骤；交互暂停仍需回窗口 /continue。 | `research-idea resume --project ./research-projects/my-idea` |
+| `add` | 导入论文文件，不立即调用模型精读。 | `research-idea add --project ./research-projects/my-idea paper.pdf notes.md` |
+| `search` | 手动检索并保存论文记录；--full-text 同时尝试下载正文。 | `research-idea search "multi-agent collaboration" --project ./research-projects/my-idea --limit 10 --full-text` |
+| `venues` | 查看支持的会议、分类、预设与来源。 | `research-idea venues` |
+| `status` | 查看项目阶段、任务状态和预算用量。 | `research-idea status --project ./research-projects/my-idea` |
+| `inspect` | 查看论文、证据或旧版候选记录；--events 看事件，--paper-card 看指定论文分析卡。 | `research-idea inspect --project ./research-projects/my-idea --events` |
+| `export` | 重新导出已保存报告，不重新调用模型研究。 | `research-idea export --project ./research-projects/my-idea --output ./results` |
+| `doctor` | 检查模型 CLI、PDF 工具和可选项目配置，不发模型请求。 | `research-idea doctor` |
+| `skills` | 本地分析 skill 的管理入口，用以下四个子命令操作。 | `research-idea skills --help` |
+| `skills list` | 列出已发现的本地 skill；--root 增加查找目录。 | `research-idea skills list` |
+| `skills show` | 查看一个 skill 的指导文本。 | `research-idea skills show /path/to/SKILL.md` |
+| `skills use` | 替换项目选中的本地 skill，可一次选多个；不执行其中脚本。 | `research-idea skills use --project ./research-projects/my-idea /path/to/SKILL.md` |
+| `skills clear` | 清除额外选中的 skill，保留内置 skill 启用设置。 | `research-idea skills clear --project ./research-projects/my-idea` |
+| `demo` | 运行合成材料的离线演示，不调用真实模型。 | `research-idea demo --project ./research-projects/demo` |
+
 ### 命令行参数与项目配置
 
 | 参数 | 用途 |
@@ -329,6 +380,22 @@ Windows 也可以直接输入 `/output D:\ResearchResults`；带空格的路径�
 | `--skill /path/to/SKILL.md` | 附加本地 skill，可重复传入；内置 skill 按任务阶段加载 |
 | `--no-search` | 使用已有资料，跳过联网检索 |
 | `--setup-only` | 仅保存配置并导入资料，暂不调用模型 |
+
+其他检索、导入与管理参数：
+
+| 参数 | 用途与适用命令 |
+| --- | --- |
+| `--source` / `--search-source` | 选择 arxiv、openalex 或 hybrid；--search-source 是研究运行命令中的别名。 |
+| `--search-results-per-query 20` | 每个查询最多召回的论文记录数，不是精读数量。 |
+| `--cs-only` / `--no-cs-only` | 启用或取消 CS 领域限制；会议筛选另外保留。 |
+| `--fetch-full-text` / `--no-fetch-full-text` | 保存自动获取正文的开关，默认启用。 |
+| `--codex-bin PATH` / `--codex-profile NAME` | 指定 Codex 可执行文件，或使用已有配置档。 |
+| `--skill-root PATH` / `--no-builtin-skills` | 增加本地 skill 查找目录，或停用内置 skill；--skill-root 可重复。 |
+| `--replan` | run/resume：根据当前材料重新探索方向，保留对话。 |
+| `--kind full_text` / `--kind abstract` / `--kind notes` | add：声明导入的是论文正文、摘要还是笔记。 |
+| `--limit 10` / `--full-text` | search：限制本次返回数，并选择是否尝试下载正文。 |
+| `--events` / `--paper-card` | inspect：查看运行事件或给定论文 ID 的分析卡；两者不能同时使用。 |
+| `--root PATH` | skills list/show/use：额外的 skill 查找目录，可重复。 |
 
 上表汇总不同命令的参数；完整支持范围用 `research-idea start --help` 或 `research-idea chat --help` 查看。设置保存在项目的 `research.toml` 中，`resume` 会沿用它们。例如：
 

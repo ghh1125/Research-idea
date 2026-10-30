@@ -197,30 +197,51 @@ While a task runs, the input box is hidden and step output appears with a spinne
 
 Paper citations in the main window show **titles and article links** directly. There is no need to look up internal evidence IDs. `/evidence` expands source quotations, page numbers, and locations. The display shows progress and analysis results, not a token-by-token stream of the model's internal reasoning.
 
-### Common commands
+### All conversation-window commands
 
-| Action | Command |
-| --- | --- |
-| Introduction / all commands | `/intro` / `/help`; the introduction shortcut stays in the footer |
-| Choose a model / reasoning effort | `/model` / `/reasoning` opens a selection menu |
-| Set them directly | `/model gpt-6.1-sol`, then `/reasoning high` |
-| Inherit the Codex configuration | `/model inherit` / `/reasoning inherit` |
-| Inspect the model catalog / sign-in method | `/models` / `/account` |
-| View or change the topic | `/topic` / `/topic NEW_DIRECTION` |
-| Import a multiline research brief | `/input /path/to/brief.txt` |
-| Add papers | `/papers /path/to/paper.pdf`; quote paths containing spaces |
-| Save resource constraints | `/constraints One 24GB GPU, two weeks, small-scale fine-tuning allowed` |
-| Start or resume research | `/run`; press Ctrl+C while running to stop |
-| Advance after discussion | `/continue`; deepen problems after direction discussion, or develop the proposition after problem discussion |
-| View the current discussion / full argument | `/problems` / `/problems detail` |
-| View active research notes and their original messages | `/memory` |
-| View the conversation / search earlier messages | `/history` / `/history KEYWORD` |
-| View the research proposition / paper evidence | `/report` / `/evidence`; `/evidence 1` expands a specific item |
-| Show detailed output | `/details` expands the previous step; `/details on` keeps full output enabled |
-| View settings / progress | `/config` / `/status` |
-| View / change the output location | `/output` / `/output /path/to/results`; `/output default` restores the default |
-| Start a new project / open an existing one | `/new NEW_DIRECTION` / `/open PROJECT_DIR` |
-| Exit | `/exit` or Ctrl+D |
+**Slash commands in the conversation window and `research-idea` subcommands in your system terminal are separate interfaces.** Enter the commands below in the conversation window. Ordinary text starts a discussion; reading help does not call a model or change settings.
+
+```text
+/help                  Browse commands by purpose
+/help date             Read date parameters and examples
+/help budget           Read budget keys and units
+/date --help           Read help without changing dates
+/help all              Expand the complete command reference
+```
+
+Every command supports `/help COMMAND`, `/COMMAND --help`, and `/COMMAND -h`. Tab completion also shows its purpose. Square brackets mean optional arguments; a vertical bar means choose one. Do not type those notation characters.
+
+| Command | Purpose | Examples |
+| --- | --- | --- |
+| `/intro` | Read the guided introduction from topic entry to the research proposition. | `/intro` |
+| `/help [command\|all]` | Browse all commands or read one command’s parameters and examples; does not call a model. | `/help date`<br>`/help /budget`<br>`/help all` |
+| `/topic [direction]` | View or set the topic before research starts; use /new to change topics after tasks exist. | `/topic`<br>`/topic Multi-agent collaboration` |
+| `/input PATH` | Send a UTF-8 text file (up to 128 KiB) as one discussion message. Calls the model. | `/input ./brief.txt` |
+| `/constraints [text]` | View resource constraints, or replace them with new text for later research. | `/constraints One 24GB GPU, two weeks` |
+| `/run [direction]` | Start research or resume saved progress. An optional direction sets the topic for a new project. | `/run`<br>`/run Multi-agent collaboration` |
+| `/continue` | Advance from direction discussion to deeper comparison, or from problem discussion to the final proposition. | `/continue` |
+| `/stop` | Stop the active task while keeping completed work. While input is hidden, press Ctrl+C instead. | `/stop` |
+| `/problems [detail]` | Review the current direction/problem discussion; detail expands its full argument. | `/problems`<br>`/problems detail` |
+| `/model [MODEL_ID\|inherit]` | Open the model menu or set a supported model ID; inherit removes the project override. Does not switch backends. | `/model`<br>`/model gpt-6.1-sol`<br>`/model inherit` |
+| `/reasoning [level\|inherit]` | Open the reasoning menu or set Codex reasoning effort; support depends on the model. Other backends use inherit. | `/reasoning`<br>`/reasoning high`<br>`/reasoning inherit` |
+| `/models` | Read the local Codex model catalog and recorded reasoning levels; not a live account-access check. | `/models` |
+| `/account` | Inspect backend, model, profile, and sign-in method; does not expose keys or query live balance. | `/account` |
+| `/papers [PATH…]` | List saved papers and full-text status, or import PDF/TXT/Markdown/JSON files and directories without model reading. | `/papers`<br>`/papers "./my papers/paper.pdf" ./notes.md` |
+| `/scope [ai-recent\|local\|START END]` | View scope, restore the recent-literature preset, disable automatic search, or set fixed dates. | `/scope`<br>`/scope ai-recent`<br>`/scope local`<br>`/scope 2025-01-01 2026-10-23` |
+| `/date [operation arguments…]` | View/edit arXiv windows and conference editions; fixed dates also set conferences to window mode. | `/date`<br>`/date rolling 12 6`<br>`/date fixed 2025-01-01 2026-10-23`<br>`/date conference latest`<br>`/date conference window` |
+| `/venues [PRESET or VENUES]` | View or replace selected venues. Does not re-enable search after /scope local; use /scope ai-recent first. | `/venues`<br>`/venues ACL EMNLP COLM ICLR`<br>`/venues core-astar-ai-2026` |
+| `/status` | Show the current project, stage, cumulative usage, paper counts, and next step. | `/status` |
+| `/report` | Read the saved research proposition without rerunning research; use /problems before a final report exists. | `/report` |
+| `/evidence [NUMBER or ID]` | List paper evidence, then expand a quotation and its location by its evidence-list number or ID. | `/evidence`<br>`/evidence 1` |
+| `/details [on\|off]` | Expand the last analysis, enable full ongoing output, or restore the compact view for this window. | `/details`<br>`/details on`<br>`/details off` |
+| `/memory` | Review active research notes, their source messages, objections, and reasons for changed judgments. | `/memory` |
+| `/history [keyword]` | View recent original messages or search older messages throughout the project. | `/history`<br>`/history research scope` |
+| `/config` | Inspect current model, search, budget, resource, and output settings; does not change them. | `/config` |
+| `/budget [KEY INTEGER]` | View limits or change one limit; time values are in seconds. Raising a limit preserves usage. | `/budget`<br>`/budget max_calls 100`<br>`/budget max_seconds 7200`<br>`/budget max_papers 6` |
+| `/output [DIRECTORY\|default]` | View/change the result parent directory. Keeps the generated folder name; re-exports existing results and retains old files. | `/output`<br>`/output ~/research-results`<br>`/output default` |
+| `/new [direction]` | Create an empty project with inherited settings and zero usage; previous conversation and papers remain in the old project. | `/new`<br>`/new Multi-agent collaboration` |
+| `/open PROJECT_DIR` | Open a project and restore settings, conversation, and pause state; a new path initializes a project. Use the project directory, not the report folder. | `/open ./research-projects/my-idea` |
+| `/exit (alias /quit)` | Exit, stopping any active task and preserving records. Ctrl+D also exits. | `/exit`<br>`/quit` |
 
 Enter sends a message. Press Esc, then Enter to insert a newline. Tab completes commands; ↑/↓ browse input history. Multiline pasted text is handled as a single input.
 
@@ -310,6 +331,34 @@ On Windows, you can use `/output D:\ResearchResults`; quote paths containing spa
 
 The folder contains `report.md` (the research question and motivation), `report.json` (structured results and discussion records), and `papers/` (paper analysis cards). Configuration, original materials, complete conversation, and SQLite checkpoints stay in the research project directory. Older reports remain readable. For an installation without a source repository, the launch directory is the default; use `/output` to choose a stable location.
 
+### All system-terminal subcommands
+
+Run these in your macOS terminal, Linux shell, or Windows PowerShell, rather than sending them to the research conversation. Replace `TOPIC` with your direction and the example project path with your own.
+
+Every subcommand has a description, argument help, and examples. Use `research-idea --help` for the overview, `research-idea search --help` for search, or `research-idea skills use --help` for skill selection. `-h` is equivalent to `--help`; `--version` prints the installed version. Runtime help currently uses Chinese.
+
+| Subcommand | Purpose | Example |
+| --- | --- | --- |
+| `chat` | Open the conversation window; running research-idea without a subcommand does the same. | `research-idea chat --project ./research-projects/my-idea` |
+| `launch` | Run the guided setup, then start research; --setup-only saves without running. | `research-idea launch` |
+| `init` | Initialize the project and topic without calling a model. | `research-idea init "TOPIC" --project ./research-projects/my-idea` |
+| `start` | Configure a topic and materials, then run; use chat for interactive discussion pauses. | `research-idea start "TOPIC" --project ./research-projects/my-idea` |
+| `run` | Start or continue using project settings; --replan reconsiders directions from current materials. | `research-idea run --project ./research-projects/my-idea` |
+| `resume` | Resume from successful checkpoints; interactive pauses still require /continue in chat. | `research-idea resume --project ./research-projects/my-idea` |
+| `add` | Import paper files without immediately calling a model to read them. | `research-idea add --project ./research-projects/my-idea paper.pdf notes.md` |
+| `search` | Search and save paper records; --full-text also attempts to download full texts. | `research-idea search "multi-agent collaboration" --project ./research-projects/my-idea --limit 10 --full-text` |
+| `venues` | List supported conferences, classifications, presets, and sources. | `research-idea venues` |
+| `status` | Inspect project stage, task status, and budget usage. | `research-idea status --project ./research-projects/my-idea` |
+| `inspect` | Inspect papers, evidence, or legacy candidates; --events shows events, --paper-card reads a given paper’s analysis. | `research-idea inspect --project ./research-projects/my-idea --events` |
+| `export` | Re-export saved reports without new research calls. | `research-idea export --project ./research-projects/my-idea --output ./results` |
+| `doctor` | Check model CLIs, PDF tools, and optional project configuration without model requests. | `research-idea doctor` |
+| `skills` | Manage local research skills using the four subcommands below. | `research-idea skills --help` |
+| `skills list` | List discovered local skills; --root adds a discovery directory. | `research-idea skills list` |
+| `skills show` | Read one skill’s guidance text. | `research-idea skills show /path/to/SKILL.md` |
+| `skills use` | Replace the project’s selected local skills; accepts several and does not run their scripts. | `research-idea skills use --project ./research-projects/my-idea /path/to/SKILL.md` |
+| `skills clear` | Clear extra selected skills while preserving the built-in-skill setting. | `research-idea skills clear --project ./research-projects/my-idea` |
+| `demo` | Run an offline demonstration with synthetic materials and no real model. | `research-idea demo --project ./research-projects/demo` |
+
 ### Command-line options and project configuration
 
 | Option | Purpose |
@@ -332,7 +381,23 @@ The folder contains `report.md` (the research question and motivation), `report.
 | `--no-search` | Use existing materials without online search |
 | `--setup-only` | Save configuration and import materials without calling a model |
 
-This table combines options from different commands. Check `research-idea start --help` or `research-idea chat --help` for each command's supported options. Settings are stored in the project's `research.toml` and reused by `resume`. For example:
+Additional search, import, and management options:
+
+| Option | Purpose and applicable command |
+| --- | --- |
+| `--source` / `--search-source` | Choose arxiv, openalex, or hybrid; --search-source is an alias on research-run commands. |
+| `--search-results-per-query 20` | Maximum metadata records per query, not the number of full texts to read. |
+| `--cs-only` / `--no-cs-only` | Enable or disable the CS-field restriction; venue filters remain separate. |
+| `--fetch-full-text` / `--no-fetch-full-text` | Persist whether full texts are retrieved automatically; enabled by default. |
+| `--codex-bin PATH` / `--codex-profile NAME` | Choose the Codex executable or an existing configuration profile. |
+| `--skill-root PATH` / `--no-builtin-skills` | Add a local skill discovery directory, or disable built-in skills; --skill-root is repeatable. |
+| `--replan` | run/resume: reconsider directions from current materials while preserving conversation. |
+| `--kind full_text` / `--kind abstract` / `--kind notes` | add: identify imported content as paper full text, an abstract, or notes. |
+| `--limit 10` / `--full-text` | search: limit returned records and optionally attempt full-text downloads. |
+| `--events` / `--paper-card` | inspect: view events or the analysis card for a supplied paper ID; mutually exclusive. |
+| `--root PATH` | skills list/show/use: additional skill discovery directory; repeatable. |
+
+These tables combine options from different commands. Check `research-idea start --help` or `research-idea chat --help` for each command's supported options. Settings are stored in the project's `research.toml` and reused by `resume`. For example:
 
 ```toml
 backend = "codex"

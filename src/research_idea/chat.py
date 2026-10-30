@@ -23,6 +23,7 @@ from .problem_dialogue import problem_text
 from .conversation import memory_text, history_text
 from .citations import Citations, EVIDENCE_ID
 from .output_paths import output_parent, saved_report
+from .command_help import BUDGET_LABELS, COMMANDS, COMMAND_SUMMARIES, help_text
 
 INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认成为正式研究主题。
 2. /model 选择模型，/reasoning 选择思考强度；设置会保存在当前项目。
@@ -40,33 +41,10 @@ INTRO = '''1. 输入你的研究方向，与模型讨论；第一条输入默认
 10. /output 查看保存位置，/output 路径 修改父目录；文件夹固定为 idea-时间戳。
 运行中隐藏输入框；底部显示预算，Ctrl+C 停止，结束后可用 /run 继续。
 接口、网络、模型权限或额度出错时，每隔 30 秒重试，最多 10 次；Ctrl+C 可停止。
-/account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/exit 退出。
+/account 看登录方式，/models 看本地模型目录，/help 查看全部命令，/help date 等可看单项说明与示例，/exit 退出。
 Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
 
-HELP = '''/intro 使用介绍：从输入方向到形成研究主张的操作步骤。
-直接输入：讨论方向或当前问题（会调用模型）；/run 开始调研，暂停后 /continue 推进。
-/model [模型ID|inherit]  选择模型       /models       本地模型目录
-/reasoning [强度]        选择思考强度   /account      登录方式
-/topic [研究方向]        查看/设置主题  /input 路径   读取多行输入
-/run                    开始调研/恢复  /stop         停止当前任务
-/continue               结束当前讨论，进入底部提示的下一步
-/problems [detail]      当前讨论；detail 展开完整论证
-/memory                 已保留的要点及出处
-/history [关键词]       原始对话；关键词可查更早的内容
-/papers [路径…]          列表/导入论文  /evidence [序号] 查看原文依据
-/status                 研究状态      /report       查看研究主张
-/details [on|off]        展开上一步分析；on/off 切换完整过程输出
-/config                 当前设置      /constraints [文字] 资源限制
-/output [目录|default]   保存位置；只改父目录，文件夹自动命名 idea-时间戳
-/budget [键 数值]        预算设置      /scope [ai-recent|local|日期 日期]
-/venues [预设或会议列表]   查看/选择会议；支持 CCF、THCPL、CORE
-/date                   arXiv 时间窗口与会议届次：最新公开一届或日期范围
-/new [研究方向]          新建空白研究，沿用设置，预算计数从 0 开始
-/open 项目目录           切换项目并恢复讨论位置
-/help                   命令说明      /exit         退出
-Enter 发送 · Esc 然后 Enter 换行 · Tab 补全 · ↑↓ 历史 · Ctrl+C 停止任务/清空输入'''
-COMMANDS = [line.split()[0] for line in HELP.splitlines() if line.startswith('/')]
-COMMANDS += ['/models', '/account', '/input', '/stop', '/evidence', '/report', '/constraints', '/scope', '/history', '/exit', '/memory']
+HELP = help_text()
 COLORS = {'system': 'ansicyan', 'assistant': 'ansigreen', 'skill': 'ansimagenta',
           'search': 'ansicyan', 'paper': 'ansiblue', 'read': 'ansiblue',
           'evidence': 'ansigreen', 'analysis': 'ansiyellow', 'thinking': 'ansiyellow',
@@ -80,10 +58,7 @@ TAG_LABELS = {'direction': '方向讨论', 'problem': '问题讨论', 'history':
     'review': '研究讨论', 'idea': '研究主张', 'concept': '研究构思', 'design': '技术参考', 'evidence': '原文依据', 'saved': '已保存',
     'error': '这一步未完成', 'retry': '等待重试', 'recovered': '调用已恢复', 'context': '本步材料',
     'gap': '检索与阅读进展', 'budget': '预算', 'stopped': '已停止', 'detail': '完整分析'}
-BUDGET_LABELS = {'search_results_per_query': '每次检索先筛的论文数', 'max_papers': '初次选读规模',
-    'max_candidates': '优先问题数量', 'max_calls': '模型调用上限',
-    'max_seconds': '累计时间（秒）', 'timeout_s': '单次调用超时（秒）'}
-BUDGET_KEYS = ('search_results_per_query', 'max_papers', 'max_candidates', 'max_calls', 'max_seconds', 'timeout_s')
+BUDGET_KEYS = tuple(BUDGET_LABELS)
 BRAND = r'''             R E S E A R C H
 
        ___ ____  _____    _
@@ -104,6 +79,7 @@ WELCOME_NOTES = '''从一个研究方向，到一个有意义、讲得清楚的�
 /model 选择模型 · /reasoning 思考强度 · /date 时间 · /budget 预算
 /problems 当前讨论 · /memory 用户要点 · /history 原始对话
 /output 保存位置 · /intro 使用介绍 · /new 新研究 · /help 全部命令
+不确定怎么用：/help date、/help budget；Tab 补全时也会显示用途。
 
 专注有意义的研究问题与想法。运行中显示进展，Ctrl+C 停止，/run 继续。'''
 
@@ -459,13 +435,16 @@ class Chat:
             return await self.send(text)
         command, _, value = text.partition(' ')
         value = value.strip()
+        if value in {'--help', '-h'}:
+            self.show('system', help_text(command), full=True)
+            return True
         if command in {'/exit', '/quit'}:
             await self.stop()
             return False
         if command == '/stop':
             await self.stop()
         elif command == '/help':
-            self.show('system', HELP)
+            self.show('system', help_text(value), full=True)
         elif command == '/intro':
             self.show('system', INTRO)
         elif command == '/details':
@@ -748,7 +727,7 @@ class Chat:
         @bindings.add('escape', 'enter')
         def newline(event):
             event.current_buffer.insert_text('\n')
-        self.session = PromptSession(completer=WordCompleter(sorted(set(COMMANDS))),
+        self.session = PromptSession(completer=WordCompleter(sorted(COMMANDS), meta_dict=COMMAND_SUMMARIES),
                                      complete_while_typing=True, key_bindings=bindings,
                                      style=Style.from_dict({'bottom-toolbar': 'noreverse bg:#f3f5f7 #526e7a'}),
                                      bottom_toolbar=self.toolbar, refresh_interval=1)

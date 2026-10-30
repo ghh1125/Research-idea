@@ -345,128 +345,156 @@ def execute_skills(args):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="research-idea", description="从文献生成有依据、可操作的 LLM/NLP 研究 idea；不自动执行实验。")
-    parser.add_argument("--version", action="version", version=__version__)
+    parser = argparse.ArgumentParser(prog="research-idea",
+        description="从文献梳理背景、现有方法、重要问题与动机，形成研究主张。",
+        epilog="直接输入 research-idea 打开对话窗口。单项帮助：research-idea start --help；窗口内：/help 或 /help date。")
+    parser.add_argument("--version", action="version", version=__version__, help="显示当前安装版本并退出")
     sub = parser.add_subparsers(dest="command", required=True)
+    def command(name, description, example):
+        return sub.add_parser(name, help=description, description=description,
+            epilog='示例：\n  ' + example, formatter_class=argparse.RawDescriptionHelpFormatter)
     def project_arg(p):
-        p.add_argument("--project", type=Path, required=True, help="Project directory")
+        p.add_argument("--project", type=Path, required=True, help="项目目录；保存配置、材料、对话和进度，例如 ./research-projects/my-idea")
     def scope_args(p):
-        p.add_argument('--date-mode', dest='search_date_mode', choices=['rolling', 'fixed'], default=None)
+        p.add_argument('--date-mode', dest='search_date_mode', choices=['rolling', 'fixed'], default=None,
+                       help='rolling 按运行当天计算月份窗口；fixed 使用指定起止日期')
         p.add_argument('--conference-policy', choices=['latest', 'window'], default=None,
-                       help='Conference time scope: latest public edition per venue (default), or the date window')
-        p.add_argument('--strategy-months', type=int, default=None, help='Rolling strategy window (default: 12 months)')
-        p.add_argument('--novelty-months', type=int, default=None, help='Candidate novelty window (default: 6 months)')
+                       help='会议时间：latest 取最新公开一届（默认）；window 按日期窗口')
+        p.add_argument('--strategy-months', type=int, default=None, help='背景与已有方法的动态窗口，单位月，默认 12')
+        p.add_argument('--novelty-months', type=int, default=None, help='动机与贡献对照的动态窗口，单位月，默认 6')
         p.add_argument("--literature-preset", choices=["ai-recent"], default=None,
-                       help="Recent AI conferences first, with CS arXiv supplementation")
-        p.add_argument("--since", default=None, help="Earliest publication date (YYYY-MM-DD)")
-        p.add_argument("--until", default=None, help="Latest publication date (YYYY-MM-DD)")
+                       help="采用近期 AI 会议与 CS arXiv 的预设范围")
+        p.add_argument("--since", default=None, help="最早发表日期，格式 YYYY-MM-DD")
+        p.add_argument("--until", default=None, help="最晚发表日期，格式 YYYY-MM-DD")
         p.add_argument("--cs-only", action=argparse.BooleanOptionalAction, default=None,
-                       help="Require CS category/field or a verified AI conference")
+                       help="限定计算机领域或已核实的 AI 会议；--no-cs-only 取消该限制")
         p.add_argument("--arxiv-categories", nargs="*", action="extend", default=None,
-                       help="Allowed arXiv categories, such as cs.* or cs.CL cs.AI")
+                       help="允许的 arXiv 分类，例如 cs.CL cs.AI；命令行中 cs.* 建议加引号")
     def backend_args(p):
         scope_args(p)
-        p.add_argument("--backend", choices=["codex", "claude", "api"], default=None)
-        p.add_argument("--model", default=None)
+        p.add_argument("--backend", choices=["codex", "claude", "api"], default=None,
+                       help="模型后端：本地 Codex CLI、Claude Code CLI 或 API；省略时沿用项目设置")
+        p.add_argument("--model", default=None, help="后端与账户支持的模型 ID，例如 gpt-6.1-sol；省略时沿用项目设置")
         p.add_argument('--output', dest='output_dir', type=Path,
-                       help='Output parent directory; folder name is always idea-TIMESTAMP')
+                       help='结果父目录；程序自动创建 idea-时间戳 文件夹')
         p.add_argument("--reasoning-effort", choices=["inherit", *REASONING_EFFORTS], default=None,
-                       help="Codex thinking effort; inherit uses its existing configuration")
-        p.add_argument("--constraints", default=None, help="Available resources and research constraints")
-        for name, help_text in (("search-results-per-query", "Metadata recall per query (no full-text reading)"), ("max-papers", "Full-text reading shortlist limit"), ("max-candidates", "Candidate limit"),
-                                ("max-rounds", "Revision-round limit"), ("max-calls", "Model-call limit"),
-                                ("max-seconds", "Cumulative runtime limit in seconds"),
-                                ("timeout-s", "Per-model-call timeout in seconds")):
+                       help="Codex 思考强度；inherit 沿用后端配置，可用档位依模型而定")
+        p.add_argument("--constraints", default=None, help="设备、时间、数据等研究资源条件；包含空格时加引号")
+        for name, help_text in (("search-results-per-query", "每个查询召回的论文记录数，不是精读篇数"), ("max-papers", "初次选读规模；后续定向补读共用总预算"), ("max-candidates", "优先问题数量；系统先比较不同问题再决定重点"),
+                                ("max-rounds", "Revision-round limit"), ("max-calls", "累计模型调用次数上限，包括讨论、分析、修复和重试"),
+                                ("max-seconds", "累计运行时间上限，单位秒；6600 为 110 分钟"),
+                                ("timeout-s", "单次模型调用超时，单位秒；1200 为 20 分钟")):
             p.add_argument("--" + name, type=int, default=None, help=argparse.SUPPRESS if name == "max-rounds" else help_text)
-        p.add_argument("--codex-bin", default=None, help="Codex executable name or path")
-        p.add_argument("--codex-profile", default=None, help="Existing Codex profile")
-        p.add_argument("--skill", action="append", default=None, help="Selected local skill name/path; repeat to select several")
-        p.add_argument("--skill-root", action="append", type=Path, default=None, help="Additional skill discovery root; repeatable")
+        p.add_argument("--codex-bin", default=None, help="Codex 可执行文件名称或完整路径")
+        p.add_argument("--codex-profile", default=None, help="已有的 Codex 配置档名称，例如 research")
+        p.add_argument("--skill", action="append", default=None, help="选用本地 skill 名称或路径；可重复传入")
+        p.add_argument("--skill-root", action="append", type=Path, default=None, help="额外的 skill 查找目录；可重复传入")
         p.add_argument("--no-builtin-skills", dest="builtin_skills", action="store_false", default=None,
-                       help="Disable the built-in research skills for this project")
+                       help="在本项目停用内置研究 skill；默认启用")
         p.add_argument("--source", "--search-source", dest="search_source", choices=["arxiv", "openalex", "hybrid"], default=None,
-                       help="Search provider; venue filters select OpenAlex automatically")
+                       help="检索来源：arxiv、openalex 或 hybrid；会议筛选会使用会议检索来源")
         p.add_argument("--venues", nargs="*", action="extend", default=None,
                        help="会议筛选，例如 ACL EMNLP NAACL COLM；名单见 venues")
         p.add_argument("--fetch-full-text", action=argparse.BooleanOptionalAction, default=None,
-                       help="Persist automatic full-text retrieval (default: enabled)")
-    p = sub.add_parser("init", help="Initialize an isolated research project")
-    p.add_argument("topic", nargs="?")
-    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
+                       help="保存自动获取正文的设置；默认启用，--no-fetch-full-text 关闭")
+    p = command("init", "创建或配置研究项目，只保存主题和设置，不调用模型。",
+                'research-idea init "研究方向" --project ./research-projects/my-idea')
+    p.add_argument("topic", nargs="?", help="研究方向；也可用 --topic-file 导入，二选一")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 研究说明文件，最多 128 KiB；与直接输入主题二选一")
     project_arg(p)
     backend_args(p)
-    p = sub.add_parser("start", help="设置主题、论文和 skills，生成 idea")
-    p.add_argument("topic", nargs="?")
-    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
+    p = command("start", "设置主题和材料后直接开始研究；需要边研究边讨论时使用 chat。",
+                'research-idea start "研究方向" --project ./research-projects/my-idea --backend codex --model gpt-6.1-sol')
+    p.add_argument("topic", nargs="?", help="研究方向；也可用 --topic-file 导入，二选一")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 研究说明文件，最多 128 KiB；与直接输入主题二选一")
     project_arg(p)
     backend_args(p)
-    p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None, help="Paper files or directories (up to 100 files)")
-    p.add_argument("--no-search", action="store_true")
-    p.add_argument("--setup-only", action="store_true", help="Only configure/import; do not invoke a model")
-    p = sub.add_parser("launch", help="交互选择主题、模型、思考强度、论文和预算")
-    p.add_argument("topic", nargs="?")
-    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
-    p.add_argument("--project", type=Path, help="Project directory; prompted when omitted")
+    p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None, help="论文文件或目录，最多 100 个文件；多个路径用空格分隔")
+    p.add_argument("--no-search", action="store_true", help="本次只使用项目内已有或导入的材料，不自动联网检索")
+    p.add_argument("--setup-only", action="store_true", help="只保存配置并导入材料，不调用模型")
+    p = command("launch", "启动设置向导，逐项选择主题、模型、论文和预算，再开始研究。",
+                'research-idea launch\n  research-idea launch --setup-only')
+    p.add_argument("topic", nargs="?", help="可选研究方向；省略时由向导询问")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 研究说明文件，最多 128 KiB；与直接输入主题二选一")
+    p.add_argument("--project", type=Path, help="项目目录；省略时由向导询问")
     backend_args(p)
-    p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None)
-    p.add_argument("--no-search", action="store_true")
-    p.add_argument("--setup-only", action="store_true")
-    p = sub.add_parser("chat", help="持续对话窗口：/model、/reasoning、/run、/stop")
+    p.add_argument("--papers", nargs="+", type=Path, action="extend", default=None, help="导入论文文件或目录；多个路径用空格分隔")
+    p.add_argument("--no-search", action="store_true", help="只使用已有或导入材料，不自动联网检索")
+    p.add_argument("--setup-only", action="store_true", help="向导完成后只保存配置与材料，不调用模型")
+    p = command("chat", "打开对话窗口，用 /run 开始研究，/continue 推进讨论，/help 查看命令。",
+                'research-idea\n  research-idea chat --project ./research-projects/my-idea')
     p.add_argument("--project", type=Path, help="已有或新项目；省略时创建独立项目目录")
     backend_args(p)
-    p = sub.add_parser("run", help="Read literature and develop research questions and motivation")
-    p.add_argument("topic", nargs="?")
-    p.add_argument("--topic-file", type=Path, help="UTF-8 research brief, up to 128 KiB")
+    p = command("run", "运行项目：检索、阅读并整理问题与动机，复用已完成的步骤。",
+                'research-idea run --project ./research-projects/my-idea\n  research-idea run --project ./research-projects/my-idea --replan')
+    p.add_argument("topic", nargs="?", help="可选研究方向；省略时使用项目已保存的主题")
+    p.add_argument("--topic-file", type=Path, help="UTF-8 研究说明文件，最多 128 KiB；与直接输入主题二选一")
     project_arg(p)
     backend_args(p)
-    p.add_argument("--no-search", action="store_true", help="Use only imported source material")
-    p.add_argument("--replan", action="store_true", help="Revisit research directions using current sources; preserve conversation history")
-    p = sub.add_parser("resume", help="Resume the same project using validated task checkpoints")
+    p.add_argument("--no-search", action="store_true", help="本次只使用已有或导入材料，不自动联网检索")
+    p.add_argument("--replan", action="store_true", help="用当前材料重新探索研究方向；保留完整对话")
+    p = command("resume", "恢复已有项目并复用检查点；交互暂停中的项目需回到 chat 输入 /continue。",
+                'research-idea resume --project ./research-projects/my-idea')
     project_arg(p)
     backend_args(p)
-    p.add_argument("--no-search", action="store_true")
-    p.add_argument("--replan", action="store_true")
-    p = sub.add_parser("add", help="Import PDF/TXT/Markdown or JSON paper records")
+    p.add_argument("--no-search", action="store_true", help="本次恢复只使用已有材料，不自动联网检索")
+    p.add_argument("--replan", action="store_true", help="用当前材料重新探索研究方向；保留完整对话")
+    p = command("add", "导入 PDF、TXT、Markdown 或论文 JSON；只导入，不调用模型分析。",
+                'research-idea add --project ./research-projects/my-idea paper.pdf notes.md')
     project_arg(p)
-    p.add_argument("files", type=Path, nargs="+")
-    p.add_argument("--kind", choices=["full_text", "abstract", "notes"], help="Explicit source type; use full_text only for actual paper text")
-    p = sub.add_parser("search", help="Search papers and optionally retrieve their full text")
+    p.add_argument("files", type=Path, nargs="+", help="一个或多个论文文件；路径含空格时加引号")
+    p.add_argument("--kind", choices=["full_text", "abstract", "notes"], help="材料类型：full_text 正文、abstract 摘要、notes 笔记；仅实际论文正文使用 full_text")
+    p = command("search", "手动检索并将论文记录加入项目；可选择下载正文，不调用模型精读。",
+                'research-idea search "multi-agent collaboration" --project ./research-projects/my-idea --limit 10 --full-text')
     project_arg(p)
     scope_args(p)
-    p.add_argument("query")
-    p.add_argument("--source", choices=["arxiv", "openalex", "hybrid"], default=None)
-    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("query", help="检索词；包含空格时加引号，例如 \"multi-agent collaboration\"")
+    p.add_argument("--source", choices=["arxiv", "openalex", "hybrid"], default=None,
+                   help="检索来源；省略时沿用项目设置，会议筛选会使用会议检索来源")
+    p.add_argument("--limit", type=int, default=10, help="本次最多返回的论文记录数，默认 10；不是精读数量")
     p.add_argument("--venues", nargs="*", action="extend", default=None,
-                   help="Curated conference names; implies --source openalex")
-    p.add_argument("--full-text", action="store_true", help="Attempt bounded full-text retrieval; retain abstracts on failure")
-    sub.add_parser("venues", help="列出支持的会议筛选（不是完整、实时的 CCF 目录）")
-    p = sub.add_parser("status", help="Show project state and budget use")
+                   help="会议名称，例如 ACL COLM；会启用会议检索来源")
+    p.add_argument("--full-text", action="store_true", help="同时尝试获取正文；获取失败时保留摘要")
+    command("venues", "列出支持的会议、分类、预设和来源；不修改项目设置。", 'research-idea venues')
+    p = command("status", "查看项目阶段、累计预算和已保存的任务进度。",
+                'research-idea status --project ./research-projects/my-idea')
     project_arg(p)
-    p = sub.add_parser("inspect", help="Inspect a candidate, source, or evidence record")
+    p = command("inspect", "查看论文或证据记录、论文分析卡及运行事件；不调用模型。",
+                'research-idea inspect --project ./research-projects/my-idea\n  research-idea inspect --project ./research-projects/my-idea --events')
     project_arg(p)
-    p.add_argument("id", nargs="?")
-    p.add_argument("--events", action="store_true")
-    p.add_argument("--paper-card", action="store_true", help="Show the structured analysis card for the supplied paper ID")
-    p = sub.add_parser("export", help="Export Markdown and JSON reports")
+    p.add_argument("id", nargs="?", help="论文、证据或旧版候选 ID；省略时列出论文和候选，普通引用可在窗口用 /evidence 查看")
+    p.add_argument("--events", action="store_true", help="查看最近的运行事件；不能与 --paper-card 一起使用")
+    p.add_argument("--paper-card", action="store_true", help="显示给定论文 ID 的分析卡；必须传 ID，不能与 --events 同用")
+    p = command("export", "从已保存结果导出 Markdown、JSON 和论文分析卡，不重新研究。",
+                'research-idea export --project ./research-projects/my-idea --output ./results')
     project_arg(p)
-    p.add_argument("--output", type=Path, help='Output parent directory; preserves the idea-TIMESTAMP folder name')
-    p = sub.add_parser("doctor", help="Check local executables and configuration without sending requests")
-    p.add_argument("--project", type=Path)
-    p = sub.add_parser("skills", help="发现、查看和选择本地研究 skills")
+    p.add_argument("--output", type=Path, help='结果父目录；沿用该项目已有的 idea-时间戳 文件夹名')
+    p = command("doctor", "检查本机模型 CLI、PDF 工具和可选项目配置，不发送模型请求。",
+                'research-idea doctor\n  research-idea doctor --project ./research-projects/my-idea')
+    p.add_argument("--project", type=Path, help="可选项目目录；同时检查该项目的配置")
+    p = command("skills", "列出、查看或选择本地分析 skill；选中的指导文本用于后续研究。",
+                'research-idea skills list\n  research-idea skills use --project ./research-projects/my-idea /path/to/SKILL.md')
     skill_sub = p.add_subparsers(dest="skill_command", required=True)
-    for name, help_text in (("list", "List locally discovered skills"), ("show", "Read one selected skill"),
-                            ("use", "Save selected skills for a project"), ("clear", "Clear selected skills")):
-        sp = skill_sub.add_parser(name, help=help_text)
-        sp.add_argument("--project", type=Path, required=name in {"use", "clear"})
+    skill_examples = {'list': 'research-idea skills list', 'show': 'research-idea skills show /path/to/SKILL.md',
+                      'use': 'research-idea skills use --project ./research-projects/my-idea /path/to/SKILL.md',
+                      'clear': 'research-idea skills clear --project ./research-projects/my-idea'}
+    for name, help_text in (("list", "列出已发现的本地 skill；可指定额外搜索目录。"), ("show", "查看一个 skill 的指导文本。"),
+                            ("use", "替换项目选中的本地 skill；可一次指定多个，不执行其中的脚本。"),
+                            ("clear", "清除项目额外选中的本地 skill；保留内置 skill 的启用设置。")):
+        sp = skill_sub.add_parser(name, help=help_text, description=help_text,
+            epilog='示例：\n  ' + skill_examples[name], formatter_class=argparse.RawDescriptionHelpFormatter)
+        sp.add_argument("--project", type=Path, required=name in {"use", "clear"},
+                        help="项目目录；use/clear 必填，list/show 可省略")
         if name != "clear":
-            sp.add_argument("--root", action="append", type=Path, default=None)
+            sp.add_argument("--root", action="append", type=Path, default=None, help="额外的 skill 查找目录；可重复传入")
         if name == "show":
-            sp.add_argument("selector")
+            sp.add_argument("selector", help="skill 名称或 SKILL.md 路径；可先运行 skills list 查看")
         if name == "use":
-            sp.add_argument("selectors", nargs="+")
-    p = sub.add_parser("demo", help="Run an explicitly synthetic offline demonstration")
+            sp.add_argument("selectors", nargs="+", help="一个或多个 skill 名称或 SKILL.md 路径")
+    p = command("demo", "运行合成材料的离线演示，不联网、不调用真实模型。",
+                'research-idea demo --project ./research-projects/demo')
     project_arg(p)
-    p.add_argument('--output', type=Path, help='Output parent directory')
+    p.add_argument('--output', type=Path, help='结果父目录；用于保存离线演示报告')
     return parser
 
 
