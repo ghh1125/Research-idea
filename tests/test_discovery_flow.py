@@ -60,7 +60,7 @@ class DiscoveryBackend:
             output = {'background_logic': 'Compare the supplied mechanisms.',
                       'approach_landscape': [], 'problem_seeds': [], 'cross_paper_synthesis': []}
         elif task.stage == 'map':
-            output = {'approach_landscape': [], 'problem_comparisons': [], 'research_frame': {'user_goal': payload['topic'],
+            output = {'formulation': [], 'approach_landscape': [], 'problem_comparisons': [], 'research_frame': {'user_goal': payload['topic'],
                 'literature_logic': 'Compare the supplied mechanisms.',
                 'research_question': 'Which mechanism explains the difficulty?',
                 'scope_connection': 'The sources inform the original objective.'},

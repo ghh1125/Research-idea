@@ -46,7 +46,7 @@ def open_checkpoint(controller, problem, kind='problem'):
     if old:
         history.append(deepcopy(old))
     created = now()
-    checkpoint = dict(kind=kind, checkpoint_id=digest([kind, created, problem, len(history)])[:20],
+    checkpoint = dict(research_intent=deepcopy(store.get('research_intent')), kind=kind, checkpoint_id=digest([kind, created, problem, len(history)])[:20],
         state='discussing', revision=1, source_key=source_key(controller),
         original=deepcopy(problem), current=deepcopy(problem), revisions=[], created_at=now(),
         confirmed_revision=None, user_notes_at_open=controller.user_notes())
@@ -234,11 +234,13 @@ def apply_discussion(controller, checkpoint, result, context):
         working['opportunity_types'] = list(dict.fromkeys(c['problem_origin'] for c in cases.values()))
         if updates or result['selected_problems'] or background:
             working['problem_comparisons'] = []
+            working['formulation'] = []
     return working
 
 
 def discuss(controller, message):
     from .reasoning_memory import revised_reasoning
+    from .research_intent import revised_intent
     store = controller.store
     checkpoint = deepcopy(store.get('problem_checkpoint'))
     if store.get('workflow') != 'question':
@@ -253,6 +255,7 @@ def discuss(controller, message):
     pending = store.get('pending_discussion') or {}
     token = digest([checkpoint['checkpoint_id'], checkpoint['revision'], message['id']]) if checkpoint.get('checkpoint_id') else digest([checkpoint, message['id']])
     def checked(value):
+        revised_intent(controller, value, message)
         apply_discussion(controller, checkpoint, value, context)
         revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
         revised_memory(store, value['memory_updates'], supplied)
@@ -277,6 +280,7 @@ def discuss(controller, message):
         context = controller.ideation_context()
         working_checkpoint = {**checkpoint, 'current': working}
         def checked_followup(value):
+            revised_intent(controller, value, message)
             apply_discussion(controller, working_checkpoint, value, context)
             revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
             if value['research_requests']:
@@ -285,14 +289,21 @@ def discuss(controller, message):
         followup = controller.task(stage, {**context, **memory, 'discussion_kind': kind,
             'problem_model': working, 'current_user_message': message, 'source_work_done': True,
             'reading_result': work, 'previous_discussion': result,
+            'research_intent': (result.get('updated_intent') or [context.get('research_intent')])[0],
             'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them.'}, checked_followup, publish=False)
         working = apply_discussion(controller, working_checkpoint, followup, context)
         result = followup
-    checkpoint.update(current=working, revision=checkpoint['revision'] + 1,
+    intent_changes = revised_intent(controller, result, message)
+    current_intent = deepcopy(intent_changes.get('research_intent', store.get('research_intent')))
+    if kind == 'problem':
+        if intent_changes:
+            working['formulation'] = []
+        working['research_intent'] = current_intent
+    checkpoint.update(research_intent=current_intent, current=working, revision=checkpoint['revision'] + 1,
                       source_key=source_key(controller), state='discussing')
     checkpoint['revisions'].append({'revision': checkpoint['revision'], 'source_message_id': message['id'],
                                     'answer': result['answer'], 'current': deepcopy(working), 'time': now()})
-    state = {'problem_checkpoint': checkpoint, 'pending_discussion': None,
+    state = {**intent_changes, 'problem_checkpoint': checkpoint, 'pending_discussion': None,
              'reasoning_notes': revised_reasoning(store, result.get('reasoning_updates', []), message, checkpoint),
              'status': WAITING_BY_KIND[kind]}
     state['problem_exploration' if kind == 'direction' else 'problem_model'] = working

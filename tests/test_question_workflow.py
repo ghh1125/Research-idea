@@ -106,6 +106,10 @@ class FakeController:
             raise self.failure
         self.last_payload = deepcopy(payload)
         value = deepcopy(POOL if stage == 'explore_problems' else BRIEF)
+        if stage == 'interpret_research':
+            value = dict(mode='explore', goal=payload['topic'],
+                goal_sources=[dict(message_id='topic', quote=payload['topic'])],
+                concerns=[], relationships=[], interpretation='探索不同问题。')
         if checker:
             checker(value)
         return value
@@ -177,7 +181,7 @@ class QuestionWorkflowTests(unittest.TestCase):
         self.assertEqual(self.store.get('workflow'), 'question')
         self.assertEqual(self.store.get('status'), 'completed')
         self.assertEqual(self.store.rows('candidates')[0]['id'], 'old')
-        self.assertEqual(self.calls, ['initial_search', 'retrieve_full_texts', 'orient_papers',
+        self.assertEqual(self.calls, ['interpret_research', 'initial_search', 'retrieve_full_texts', 'orient_papers',
             'explore_problems', 'discover_problems', 'frame_question'])
         before = list(self.calls)
         run_questions(self.controller())

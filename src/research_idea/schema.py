@@ -21,6 +21,13 @@ STR = string()
 STRINGS = array(STR)
 DESIGN_AXIS = obj(id=STR, question=STR, why_needed=STR, required_function=STR, search_directions=STRINGS)
 RESEARCH_ROUTE = obj(id=STR, question=STR, why_relevant=STR)
+INTENT_SOURCE = obj(message_id=STR, quote=STR)
+RESEARCH_INTENT = obj(mode=string(['explore', 'refine', 'assess']), goal=STR,
+    goal_sources=array(INTENT_SOURCE),
+    concerns=array(obj(id=STR, statement=STR, kind=string(['need', 'hypothesis']), sources=array(INTENT_SOURCE))),
+    relationships=array(obj(from_id=STR, to_id=STR,
+        relation=string(['alternative', 'joint', 'depends_on', 'shared_cause']), reason=STR)),
+    interpretation=STR)
 PLAN_SEARCH = obj(research_question=STR, scope=STR,
     research_routes=array(RESEARCH_ROUTE), design_axes=array(DESIGN_AXIS),
     queries=array(obj(query=STR, purpose=string(["background", "motivation", "mechanism", "implementation", "evaluation", "counterevidence"]), rationale=STR, route_ids=STRINGS, axis_ids=STRINGS)),
@@ -63,10 +70,10 @@ PROBLEM_READING = obj(reason=STR, requests=array(RESEARCH_REQUEST), citation_tar
 REASONING_NOTE = obj(kind=string(['user_objection', 'analysis_revision', 'open_question']),
     problem_id=STR, user_quote=STR, judgment=STR, reason=STR, revisit_when=STR,
     evidence_ids=STRINGS, replaces=STRINGS)
-DISCUSS_DIRECTION = obj(answer=STR, memory_updates=MEMORY_UPDATES,
+DISCUSS_DIRECTION = obj(answer=STR, memory_updates=MEMORY_UPDATES, updated_intent=array(RESEARCH_INTENT),
     updated_pool=array(PROBLEM_POOL), research_requests=array(RESEARCH_REQUEST),
     reasoning_updates=array(REASONING_NOTE))
-DISCUSS_QUESTION = obj(**DISCUSS_PROBLEM['properties'], research_requests=array(RESEARCH_REQUEST),
+DISCUSS_QUESTION = obj(**DISCUSS_PROBLEM['properties'], updated_intent=array(RESEARCH_INTENT), research_requests=array(RESEARCH_REQUEST),
     reasoning_updates=array(REASONING_NOTE),
     updated_background=array(obj(research_frame=RESEARCH_FRAME, approach_landscape=array(APPROACH))))
 FRAME_QUESTION = obj(title=STR, background=STR, existing_methods=STR, problem=STR,
@@ -77,7 +84,10 @@ PROBLEM_CASE = obj(opportunity=OPPORTUNITY, revision_reason=STR,
     response_analysis=array(obj(
     approach=STR, effective_response=STR, remaining_difficulty=STR, why_it_remains=STR)))
 PROBLEM_COMPARISON = obj(opportunity_id=STR, strongest_case=STR, remaining_obstacle=STR, priority_reason=STR)
-MAP = obj(approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
+FORMULATION = obj(strategy=string(['select', 'synthesize', 'reframe']), member_ids=STRINGS,
+    opportunity=OPPORTUNITY, relationship_assessment=STR, scope_reason=STR,
+    concern_disposition=array(obj(concern_id=STR, treatment=string(['central', 'context', 'revised', 'deferred']), reason=STR)))
+MAP = obj(formulation=array(FORMULATION), approach_landscape=array(APPROACH), research_frame=RESEARCH_FRAME, problem=STR, observations=STRINGS, competing_explanations=STRINGS, unresolved_questions=STRINGS,
     opportunity_types=array(string(PROBLEM_ORIGINS)), evidence_ids=STRINGS, opportunities=array(OPPORTUNITY),
     problem_comparisons=array(PROBLEM_COMPARISON),
     selected_problems=array(obj(opportunity_id=STR, selection_reason=STR)))
@@ -155,6 +165,7 @@ SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract"
     "map": MAP, "propose": PROPOSE, "develop": DEVELOP, "refine": DEVELOP, "review": REVIEW}
 SCHEMAS.update(plan_problem_reading=PROBLEM_READING, discuss_direction=DISCUSS_DIRECTION,
                discuss_question=DISCUSS_QUESTION, frame_question=FRAME_QUESTION)
+SCHEMAS['interpret_research'] = RESEARCH_INTENT
 SCHEMAS['reconsider_problems'] = obj(pool=PROBLEM_POOL,
     changes=array(obj(previous_ids=STRINGS, current_ids=STRINGS, reason=STR, evidence_ids=STRINGS)))
 

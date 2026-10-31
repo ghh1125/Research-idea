@@ -105,6 +105,8 @@ def _handoff(controller, cycle, checkpoint):
         'stage_confirmations': {kind: _confirmation_view(snapshot)
             for kind, snapshot in cycle.get('confirmations', {}).items()},
         'user_decisions': controller.user_notes(),
+        'research_intent': controller.store.get('research_intent'),
+        'formulation': deepcopy(checkpoint['current'].get('formulation', [])),
         'memory_sources': memory.get('memory_sources', []),
     }
 
@@ -175,6 +177,8 @@ def run_questions(controller, interactive=False, continue_problem=False):
             if cycle['stage'] == 'reading':
                 controller.progress('[concept] 调研背景与主要方法，寻找几个值得深入讨论的问题。')
                 try:
+                    from .research_intent import ensure_intent
+                    ensure_intent(controller)
                     if not cycle.get('search_complete'):
                         controller.initial_search()
                         cycle['search_complete'] = True
@@ -216,7 +220,7 @@ def run_questions(controller, interactive=False, continue_problem=False):
         handoff = _handoff(controller, cycle, checkpoint)
         from .prompts import stage_version
         brief_key = digest([cycle['source_key'], problem, handoff,
-                            stage_version('frame_question'), getattr(controller, 'skill_key', None),
+                            context.get('research_intent'), stage_version('frame_question'), getattr(controller, 'skill_key', None),
                             {key: controller.config.get(key) for key in (
                                 'backend', 'model', 'reasoning_effort', 'api_provider',
                                 'base_url', 'codex_bin', 'codex_profile')}])

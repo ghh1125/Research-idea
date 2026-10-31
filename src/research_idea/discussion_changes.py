@@ -31,6 +31,8 @@ def saved_changes(before, after, old_memory, new_memory, old_reasons, new_reason
     """Compare successful versions; no schema, model call, or approval gate is added."""
     old, new = before.get('current', {}), after.get('current', {})
     changed, unchanged = [], []
+    if before.get('research_intent') != after.get('research_intent') and after.get('research_intent'):
+        changed.append('研究主线已更新：' + after['research_intent']['goal'] + '；' + after['research_intent']['interpretation'])
     old_choices = old.get('selected_problems', [])
     new_choices = new.get('selected_problems', [])
     if [x['opportunity_id'] for x in old_choices] != [x['opportunity_id'] for x in new_choices]:

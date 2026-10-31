@@ -53,6 +53,8 @@ def argument_handoff(problem):
             'opportunity_id': case['id'],
             'user_goal': problem.get('research_frame', {}).get('user_goal', ''),
             'question': case['question'],
+            'research_intent': deepcopy(problem.get('research_intent')),
+            'formulation': deepcopy(problem.get('formulation', [])),
             'steps': [{'role': role, 'text': case[field]} for role, field in (
                 ('existing_response', 'prior_art_delta'),
                 ('causal_insight', 'bottleneck_hypothesis'),
@@ -131,7 +133,7 @@ def develop_problem_pool(controller, context, check_refs, pool=None):
         result = controller.task('deepen_problem', {
             **context, 'background_logic': pool['background_logic'],
             'cross_paper_synthesis': pool.get('cross_paper_synthesis', []),
-            'approach_landscape': pool['approach_landscape'], 'problem_seed': deepcopy(seed),
+            'approach_landscape': pool['approach_landscape'], 'problem_seed': deepcopy(seed), 'related_problem_seeds': deepcopy(pool['problem_seeds']),
         }, check_case)
         case = result['opportunity']
         responses[case['id']] = result['response_analysis']

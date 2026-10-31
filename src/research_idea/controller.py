@@ -390,6 +390,7 @@ class Controller:
                               for alias in [paper['id'], *paper.get('aliases', [])]}
         return compact_research_context({"topic": self.store.get("topic"), "user_notes": self.user_notes(), "constraints": self.config["constraints"],
                 "problem_discussion": self.discussion_handoff(),
+                "research_intent": self.store.get("research_intent"),
                 "quote_gaps": current_quote_gaps(self.store),
                 "search_filters": config_scope(self.config),
                 "search_windows": {purpose: config_scope(self.config, purpose) for purpose in ('strategy', 'novelty')},
@@ -602,7 +603,8 @@ class Controller:
                    "venues": self.config.get("search_venues", []), "source": self.config["search_source"],
                    "filters": config_scope(self.config, 'design' if candidate else 'strategy'),
                    "search_windows": {p: config_scope(self.config, p) for p in ('strategy', 'novelty')},
-                   "purpose": 'technical_design' if candidate else 'strategy_discovery'}
+                   "purpose": 'technical_design' if candidate else 'strategy_discovery',
+                   "research_intent": self.store.get("research_intent")}
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
             payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
@@ -665,6 +667,7 @@ class Controller:
                     and skill['name'] != 'research-idea-build-mechanism']
         input_key = digest({
             'topic': self.store.get('topic'), 'user_notes': self.user_notes(),
+            'research_intent': self.store.get('research_intent'),
             'constraints': self.config['constraints'], 'source': self.config['search_source'],
             'venues': self.config.get('search_venues', []), 'strategy_scope': scope,
             'novelty_scope': config_scope(self.config, 'novelty'),
@@ -1171,16 +1174,25 @@ class Controller:
                 raise ValueError('Choose research problems within max_candidates before method construction')
             if any(not item['selection_reason'].strip() for item in decisions):
                 raise ValueError('Explain the research value of the problem choice before constructing a method')
+            from .research_intent import validate_formulation
+            validate_formulation(value.get('formulation', []), cases, self.store.get('research_intent'))
+            for form in value.get('formulation', []):
+                if not set(form['opportunity']['research_route_ids']) <= route_ids:
+                    raise ValueError('Use actual research route IDs in the formulation')
+        calls_before_map = self.store.get("calls_used", 0)
         problem = self.task("map", {**context, "problem_cases": cases,
             "cross_paper_synthesis": pool.get('cross_paper_synthesis', []),
             "explanation_comparisons": self.store.get('problem_explanations', {}),
             "argument_revisions": self.store.get('problem_argument_revisions', {}),
             "response_analyses": self.store.get("problem_response_analyses", {}),
             "background_logic": pool['background_logic'], "approach_landscape": pool['approach_landscape'],
-            "max_candidates": self.config["max_candidates"]}, validate_problem)
+            "max_candidates": self.config["max_candidates"]}, validate_problem, publish=False)
         problem = {**problem, 'cross_paper_synthesis': pool.get('cross_paper_synthesis', []),
                    'explanation_comparisons': self.store.get('problem_explanations', {})}
+        from .research_intent import apply_formulation
+        problem = apply_formulation(problem, self.store.get('research_intent'))
         self.store.set("problem_model", problem)
+        self.activity("map", problem, self.store.get("calls_used", 0) == calls_before_map)
         return problem
 
     def form_ideas(self):

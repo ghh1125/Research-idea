@@ -48,7 +48,11 @@ class DemoBackend:
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
         refs = [e["id"] for e in payload.get("evidence", [])]
         papers = [p["id"] for p in payload.get("papers", [])]
-        if task.stage == 'frame_question':
+        if task.stage == 'interpret_research':
+            output = {'mode': 'explore', 'goal': payload['topic'],
+                      'goal_sources': [{'message_id': 'topic', 'quote': payload['topic']}],
+                      'concerns': [], 'relationships': [], 'interpretation': '合成演示：探索研究方向。'}
+        elif task.stage == 'frame_question':
             model = payload['problem_model']
             chosen = {c['opportunity_id'] for c in model['selected_problems']}
             cases = [c for c in model['opportunities'] if c['id'] in chosen]
@@ -67,7 +71,7 @@ class DemoBackend:
             output['pool'].setdefault('cross_paper_synthesis', [])
         elif task.stage in {'discuss_direction', 'discuss_question'}:
             output = {'answer': '已保留当前问题，可以继续讨论或 /continue。',
-                      'memory_updates': [], 'research_requests': [], 'reasoning_updates': []}
+                      'memory_updates': [], 'research_requests': [], 'reasoning_updates': [], 'updated_intent': []}
             output.update({'updated_pool': []} if task.stage == 'discuss_direction' else
                           {'updated_problems': [], 'selected_problems': [], 'updated_background': []})
         elif task.stage == 'plan_search':
@@ -139,6 +143,14 @@ class DemoBackend:
                 {'opportunity_id': item['id'],
                  'selection_reason': '合成演示优先区分信息缺失与使用困难：这关系到已有资料能否支持可靠回答，单纯增加资料仍可能留下依据选择问题。'}
                 for item in output['opportunities'][:payload.get('max_candidates', 1)]]
+            output['formulation'] = []
+            if payload.get('research_intent') and payload.get('problem_cases'):
+                case = output['opportunities'][0]
+                output['formulation'] = [dict(strategy='select', member_ids=[case['id']],
+                    opportunity=deepcopy(case), relationship_assessment='合成演示：比较独立问题。',
+                    scope_reason='合成演示选择第一个问题，不表示科学判断。', concern_disposition=[
+                        dict(concern_id=c['id'], treatment='central', reason='合成演示关联。')
+                        for c in payload['research_intent']['concerns']])]
         elif task.stage == "propose":
             candidates = []
             opportunities = {item['id']: item for item in payload['problem_model']['opportunities']}

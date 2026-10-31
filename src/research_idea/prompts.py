@@ -6,17 +6,17 @@ import json
 from .idea_instructions import (MAP_INSTRUCTIONS, PROPOSE_INSTRUCTIONS, PROBLEM_ORIGIN_RULES,
                                 EXPLORE_PROBLEMS_INSTRUCTIONS, DEEPEN_PROBLEM_INSTRUCTIONS)
 
-PROMPT_VERSION = "41"
+PROMPT_VERSION = "42"
 
 
 def stage_version(stage):
     # Presentation and ideation changes do not invalidate already read sources.
     if stage in {'frame_question', 'discuss_direction', 'discuss_question', 'plan_problem_reading'}:
-        return '52'
+        return '53'
     if stage in {'explore_problems', 'deepen_problem', 'map', 'screen_papers'}:
-        return '52'
+        return '53'
     if stage == 'reconsider_problems':
-        return '1'
+        return '2'
     if stage == 'discuss_problem':
         return '42'
     if stage == 'inspect_source':
@@ -251,6 +251,9 @@ reasoning_notes 保存既往异议和判断理由，与用户要求分开。reas
 INSTRUCTIONS['map'] += """
 使用 cross_paper_synthesis 与 explanation_comparisons 比较问题的解释力和研究意义，argument_revisions 说明判断为何改变。不凭某个解释写得长或技术容易就选它。
 """
+
+from .intent_instructions import extend as _extend_intent_instructions
+_extend_intent_instructions(INSTRUCTIONS)
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:
     guidance = ""

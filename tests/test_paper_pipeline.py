@@ -90,7 +90,7 @@ class PipelineBackend:
             output = {"background_logic": "Separate feedback quality from access.",
                       "approach_landscape": [], "problem_seeds": [], "cross_paper_synthesis": []}
         elif task.stage == "map":
-            output = {"approach_landscape": [], "research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
+            output = {"formulation": [], "approach_landscape": [], "research_frame": {"user_goal": payload.get("topic") or "Reliable feedback", "literature_logic": "Separate feedback quality from access", "research_question": "When is feedback useful?", "scope_connection": "The supplied routing case motivates this broader question"}, "problem": "Routing feedback may fail outside the tested setting.",
                       "observations": ["A narrow reported result does not establish the broad claim."],
                       "competing_explanations": ["Feedback validity versus prompt differences"],
                       "unresolved_questions": ["Does the mechanism survive a matched-prompt control?"],

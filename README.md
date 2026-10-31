@@ -10,7 +10,7 @@ Start with a research direction. You can also provide initial ideas, reference p
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-The current version, **v0.6.0**, includes a conversational CLI, literature search and full-text analysis, two discussion pauses, `/continue` to advance, persistent conversation memory with message sources, paper links and source evidence, budgets, and resumable runs. This release makes repeated discussion easier: each reply shows what actually changed in the saved draft, follow-up questions recall earlier feedback using the current discussion context, and every CLI command has usage help. See the [changelog (Chinese)](CHANGELOG.md).
+The current version, **v0.7.0**, preserves the research purpose across search, discussion, and writing. It distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. The conversational CLI, two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
@@ -36,12 +36,13 @@ flowchart TD
     D["Direction discussion: question, correct, add, or remove directions"]
     C["Read relevant details, trace original works, and reconsider directions"]
     X["Explore each problem: possible causes → existing responses → remaining difficulty → research value"]
-    E["Compare problems and explain the priority"]
+    E["Select, synthesize, or reframe a question; explain its connection to the goal"]
     P["Problem discussion: clarify causes, revise priorities, and add evidence"]
     R["Targeted search and reading for specific questions"]
     O["Deliver: background → existing approaches → problem → motivation → research proposition"]
     M["Full conversation + active notes + objections and reasons for revisions + stage versions"]
-    U --> A --> B --> D
+    I["Understand the goal, hypotheses, and relationships among concerns"]
+    U --> I --> A --> B --> D
     D -->|/continue| C
     C --> X --> E --> P
     P -->|/continue| O
@@ -55,9 +56,15 @@ flowchart TD
     M -.carry forward.-> O
     classDef work fill:#eff6ff,stroke:#93b4d6,color:#243c55
     classDef discuss fill:#f0f8f4,stroke:#9ac6af,color:#254b38
-    class A,B,C,X,E,R,O work
+    class I,A,B,C,X,E,R,O work
     class D,P,M discuss
 ```
+
+**Different starting points need different reasoning.** A broad direction invites comparison of distinct important questions. An existing, coherent idea calls for refining its whole argument. A request to critique a problem calls for examining its premises and the strongest existing responses. The system makes this interpretation before search, shows it briefly, and lets you correct it in ordinary conversation.
+
+**Related difficulties do not have to compete for one slot.** The system records the research goal, user hypotheses, their source messages, and whether concerns are alternatives, joint requirements, dependencies, or possible effects of a shared cause. Search and reading examine these relationships as well as individual topics. After deeper analysis, the question can be selected, synthesized, or reframed. The original analyses are retained, with reasons for keeping, revising, or setting aside each concern. New evidence can change a hypothesis without silently replacing the user's goal.
+
+Use `/memory` to inspect the current interpretation and its source words. During either discussion, explain what the system misunderstood or how you want to change the focus. The revision is saved with the conversation and carried into later reasoning; temporary wording requests remain separate. No additional approval step is introduced.
 
 **Two pauses let you revise the reasoning before the final proposition.** The first discussion checks whether the direction has become too narrow or overlooks a more important question. After `/continue`, the system examines each problem in depth and compares their significance and priority. The second discussion focuses on the problems themselves: whether the difficulty matters, whether its causes make sense, and why existing approaches might still leave it unresolved. Another `/continue` produces the motivation and research proposition from the current discussion. Ordinary messages stay within the discussion rather than advancing automatically.
 
@@ -143,7 +150,7 @@ research-idea doctor
 
 This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage (Chinese)](docs/advanced-usage.md#虚拟环境安装).
 
-### Upgrade to v0.6.0
+### Upgrade to v0.7.0
 
 Close the running Research-idea window, then run these commands **inside your existing repository directory**.
 
@@ -163,7 +170,7 @@ py -3 -m pipx reinstall research-idea
 research-idea --version
 ```
 
-The version should show `0.6.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
+The version should show `0.7.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
 
 ### Open the conversation window
 
@@ -336,11 +343,11 @@ For an initial selection of **about 4–6 papers, deeper comparison of 2–3 pro
 
 | Stage or resource | Estimate |
 | --- | --- |
-| Before the first direction discussion (4–6 papers) | **About 10–25 minutes and 7–9 main calls** |
+| Before the first direction discussion (4–6 papers) | **About 10–25 minutes and 8–10 main calls** |
 | Complete automated research and synthesis | **About 30–90 minutes** |
-| Total model calls | **About 20–45** |
+| Total model calls | **About 21–46** |
 
-These are planning estimates. Before the first discussion, the main steps are search planning, screening, one background read per paper, and direction exploration. Three problems typically involve six main analysis calls: one exploration, three individual deep dives, one comparison, and one final proposition, plus search planning and reading calls. Downloads, reasoning effort, model speed, additional reading, and retries can extend the total.
+These are planning estimates. Before the first discussion, the main steps are interpreting the research intent, search planning, screening, one background read per paper, and direction exploration. Three problems typically involve six main analysis calls: one exploration, three individual deep dives, one comparison, and one final proposition, plus search planning and reading calls. Downloads, reasoning effort, model speed, additional reading, and retries can extend the total.
 
 An ordinary discussion turn usually adds one model call. A turn requiring literature may also need search planning, reading, and updated analysis. Each problem or specific follow-up question selects a small number of additional papers as needed, usually at most two. All calls share the overall budget. Successful checkpoints are reused when resuming.
 

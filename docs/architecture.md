@@ -1,4 +1,4 @@
-# 架构与当前范围 · v0.6.0
+# 架构与当前范围 · v0.7.0
 
 Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目及会话状态；模型只完成有界的结构化任务。产品以背景、现有方法、问题和动机为终点，不自动生成解决方案。
 
@@ -25,11 +25,12 @@ Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目�
 
 ```mermaid
 flowchart TD
-    A[研究目标与用户要求] --> B[检索、筛选与正文阅读]
+    A[研究目标与用户要求] --> J[interpret_research：目标、假设与关切关系]
+    J --> B[检索、筛选与正文阅读]
     B --> C[explore_problems：方向与问题池]
     C --> D[方向讨论与修订]
     D -->|/continue| E[按问题补读、deepen_problem逐个深入]
-    E --> F[map：比较研究价值与优先理由]
+    E --> F[map：选择、综合或重构问题]
     F --> G[问题讨论与修订]
     G -->|/continue| H[frame_question：背景、方法、问题、动机]
     D -.具体资料缺口.-> R[定向检索与阅读后更新判断]
@@ -42,7 +43,7 @@ flowchart TD
 
 `Controller.run_questions` 是 CLI 当前入口。旧版本的方案生成函数和数据结构保留供历史项目及兼容读取，当前命令不执行 `propose/develop/refine/review` 方法循环。
 
-所有问题所需补充来源先获得，再逐个深入；每次深入不带偏好的其他候选论证。`map` 比较各自价值，保留已深入的原论证。`frame_question` 读取当前讨论版本，输出 `title/background/existing_methods/problem/motivation/research_claim/why_priority` 以及论文、证据 ID，不包含方法或实验字段。
+所有问题所需补充来源先获得，再逐个深入；每次深入保留同轮其他问题种子与用户关切关系，不带其他候选的优先级判断。`map` 比较各自价值，保留已深入的原论证。`frame_question` 读取当前讨论版本，输出 `title/background/existing_methods/problem/motivation/research_claim/why_priority` 以及论文、证据 ID，不包含方法或实验字段。
 
 ## 对话事务与记忆
 
@@ -66,7 +67,7 @@ flowchart TD
 - checkpoint 保存 `kind/state/revision/original/current/revisions/source_key/confirmed_revision`。
 - `question_cycle` 保存步骤及互动模式；`question_brief_provenance` 记录整理正文使用的版本、确认来源与缓存标识。
 - 用户更改来源或研究范围使讨论失效并重开；控制器自己补查的来源更新保留在同一阶段。模型/思考强度更改保留选择，但影响后续任务缓存。
-- 新报告使用 `schema_version: 16`，包含当前研究主张、问题分析、检索记录、完整会话和记忆。新流程不混入旧技术方案。
+- 新报告使用 `schema_version: 17`，包含当前研究主张、问题分析、检索记录、完整会话和记忆。新流程不混入旧技术方案。
 
 引用校验检查 ID、原文位置、论文归属和实际引文；论文卡区分作者主张、结果及分析。模型可大胆推演新的困难，但不得把推演写成论文已经证明的结果。没有额外科学打分或发表保证门槛。
 
@@ -77,3 +78,12 @@ flowchart TD
 模型服务错误按类别提示，30 秒后重试，最多重试 10 次；每次先检查剩余预算。结构或引用错误仅进行一次有针对性的输出修复。认证和 API 请求由后端负责，应用不复制 CLI 凭据。
 
 结果保存到可配置父目录下固定的 `idea-时间戳` 文件夹，Markdown 面向读者，JSON 保留完整推导及来源。原始论文、旧项目记录与用户对话不会因更改报告范围被删除。
+
+
+## v0.7.0 研究主线与问题表述
+
+`research_intent.py` 在新研究的检索前增加一次 `interpret_research`，保存 `mode/goal/goal_sources/concerns/relationships/interpretation`。来源引用核对用户原话，关系是模型解读，不当作已经验证的因果。宽方向允许无具体关切；已有想法区分目标与假设。检索规划、问题补读、逐个深入、重新构思、比较和最终表达都收到这份状态；深入任务还收到同轮其他问题种子。
+
+`map.formulation` 支持 select、synthesize、reframe；成员 ID 指向已深入的案例，综合或重构使用独立 ID，原案例不覆盖。程序校验引用、成员链接、关切覆盖和必要字段，允许假设被修订、范围被调整，不判科学得分。当前问题与优先选择由 formulation 更新后才向 CLI 发布；关系判断与聚焦理由一并展示。
+
+`updated_intent` 随讨论稿、原话与记忆原子提交，`research_intent_history` 保存前后版本及消息出处。临时格式要求留在 turn 记忆，不写入研究主线。讨论改了问题或目标就清除旧 formulation，最终整理用当前讨论版本和完整研究主线重新梳理关系。恢复已有暂停不会重跑 intake 或自动改选题；新研究及重新规划在缺少主线状态时建立它。任务输入与最终整理缓存包含研究主线，论文原文与阅读结果继续复用。报告 JSON 导出主线和修订历史，`/memory` 显示当前理解与用户原话。

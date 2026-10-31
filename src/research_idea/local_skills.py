@@ -26,7 +26,7 @@ BUILTIN_NAMES = (
 STAGE_MAP = {
     "research-idea-read-evidence": ("plan_search", "extract", "read_section", "inspect_source"),
     "research-idea-analyze-paper": ("read_section", "paper_card"),
-    "research-idea-motivation": ("reconsider_problems", "frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "refine", "review"),
+    "research-idea-motivation": ("interpret_research", "plan_search", "reconsider_problems", "frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "refine", "review"),
     "research-idea-compare-methods": ("plan_problem_reading", "deepen_problem", "discuss_question", "frame_question", "propose", "inspect_source", "develop", "refine", "review"),
     "research-idea-build-mechanism": ("plan_search", "propose", "design_transfer", "develop", "refine"),
     "research-idea-check-feasibility": ("propose", "develop", "refine", "review"),
@@ -261,6 +261,7 @@ def load_selected_skills(selectors: list[str], project: Path, extra_roots: list[
 
 
 MOTIVATION_REFERENCES = {
+    'interpret_research': 'intent.md', 'plan_search': 'intent.md',
     'explore_problems': 'synthesis.md', 'deepen_problem': 'explanations.md',
     'reconsider_problems': 'reconsider.md', 'frame_question': 'framing.md',
     'discuss_direction': 'discussion.md', 'discuss_question': 'discussion.md',

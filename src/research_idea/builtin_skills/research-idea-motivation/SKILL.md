@@ -10,6 +10,7 @@ description: Synthesize literature into important research problems and convinci
 不靠否定原贡献、缺少消融、标题相似或“没有采用我们的办法”制造或抹掉问题。现有方法的最强正常回应也要参与推理。动机应说明跨过困难会增加什么重要能力或认识。最终表达详细、通俗、连贯，交付研究问题与主张。
 
 控制器按任务提供以下一个相关参考文件，不自动加载全部参考：
+- [理解研究主线](references/intent.md)：interpret_research、plan_search，区分目标、假设及关切关系。
 - [综合文献](references/synthesis.md)：explore_problems，建立跨论文认识。
 - [比较原因](references/explanations.md)：deepen_problem，推导不同解释与动机。
 - [重新构思](references/reconsider.md)：reconsider_problems，新材料改变方向。

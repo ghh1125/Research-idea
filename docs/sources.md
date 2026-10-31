@@ -11,7 +11,7 @@
 
 动机 skill 按综合、原因比较、重新构思、讨论和表达拆分加载。讨论理由与用户决定分别持久保存。产品仍只交付问题和动机，不采用评分淘汰、实验注册或额外审批流程。
 
-> v0.6.0 当前流程专注研究问题与动机。本文保留历次设计来源记录；早期技术方案相关条目属于历史实现，当前主流程不再执行。讨论与记忆的设计来源见文末 v0.5.0 一节；本轮交互与记忆改进见[版本更新](../CHANGELOG.md)。
+> v0.7.0 当前流程专注研究问题与动机。本文保留历次设计来源记录；早期技术方案相关条目属于历史实现，当前主流程不再执行。讨论与记忆的设计来源见文末 v0.5.0 一节；本轮交互与记忆改进见[版本更新](../CHANGELOG.md)。
 
 
 本项目的控制器、存储、适配器、八个内置 skill 和测试为本次自主实现；未复制或打包下列项目的源代码。它们是工作流设计的参考，不构成本项目已获得研究效果的证据。
@@ -196,3 +196,15 @@
 [conversation.py](../src/research_idea/conversation.py) 中的用户决定账本是本项目自行实现的组合设计：只有用户消息可以作为要点来源；`add/replace/remove` 保留替代关系；临时要求绑定产生时的讨论阶段和实例，`/continue` 只结束当前讨论的临时要求。长期要求持续使用，完整原话不改写。模型同时接收当前要点的原话出处、近期对话和按当前问题召回的较早用户消息；已撤回要求附带失效记录，避免旧选择被重新当成当前决定。已处理但没有提炼为要点的早期消息也可以再次检索，`/history [关键词]` 则面向用户查阅全部历史中的相关原话。
 
 以上源码启发了讨论与上下文的组织方式；没有发现 ARIS 或 CORAL 在这些入口中直接提供与本项目相同的、仅接受用户原话来源且可替代或撤回的决定账本。Research-idea 没有复制它们的代码，也不依赖后端原生会话记住研究要求。
+
+
+### v0.7.0：保留研究主线，同时允许问题被改进
+
+本轮核对了以下公开说明/skill，借鉴其组织方法；没有引入其依赖、后台服务或额外 agent 流程：
+
+- [ARIS research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md) 用 Problem Anchor 防止修订偏题，和 [idea-discovery](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md) 区分探索与已有 idea 的深化。这里改为有原话出处、可通过讨论修订的研究主线；不固定用户假设，也不采用分数达标循环。
+- [CORAL create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) 区分焦点、综合与证据笔记，并保留替代/反驳关系。这里把用户目标、关切关系和文献引起的判断变化分别保存，保留前后版本；没有移植完整团队调度。
+- [Supervisor-Skills tech-paper-template](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/tech-paper-template/SKILL.md) 与 [intro-drafter](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/intro-drafter/SKILL.md) 强调研究论证各环节对应。这里用于背景目标、已有回应、困难关系、动机与主张的交接，不恢复技术方案和实验章节。
+- [IdeaScientist README](https://github.com/jiarui-liu/IdeaScientist) 的阶段与角色分工作为对照；本轮没有声称检查其内部实现，也不把单篇论文的 gap 直接当作用户研究目标。
+
+对应实现：`research_intent.py` 保存带出处的目标与关切、版本和问题表述；`question_workflow.py` 在检索前理解输入，交付时携带完整主线；`problem_discovery.py` 保留相关问题进入深入；`controller.py` 将综合/重构结果设为当前问题且保留原分析；`problem_dialogue.py` 原子提交用户纠正；motivation skill 各阶段参考分别说明如何使用这些状态。新增流程测试涵盖相连困难、独立方向、开放主题、被修订的假设和讨论后的恢复。程序校验只能确认结构和来源完整，科学判断仍由模型和研究者讨论完成。

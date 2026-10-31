@@ -23,7 +23,7 @@ class CaptureBackend:
         self.prompts.append(task.prompt)
         return BackendResult({"approach_landscape": [], "research_frame": {"user_goal": "Understand the research goal", "literature_logic": "Compare research approaches", "research_question": "What remains?", "scope_connection": "Sources support a focused hypothesis"}, "problem": "A research question", "observations": [],
             "competing_explanations": [], "unresolved_questions": [],
-            "opportunity_types": [], "evidence_ids": [], "opportunities": [], "selected_problems": [], "problem_comparisons": []})
+            "opportunity_types": [], "evidence_ids": [], "opportunities": [], "selected_problems": [], "problem_comparisons": [], "formulation": []})
 
 
 class ExtractionBackend:
@@ -67,7 +67,7 @@ class SkillIntegrationTests(unittest.TestCase):
         audits = [s["name"] for s in controller.skills if "audit_claims" in s["stages"]]
         self.assertEqual(audits, ["research-idea-audit-claims"])
         planners = [s["name"] for s in controller.skills if "plan_search" in s["stages"]]
-        self.assertEqual(planners, ["research-idea-read-evidence", "research-idea-build-mechanism"])
+        self.assertEqual(planners, ["research-idea-read-evidence", "research-idea-motivation", "research-idea-build-mechanism"])
 
     def test_explicit_skill_changes_prompt_and_invalidates_its_task(self):
         path = self.skill("ccf-idea-optimizer", "Compare a causal explanation with its simplest rival.")

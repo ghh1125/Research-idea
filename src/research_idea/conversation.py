@@ -411,6 +411,16 @@ def memory_text(store):
         lines += [f"\n• {item['content']}（{scope}）", f"  出处：{source.get('content', item['source_message_id'])}"]
     if len(lines) == 1:
         lines.append('尚无提炼的要点。')
+    intent = store.get('research_intent')
+    if intent:
+        lines.extend(['', '研究主线：' + intent['goal'], '当前理解：' + intent['interpretation']])
+        for concern in intent['concerns']:
+            label = '待讨论的假设' if concern['kind'] == 'hypothesis' else '希望解决的需要'
+            lines.append('• ' + label + '：' + concern['statement'])
+            for source in concern['sources']:
+                lines.append('  用户原话：' + source['quote'])
+        for link in intent['relationships']:
+            lines.append('• 这些需要的关系：' + link['reason'])
     from .reasoning_memory import reasoning_context
     for note in reasoning_context(store):
         label = {'user_objection': '用户提出的疑问', 'analysis_revision': '研究判断的调整',

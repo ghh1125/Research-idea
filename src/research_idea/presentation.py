@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 STAGE_LABELS = {
+    "interpret_research": ("concept", "理解研究目标与关键关切"),
     "reconsider_problems": ("analysis", "新材料后的方向调整"),
     'plan_search': ('search', '第一阶段 · 文献构思 · 找论文'),
     'screen_papers': ('search', '第一阶段 · 文献构思 · 选择论文'),
@@ -279,6 +280,9 @@ def activity_summary(stage, result, citations=None):
         add('把相关研究连起来看', frame.get('literature_logic'))
         add('由此提出的研究问题', frame.get('research_question'))
         add('值得研究的问题', result.get('problem'))
+        for form in result.get('formulation', []):
+            add('这些困难有什么关系', form['relationship_assessment'])
+            add('为什么这样聚焦', form['scope_reason'])
         directions = {item['id']: item for item in result.get('opportunities', [])}
         for comparison in result.get('problem_comparisons', []):
             item = directions.get(comparison['opportunity_id'], {})
