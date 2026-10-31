@@ -221,7 +221,7 @@ class Controller:
         self.skill_key = digest(self.skill_manifest)
         self.guidance_keys = {stage: digest([stage_version(stage), stage,
             [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
-            for stage in ("extract", "inspect_source", "read_section")}
+            for stage in ("extract", "inspect_source", "read_section", "read_problem_source")}
         self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
         self.store.set("active_search_scope", {"source": config["search_source"],
                        "venues": config.get("search_venues", []), **config_scope(config)})
@@ -325,7 +325,7 @@ class Controller:
                 self.store.fail_task(task_id, str(exc))
                 self.store.event('output_repair', {'task_id': task_id, 'stage': stage,
                     'attempt': attempt + 1, 'diagnostic': str(exc)})
-                if isinstance(exc, QuoteMatchError) and stage in {'extract', 'read_section', 'inspect_source'}:
+                if isinstance(exc, QuoteMatchError) and stage in {'extract', 'read_section', 'inspect_source', 'read_problem_source'}:
                     details = repair_hint(payload['excerpt'], exc.quote)
                     self.store.event('quote_repair', {'task_id': task_id, 'paper_id': payload['paper_id'],
                         'attempt': attempt + 1, **details})
@@ -341,6 +341,9 @@ class Controller:
                                 rejected.append({'quote': observation['quote'], 'statement': observation['statement'],
                                                  'reason': str(quote_error)})
                         filtered = {'observations': accepted}
+                        if stage == 'read_problem_source':
+                            from .source_understanding import filter_reading_points
+                            filtered['reading_points'] = filter_reading_points(result.output, accepted)
                         checker(filtered)
                         gaps = self.store.get('quote_gaps', {})
                         paper = next(p for p in self.store.rows('papers') if p['id'] == payload['paper_id'])
@@ -436,6 +439,8 @@ class Controller:
         from .reasoning_memory import reasoning_context
         context = problem_discovery_context(source_context, selected_ids=self.initial_paper_ids())
         context['reasoning_notes'] = reasoning_context(self.store)
+        from .source_understanding import current_understandings
+        context['source_understandings'] = current_understandings(self)
         # Problem-directed readings are separate from old technical-design
         # readings. Explicitly carry their source quotes into later judgments.
         question_refs = set(self.store.get('question_source_evidence', []))
@@ -756,6 +761,7 @@ class Controller:
         selected = [papers[p] for p in closest if p in papers and papers[p].get("content_kind") == "full_text"][:3]
         if selected_ids is not None:
             selected = [p for p in selected if p['id'] in selected_ids]
+        stage = 'read_problem_source' if self.phase == 'problem' else 'inspect_source'
         scope = digest([candidate["proposal"], candidate.get('spec')])
         readings = []
         for paper in selected:
@@ -792,7 +798,8 @@ class Controller:
                     comparison_search=candidate['proposal'].get('comparison_search', {}))
             if self.phase == 'problem':
                 payload.update(purpose='problem_research', reading_question=question,
-                               acquisition_requests=requests)
+                               acquisition_requests=requests, research_intent=self.store.get('research_intent'),
+                               user_goal=self.store.get('topic'))
             if self.phase == 'orientation':
                 payload.update(purpose='background_orientation', reading_question=question)
             if design:
@@ -803,26 +810,34 @@ class Controller:
                 payload['method_spec'] = candidate['spec']
             if selection:
                 payload['reading_selection'] = {k: v for k, v in selection.items() if k != 'excerpt'}
-            result = self.task("inspect_source", payload,
-                lambda x: make_evidence(paper, x["observations"], excerpt, source_spans=spans))
+            def check_reading(value):
+                make_evidence(paper, value['observations'], excerpt, source_spans=spans)
+                if stage == 'read_problem_source':
+                    from .source_understanding import validate_reading_points
+                    validate_reading_points(value)
+            result = self.task(stage, payload, check_reading, publish=stage != 'read_problem_source')
             retained = [e for e in self.store.rows("evidence") if e["paper_id"] == paper["id"]
                 and e.get("source_hash") == digest(text) and e.get("source_kind") == "full_text"
                 and e.get("extraction_stage") in self.guidance_keys
-                and (e.get("extraction_stage") != "inspect_source"
-                     or e.get("guidance_key") == self.guidance_keys["inspect_source"])
-                and not (e["extraction_stage"] == "inspect_source" and e.get("extraction_scope") == scope)]
+                and (e.get("extraction_stage") not in {'inspect_source', 'read_problem_source'}
+                     or e.get("guidance_key") == self.guidance_keys[e['extraction_stage']])
+                and not (e["extraction_stage"] == stage and e.get("extraction_scope") == scope)]
             generated = make_evidence(paper, result["observations"], excerpt, source_spans=spans)
             for record in generated:
                 # Directed interpretations must not overwrite an identical
                 # neutral quote or the evidence of another candidate.
-                record['id'] = 'ev_' + digest([record['id'], 'inspect_source', scope])[:12]
-                record.update(extraction_stage="inspect_source", guidance_key=self.guidance_keys["inspect_source"],
+                record['id'] = 'ev_' + digest([record['id'], stage, scope])[:12]
+                record.update(extraction_stage=stage, guidance_key=self.guidance_keys[stage],
                               extraction_scope=scope)
             self.store.replace_evidence(paper["id"], list({e["id"]: e for e in retained + generated}.values()))
             reading = {'paper_id': paper['id'], 'source_hash': digest(text), 'scope': scope,
                        'reading_question': question, 'acquisition_requests': requests,
                        'selection': payload.get('reading_selection', {'selection_note': 'General section sampling'}),
                        'evidence_ids': [e['id'] for e in generated]}
+            if stage == 'read_problem_source':
+                from .source_understanding import save_understanding
+                reading = save_understanding(self, reading, result, generated, paper)
+                self.activity(stage, reading, False)
             journal = self.store.get('focused_readings', {})
             journal[digest([paper['id'], scope, question])] = reading
             self.store.set('focused_readings', journal)

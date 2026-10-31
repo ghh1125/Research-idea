@@ -5,6 +5,7 @@ from .store import digest
 def _reading_scope(controller):
     """Explicit settings invalidate saved work; incidental new papers do not."""
     return [controller.store.get('source_revision', 0), controller.guidance_keys.get('inspect_source'),
+            controller.guidance_keys.get('read_problem_source'), controller.store.get('research_intent'),
             {name: controller.config.get(name) for name in ('auto_search', 'search_source',
                 'search_venues', 'fetch_full_text', 'source_chars', 'deep_reading',
                 'max_paper_read_chunks', 'max_followup_reads')},

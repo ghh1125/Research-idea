@@ -92,7 +92,7 @@ def problem_discovery_context(context, selected_ids=None):
         original_evidence = result.get('evidence', [])
         result['evidence'] = [item for item in original_evidence
                               if item.get('paper_id') in selected_ids
-                              and item.get('extraction_stage') != 'inspect_source']
+                              and item.get('extraction_stage') not in {'inspect_source', 'read_problem_source'}]
         retained_refs = {item['id'] for item in result['evidence']}
         removed_refs = {item['id'] for item in original_evidence} - retained_refs
         result['papers'] = [paper for paper in result.get('papers', [])

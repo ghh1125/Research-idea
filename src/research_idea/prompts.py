@@ -10,6 +10,8 @@ PROMPT_VERSION = "42"
 
 
 def stage_version(stage):
+    if stage == "read_problem_source":
+        return "1"
     # Presentation and ideation changes do not invalidate already read sources.
     if stage in {'frame_question', 'discuss_direction', 'discuss_question', 'plan_problem_reading'}:
         return '53'
@@ -254,6 +256,13 @@ INSTRUCTIONS['map'] += """
 
 from .intent_instructions import extend as _extend_intent_instructions
 _extend_intent_instructions(INSTRUCTIONS)
+
+from .source_understanding import READING_INSTRUCTIONS
+INSTRUCTIONS['read_problem_source'] = READING_INSTRUCTIONS
+for _stage in ('explore_problems', 'deepen_problem', 'reconsider_problems', 'map', 'discuss_direction', 'discuss_question', 'frame_question'):
+    INSTRUCTIONS[_stage] += """
+source_understandings 是定向阅读后的解释，包含方法为何作用、信息从哪里来、输入到输出的过程及对当前问题的影响；不是额外实验结果。paper_claim 是原文所述，prior_literature 是该文对前作的转述，reasoned_inference 与 hypothesis 是分析和猜想。引用仍用关联的原文 evidence_ids。综合多篇的研究目标、有效回应和条件，推导对用户原目标的认识，不把单篇研究的小场景当成全部背景。先说明已有方法怎样成功，再解释成功之后还可能遇到什么；不能强迫每篇贡献一个缺点。不要把方法声称能获得某信息，等同于已经说明如何可靠取得它。
+"""
 
 def make_prompt(stage: str, payload: dict, local_guidance: list | None = None) -> str:
     guidance = ""

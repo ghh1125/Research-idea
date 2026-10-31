@@ -35,6 +35,11 @@ PLAN_SEARCH = obj(research_question=STR, scope=STR,
 SCREEN_PAPERS = obj(selection_summary=STR,
     selected=array(obj(paper_id=STR, reason=STR, reading_question=STR, reading_role=string(["landscape", "method"]), route_ids=STRINGS)))
 EVIDENCE = obj(observations=array(obj(statement=STR, quote=STR, kind=string(["reported_result", "author_claim", "limitation"]), conditions=STR, source_section=STR)))
+READING_POINT = obj(role=string(['research_problem', 'prior_response', 'core_intuition',
+    'input', 'information_source', 'processing', 'output', 'research_impact']),
+    text=STR, information_type=string(['paper_claim', 'prior_literature', 'reasoned_inference', 'hypothesis']),
+    observation_indices=STRINGS)
+PROBLEM_SOURCE = obj(observations=EVIDENCE['properties']['observations'], reading_points=array(READING_POINT))
 CLAIM_AUDIT = obj(
     paper_id=STR,
     reading_coverage=obj(experiments=string(["read", "partial", "unavailable"]),
@@ -166,6 +171,7 @@ SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract"
 SCHEMAS.update(plan_problem_reading=PROBLEM_READING, discuss_direction=DISCUSS_DIRECTION,
                discuss_question=DISCUSS_QUESTION, frame_question=FRAME_QUESTION)
 SCHEMAS['interpret_research'] = RESEARCH_INTENT
+SCHEMAS['read_problem_source'] = PROBLEM_SOURCE
 SCHEMAS['reconsider_problems'] = obj(pool=PROBLEM_POOL,
     changes=array(obj(previous_ids=STRINGS, current_ids=STRINGS, reason=STR, evidence_ids=STRINGS)))
 

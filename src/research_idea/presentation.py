@@ -3,6 +3,7 @@ from __future__ import annotations
 
 
 STAGE_LABELS = {
+    "read_problem_source": ("read", "读懂已有方法与当前问题的关系"),
     "interpret_research": ("concept", "理解研究目标与关键关切"),
     "reconsider_problems": ("analysis", "新材料后的方向调整"),
     'plan_search': ('search', '第一阶段 · 文献构思 · 找论文'),
@@ -175,6 +176,9 @@ def activity_summary(stage, result, citations=None):
     """Show decisions and findings at every stage, rather than nested schema fields."""
     if stage == 'frame_question':
         return research_brief_markdown(result, citations)
+    if stage == 'read_problem_source':
+        from .source_understanding import understanding_text
+        return understanding_text(result, citations)
     lines = []
     def add(label, value):
         if value:

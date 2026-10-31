@@ -216,7 +216,7 @@ def export_report(store: Store, output_dir: Path | None = None):
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
     cards = current_cards(papers, evidence, store.get("paper_cards", {}), store.get("paper_readings", {}))
-    data = {"schema_version": 17, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
+    data = {"schema_version": 18, "generated_at": now(), "demo": demo, "topic": store.get("topic"), "status": store.get("status", "initialized"),
         "problem_response_analyses": store.get("problem_response_analyses", {}),
         "cross_paper_synthesis": store.get("cross_paper_synthesis", []),
         "problem_explanations": store.get("problem_explanations", {}),
@@ -224,6 +224,7 @@ def export_report(store: Store, output_dir: Path | None = None):
         "problem_reconsiderations": store.get("problem_reconsiderations", {}),
         "reasoning_notes": store.get("reasoning_notes", []),
         "research_intent": store.get("research_intent"),
+        "source_understandings": store.get("source_understandings", {}),
         "research_intent_history": store.get("research_intent_history", []),
         "citation_calibration": store.get("citation_calibration", {}),
         "problem_exploration": store.get("problem_exploration", {}), "problem_cases": store.get("problem_cases", []),
