@@ -12,8 +12,9 @@ from research_idea.demo import DemoBackend
 from research_idea.discussion_sources import research_requests
 from research_idea.presentation import activity_summary
 from research_idea.citations import Citations
-from research_idea.source_understanding import current_understandings, validate_reading_points
-from research_idea.store import Store
+from research_idea.source_understanding import (current_understandings, validate_reading_points,
+    compact_understandings, reading_result_view)
+from research_idea.store import Store, digest
 
 QUOTES = [
     'Training labels are obtained from the simulator; no correctness labels are available during deployment.',
@@ -145,6 +146,57 @@ class UnderstandingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'this source call'):
             validate_reading_points(value)
 
+    def test_provisional_goal_reading_remains_isolated_until_intent_is_committed(self):
+        new_intent = {'goal': '解释反馈可靠性的新目标'}
+        request = [dict(question='新目标下怎样取得反馈？', query='', paper_ids=['routing'])]
+        work = research_requests(self.controller(), request, key='new-goal',
+            reading_context={'research_intent': new_intent, 'user_goal': new_intent['goal']})
+        self.assertIsNone(self.store.get('research_intent'))
+        self.assertEqual(current_understandings(self.controller()), [])
+        reading_payload = self.backend.calls[-1][1]
+        self.assertEqual(reading_payload['research_intent'], new_intent)
+        self.assertEqual(work['readings'][0]['intent_key'], digest(new_intent))
+        self.store.set('research_intent', new_intent)
+        self.assertEqual(len(current_understandings(self.controller())), 1)
+
+    def test_goal_revision_and_reading_recover_atomically_after_followup_failure(self):
+        from research_idea.problem_dialogue import discuss
+        from research_idea.conversation import append_message
+        self.controller().run_questions(interactive=True)
+        old = deepcopy(self.store.get('research_intent'))
+        message = append_message(self.store, 'user', '改为研究部署时反馈的可靠性。')
+        revised = {**deepcopy(old), 'goal': message['content'], 'mode': 'assess',
+                   'goal_sources': [dict(message_id=message['id'], quote=message['content'])]}
+        original = self.backend.generate
+        fail = [True]
+        seen = []
+        def generate(task):
+            if task.stage != 'discuss_direction':
+                return original(task)
+            data = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+            seen.append(data)
+            if data['source_work_done'] and fail[0]:
+                raise RuntimeError('followup interrupted')
+            return BackendResult(dict(answer='按部署时的反馈来讨论。', memory_updates=[], reasoning_updates=[],
+                updated_pool=[], updated_intent=[revised], research_requests=[] if data['source_work_done'] else
+                [dict(question='部署时怎样获得反馈？', query='', paper_ids=['routing'])]))
+        self.backend.generate = generate
+        with self.assertRaisesRegex(RuntimeError, 'interrupted'):
+            discuss(self.controller(), message)
+        self.assertEqual(self.store.get('research_intent'), old)
+        self.assertEqual(current_understandings(self.controller()), [])
+        self.assertEqual([stage for stage, _, _ in self.backend.calls].count('read_problem_source'), 1)
+        fail[0] = False
+        discuss(self.controller(), message)
+        self.assertEqual(self.store.get('research_intent'), revised)
+        self.assertEqual(len(current_understandings(self.controller())), 1)
+        self.assertEqual([stage for stage, _, _ in self.backend.calls].count('read_problem_source'), 1)
+        followup = seen[-1]
+        self.assertEqual(followup['research_intent'], revised)
+        self.assertEqual(followup['saved_research_intent'], old)
+        self.assertEqual(len(followup['source_understandings']), 1)
+        self.assertNotIn('reading_points', followup['reading_result']['readings'][0])
+
     def test_display_leads_with_impact_and_resolves_the_paper_link(self):
         reading = self.read()['readings'][0]
         rendered = activity_summary('read_problem_source', reading, Citations.from_store(self.store))
@@ -153,3 +205,50 @@ class UnderstandingTests(unittest.TestCase):
         self.assertIn('分析推断', rendered)
         self.assertIn('论文所述', rendered)
         self.assertNotIn('observation_indices', rendered)
+
+
+class ContextBudgetTests(unittest.TestCase):
+    def test_budget_keeps_whole_points_and_shares_space_across_sources(self):
+        records = [dict(paper_id=f'p{i}', reading_question='原文的具体问题', evidence_ids=[f'ev{i}'],
+            reading_points=[dict(role=role, information_type='reasoned_inference', evidence_ids=[f'ev{i}'],
+                                 text=f'{i}-{j}：' + '完整论证与条件。' * 35 + '仅在指定条件下成立。')
+                for j, role in enumerate(('input', 'core_intuition', 'research_impact', 'processing'))])
+            for i in range(8)]
+        before = deepcopy(records)
+        view = compact_understandings(records, 7000)
+        self.assertLessEqual(len(json.dumps(view['readings'], ensure_ascii=False)), 7000)
+        self.assertEqual(view['coverage']['shown_readings'], 8)
+        self.assertLess(view['coverage']['shown_points'], view['coverage']['current_points'])
+        for reading in view['readings']:
+            original = next(r for r in records if r['paper_id'] == reading['paper_id'])
+            for p in reading['reading_points']:
+                self.assertIn(p, original['reading_points'])
+                self.assertTrue(p['text'].endswith('仅在指定条件下成立。'))
+        self.assertEqual(records, before)
+
+    def test_repeated_readings_do_not_evict_other_paper_families(self):
+        def record(pid, question):
+            return dict(paper_id=pid, reading_question=question, evidence_ids=[], reading_points=[
+                dict(role='research_impact', information_type='hypothesis', text='完整判断', evidence_ids=[])])
+        records = [record('earlier-family', '早期主要思路')]
+        records += [record('recent-paper', f'后续讨论{i}') for i in range(20)]
+        view = compact_understandings(records)
+        self.assertEqual(len(view['readings']), 12)
+        self.assertIn('earlier-family', [r['paper_id'] for r in view['readings']])
+        self.assertEqual(view['coverage']['current_readings'], 21)
+
+    def test_oversized_point_is_not_truncated_or_allowed_to_evict_short_points(self):
+        records = [dict(paper_id='p', reading_question='question', evidence_ids=['ev'], reading_points=[
+            dict(role='research_impact', information_type='hypothesis', text='解释' * 20000, evidence_ids=[]),
+            dict(role='information_source', information_type='paper_claim', text='标签仅在训练时可用。', evidence_ids=['ev'])])]
+        view = compact_understandings(records, 1000)
+        self.assertEqual(view['coverage']['shown_points'], 1)
+        self.assertEqual(view['readings'][0]['reading_points'][0], records[0]['reading_points'][1])
+
+    def test_followup_handoff_does_not_duplicate_full_explanations(self):
+        work = dict(readings=[dict(paper_id='p', evidence_ids=['ev'], reading_points=[{'text': 'explanation'}])],
+                    search_status='completed')
+        view = reading_result_view(work)
+        self.assertNotIn('reading_points', view['readings'][0])
+        self.assertEqual(view['readings'][0]['evidence_ids'], ['ev'])
+        self.assertIn('reading_points', work['readings'][0])

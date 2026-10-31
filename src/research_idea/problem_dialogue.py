@@ -269,8 +269,12 @@ def discuss(controller, message):
     working = apply_discussion(controller, checkpoint, result, context)
     if result['research_requests']:
         from .discussion_sources import research_requests
+        from .source_understanding import understanding_context, reading_result_view
+        effective_intent = (result.get('updated_intent') or [context.get('research_intent')])[0]
+        reading_options = {'reading_context': {'research_intent': effective_intent,
+                           'user_goal': effective_intent['goal']}} if result.get('updated_intent') else {}
         try:
-            work = research_requests(controller, result['research_requests'], key=['discussion', message['id']])
+            work = research_requests(controller, result['research_requests'], key=['discussion', message['id']], **reading_options)
         finally:
             # Only this operation's own source acquisition changes the saved
             # fingerprint; external scope changes still invalidate the pause.
@@ -278,6 +282,9 @@ def discuss(controller, message):
             saved['source_key'] = source_key(controller)
             store.set('problem_checkpoint', saved)
         context = controller.ideation_context()
+        view = understanding_context(controller, intent_key=digest(effective_intent))
+        context['source_understandings'] = view['readings']
+        context['source_understanding_coverage'] = view['coverage']
         working_checkpoint = {**checkpoint, 'current': working}
         def checked_followup(value):
             revised_intent(controller, value, message)
@@ -288,9 +295,10 @@ def discuss(controller, message):
             revised_memory(store, value['memory_updates'], supplied)
         followup = controller.task(stage, {**context, **memory, 'discussion_kind': kind,
             'problem_model': working, 'current_user_message': message, 'source_work_done': True,
-            'reading_result': work, 'previous_discussion': result,
-            'research_intent': (result.get('updated_intent') or [context.get('research_intent')])[0],
-            'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them.'}, checked_followup, publish=False)
+            'reading_result': reading_result_view(work), 'previous_discussion': result,
+            'research_intent': effective_intent,
+            'saved_research_intent': store.get('research_intent'),
+            'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them. research_intent is provisional for this reading, not yet saved. Return updated_intent as the final complete revision against saved_research_intent; [] means keep the saved intent.'}, checked_followup, publish=False)
         working = apply_discussion(controller, working_checkpoint, followup, context)
         result = followup
     intent_changes = revised_intent(controller, result, message)

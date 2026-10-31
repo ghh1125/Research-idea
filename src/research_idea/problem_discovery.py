@@ -29,8 +29,9 @@ def reconsider_after_reading(controller, pool, context, work):
             if not set(change['previous_ids']) <= previous_ids or not set(change['current_ids']) <= current_ids:
                 raise ValueError('Revision links must name the before and after directions')
     controller.progress('[analysis] 把新读到的材料带回构思：保留、重述或更换问题方向。')
+    from .source_understanding import reading_result_view
     result = controller.task('reconsider_problems', {**context, 'previous_pool': pool,
-        'reading_results': work}, check)
+        'reading_results': [reading_result_view(item) for item in work]}, check)
     record = {'before': deepcopy(pool), 'after': deepcopy(result['pool']), 'changes': result['changes']}
     journal = controller.store.get('problem_reconsiderations', {})
     journal[digest(record)] = record

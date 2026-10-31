@@ -1,5 +1,6 @@
 """Carry paper-level understanding into question discovery, with quote provenance."""
 from copy import deepcopy
+import json
 
 from .store import digest
 
@@ -55,7 +56,7 @@ def save_understanding(controller, reading, result, generated, paper):
               {'evidence_ids': list(dict.fromkeys(indices[i] for i in point['observation_indices']))}
               for point in result.get('reading_points', [])]
     reading = {**reading, 'reading_points': points, 'title': paper['title'],
-               'intent_key': digest(controller.store.get('research_intent')),
+               'intent_key': reading.get('intent_key', digest(controller.store.get('research_intent'))),
                'guidance_key': controller.guidance_keys['read_problem_source']}
     journal = controller.store.get('source_understandings', {})
     key = digest([paper['id'], reading['scope'], reading['reading_question']])
@@ -65,12 +66,12 @@ def save_understanding(controller, reading, result, generated, paper):
     return reading
 
 
-def current_understandings(controller):
+def _current_records(controller, intent_key=None):
     """Exclude changed sources, expired guidance and interpretations of an old goal."""
     store = controller.store
     papers = {p['id']: p for p in store.rows('papers')}
     evidence = {e['id']: e for e in store.rows('evidence')}
-    intent_key = digest(store.get('research_intent'))
+    intent_key = intent_key if intent_key is not None else digest(store.get('research_intent'))
     current = []
     for reading in store.get('source_understandings', {}).values():
         paper = papers.get(reading['paper_id'])
@@ -83,7 +84,7 @@ def current_understandings(controller):
             continue
         current.append({key: deepcopy(reading[key]) for key in
                         ('paper_id', 'reading_question', 'reading_points', 'evidence_ids')})
-    return current[-12:]
+    return current
 
 
 ROLE_LABELS = {'research_problem': '论文要解决什么', 'prior_response': '已有方法做到哪里',
@@ -106,3 +107,72 @@ def understanding_text(reading, citations=None):
                 text = citations.text(text, compact=True)
             lines.append(f"**{ROLE_LABELS[role]} · {TYPE_LABELS[point['information_type']]}**\n\n{text}")
     return '\n\n'.join(lines)
+
+
+def compact_understandings(records, max_chars=12000):
+    """Spend an additive context allowance on whole points, fairly across readings.
+
+    Never cut a condition off a claim to make it fit. Full records and original
+    evidence stay in storage. The serialized view, including IDs, is bounded.
+    """
+    # Repeated discussion of one paper must not displace every other source.
+    chosen, papers = set(), set()
+    for i in reversed(range(len(records))):
+        if records[i]['paper_id'] not in papers:
+            chosen.add(i)
+            papers.add(records[i]['paper_id'])
+        if len(chosen) == 12:
+            break
+    for i in reversed(range(len(records))):
+        if len(chosen) == 12:
+            break
+        chosen.add(i)
+    recent = [records[i] for i in sorted(chosen)]
+    selected = {i: set() for i in range(len(recent))}
+    priority = {role: i for i, role in enumerate(('research_impact', 'core_intuition',
+        'information_source', 'processing', 'input', 'output', 'research_problem', 'prior_response'))}
+    ranked = [sorted(range(len(r['reading_points'])), key=lambda j: (
+        priority.get(r['reading_points'][j]['role'], 99), j)) for r in recent]
+    def render():
+        result = []
+        for i, reading in enumerate(recent):
+            if not selected[i]:
+                continue
+            points = [deepcopy(p) for j, p in enumerate(reading['reading_points']) if j in selected[i]]
+            result.append({'paper_id': reading['paper_id'], 'reading_question': reading['reading_question'],
+                           'reading_points': points,
+                           'evidence_ids': list(dict.fromkeys(eid for p in points for eid in p['evidence_ids']))})
+        return result
+    for depth in range(max((len(items) for items in ranked), default=0)):
+        for i in reversed(range(len(recent))):
+            if depth >= len(ranked[i]):
+                continue
+            j = ranked[i][depth]
+            selected[i].add(j)
+            if len(json.dumps(render(), ensure_ascii=False)) > max_chars:
+                selected[i].remove(j)
+    readings = render()
+    return {'readings': readings, 'coverage': {
+        'current_readings': len(records), 'shown_readings': len(readings),
+        'current_points': sum(len(r['reading_points']) for r in records),
+        'shown_points': sum(len(r['reading_points']) for r in readings),
+        'view_characters': len(json.dumps(readings, ensure_ascii=False)), 'character_limit': max_chars,
+        'selection': 'Whole points only; omitted detail remains in stored readings. Source quotes are supplied separately.'}}
+
+
+def understanding_context(controller, *, intent_key=None):
+    return compact_understandings(_current_records(controller, intent_key))
+
+
+def current_understandings(controller):
+    return understanding_context(controller)['readings']
+
+
+def reading_result_view(work):
+    """Do not inject the same explanations again through a second payload path."""
+    if not work:
+        return work
+    view = deepcopy(work)
+    for reading in view.get('readings', []):
+        reading.pop('reading_points', None)
+    return view

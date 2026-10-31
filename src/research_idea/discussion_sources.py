@@ -41,7 +41,7 @@ def validate_requests(requests, paper_ids):
             raise ValueError('Read only supplied paper IDs; use a query to find new papers')
 
 
-def research_requests(controller, requests, *, key):
+def research_requests(controller, requests, *, key, reading_context=None):
     """Search metadata, select up to two sources total, then read relevant text.
 
     Selection is persisted before downloading. A retry reuses its exact papers
@@ -50,7 +50,10 @@ def research_requests(controller, requests, *, key):
     store = controller.store
     validate_requests(requests, {p['id'] for p in store.rows('papers')})
     ledger = store.get('problem_research_ledger', {})
-    fingerprint = digest([key, requests, _reading_scope(controller)])
+    fingerprint_parts = [key, requests, _reading_scope(controller)]
+    if reading_context:
+        fingerprint_parts.append(reading_context)
+    fingerprint = digest(fingerprint_parts)
     entry = ledger.get(fingerprint, {})
     if entry.get('completed'):
         return entry
@@ -67,6 +70,8 @@ def research_requests(controller, requests, *, key):
             'comparison_search': {'comparison_need': question,
                                   'questions': [{'question': r['question'], 'query': r['query']} for r in requests]}},
             'retrieved_work_ids': []}
+        if reading_context:
+            candidate['reading_context'] = reading_context
         if 'selected_ids' not in entry:
             selected = list(dict.fromkeys(pid for r in requests for pid in r['paper_ids']))[:2]
             keys = []

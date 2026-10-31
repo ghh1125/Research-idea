@@ -439,8 +439,10 @@ class Controller:
         from .reasoning_memory import reasoning_context
         context = problem_discovery_context(source_context, selected_ids=self.initial_paper_ids())
         context['reasoning_notes'] = reasoning_context(self.store)
-        from .source_understanding import current_understandings
-        context['source_understandings'] = current_understandings(self)
+        from .source_understanding import understanding_context
+        view = understanding_context(self)
+        context['source_understandings'] = view['readings']
+        context['source_understanding_coverage'] = view['coverage']
         # Problem-directed readings are separate from old technical-design
         # readings. Explicitly carry their source quotes into later judgments.
         question_refs = set(self.store.get('question_source_evidence', []))
@@ -762,7 +764,11 @@ class Controller:
         if selected_ids is not None:
             selected = [p for p in selected if p['id'] in selected_ids]
         stage = 'read_problem_source' if self.phase == 'problem' else 'inspect_source'
-        scope = digest([candidate["proposal"], candidate.get('spec')])
+        reading_context = candidate.get('reading_context') or {}
+        scope_parts = [candidate["proposal"], candidate.get('spec')]
+        if reading_context:
+            scope_parts.append(reading_context)
+        scope = digest(scope_parts)
         readings = []
         for paper in selected:
             text = paper.get("text") or paper.get("abstract") or ""
@@ -798,8 +804,9 @@ class Controller:
                     comparison_search=candidate['proposal'].get('comparison_search', {}))
             if self.phase == 'problem':
                 payload.update(purpose='problem_research', reading_question=question,
-                               acquisition_requests=requests, research_intent=self.store.get('research_intent'),
-                               user_goal=self.store.get('topic'))
+                               acquisition_requests=requests,
+                               research_intent=reading_context.get('research_intent', self.store.get('research_intent')),
+                               user_goal=reading_context.get('user_goal', self.store.get('topic')))
             if self.phase == 'orientation':
                 payload.update(purpose='background_orientation', reading_question=question)
             if design:
@@ -836,6 +843,7 @@ class Controller:
                        'evidence_ids': [e['id'] for e in generated]}
             if stage == 'read_problem_source':
                 from .source_understanding import save_understanding
+                reading['intent_key'] = digest(payload.get('research_intent'))
                 reading = save_understanding(self, reading, result, generated, paper)
                 self.activity(stage, reading, False)
             journal = self.store.get('focused_readings', {})
