@@ -14,7 +14,7 @@ The current version, **v0.8.0**, adds a local Web interface design preview and p
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
-**Web interface preview:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. It is not connected to the research backend yet; the CLI remains the working application.
+**Web interface preview:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. Model discovery is connected to local Codex; research interactions remain a preview, and the CLI runs actual research.
 
 ## 2. What makes a good research idea?
 
@@ -198,23 +198,23 @@ For a guided setup of the topic, model, papers, and budget, run `research-idea l
 
 ### Launch the Web preview: explore the interface in your browser
 
-Run from the **Research-idea repository root**, the directory containing `pyproject.toml`.
+After installation or upgrade, run from any directory. The sidebar switches or creates conversations; the central conversation shows stage progress. Settings and step details open in dialogs, including searches, paper evidence, skills, revisions, and usage. Sending discusses the current content; Continue advances to the next stage. Built-in skill text is read from the installed package, while research activity records remain demonstrations.
 
 macOS / Linux:
 
 ```bash
-python3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+research-idea web
 ```
 
 Windows (PowerShell):
 
 ```powershell
-py -3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+research-idea web
 ```
 
-Keep the terminal open and visit **http://127.0.0.1:8769/** in your browser. Press **Ctrl+C** to stop the preview server.
+The browser opens **http://127.0.0.1:8769/** automatically. Keep the terminal open; press **Ctrl+C** to stop. Use `--no-browser` to suppress opening the browser, `--port 8770` to change the port, or `--codex-bin` / `--codex-profile` to select the local Codex installation and profile.
 
-**The v0.8.0 Web interface is currently an interactive preview.** You can explore the conversation, model dropdown, research materials, and settings, but it does not execute research or discover account models yet. Use `research-idea` above for real research. There is no `research-idea web` subcommand yet. See the [Web preview guide](docs/web-preview/README.md).
+**Model discovery now uses a real local service.** It reads the Codex cache and refreshes through the Codex model-list interface, shows the source, and updates reasoning options for the selected model. Failed refreshes preserve previous results. A catalog is not an entitlement check. Other providers are not connected yet. **Research conversations and steps remain an interactive preview**; use `research-idea` above for real research. The old `python -m http.server` command serves static files only and cannot discover local models. See the [Web guide](docs/web-preview/README.md).
 
 ### CLI: start a research run directly
 
@@ -432,6 +432,7 @@ Every subcommand has a description, argument help, and examples. Use `research-i
 | `launch` | Run the guided setup, then start research; --setup-only saves without running. | `research-idea launch` |
 | `init` | Initialize the project and topic without calling a model. | `research-idea init "TOPIC" --project ./research-projects/my-idea` |
 | `start` | Configure a topic and materials, then run; use chat for interactive discussion pauses. | `research-idea start "TOPIC" --project ./research-projects/my-idea` |
+| `web` | Open the local Web interface with real Codex model discovery and preview research interactions. | `research-idea web`<br>`research-idea web --no-browser --port 8770` |
 | `run` | Start or continue using project settings; --replan reconsiders directions from current materials. | `research-idea run --project ./research-projects/my-idea` |
 | `resume` | Resume from successful checkpoints; interactive pauses still require /continue in chat. | `research-idea resume --project ./research-projects/my-idea` |
 | `add` | Import paper files without immediately calling a model to read them. | `research-idea add --project ./research-projects/my-idea paper.pdf notes.md` |
