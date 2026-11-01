@@ -14,6 +14,8 @@ The current version, **v0.7.0**, preserves the research purpose across search, d
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
+**Upcoming Web interface:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. It is not connected to the research backend yet; the CLI remains the working application.
+
 ## 2. What makes a good research idea?
 
 **Motivation is central; finding the right problem comes first.** The goal is a meaningful question that could support research at a leading CCF-A venue: explaining an important phenomenon, identifying an obstacle to the field's original goal, or pursuing a valuable new capability. An extra module, a small score improvement, or a restated trade-off does not establish significance on its own. A technique should not dictate the question simply because it is easy to implement.
