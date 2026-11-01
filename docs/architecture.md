@@ -11,6 +11,8 @@ Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目�
 | `problem_discovery.py` | 方向探索、独立深入与比较交接 |
 | `problem_dialogue.py` | 方向/问题讨论、增量修订、原子保存对话与研究版本 |
 | `discussion_sources.py` | 具体问题触发的有界检索/补读、选择记录与恢复 |
+| `focused_reading.py` | 当前问题与指定编号优先的正文定位，保留连续原文及位置 |
+| `research_context.py` | 来源视图、运行记录压缩与模型输入的可还原去重 |
 | `conversation.py` | 原始历史、有效要求、旧消息检索、阶段作用域与迁移 |
 | `memory_scope.py` | 根据用户原话校正局部表达要求的期限，兼容旧会话 |
 | `discussion_focus.py` | 单个可选追问的校验、显示与跨轮接续，独立于用户研究决定 |
@@ -23,6 +25,10 @@ Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目�
 | `backends/` | Codex、Claude Code、OpenAI-compatible、Anthropic 适配器 |
 
 ## 当前主流程
+
+`make_prompt` 仅在问题发现、讨论和最终整理阶段调用 `compact_task_payload`。完全相同且较长的研究记录共享前文 JSON pointer 引用，不进行语义摘要或按长度截断；不同条件不会被合并。证据和对话记忆保持内联。存储、缓存指纹、检查器及报告继续使用完整原始载荷，模型输出也必须是原有完整结构。`expand_task_payload` 供离线后端和测试验证还原，不增加真实模型调用。该措施减少重复，不保证任意大小的证据集都能满足模型上下文上限。
+
+补读使用对应论文的本轮问题；没有新问题才回退到首次选文的问题。引号内检索短语保留为整体。显式编号优先定位正文或附录中的算法/章节/图表标题，再补充附近原文和关键词窗口，仍受 `source_chars` 限制且排除参考文献条目。定位版本加入补读缓存依据，避免复用旧选段；引文校验仍限定到实际提供的连续原文窗口。
 
 ```mermaid
 flowchart TD

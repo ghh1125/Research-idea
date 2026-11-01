@@ -6,6 +6,18 @@ text nor treats an unmatched term as evidence that a technique is absent.
 from __future__ import annotations
 
 import re
+import shlex
+
+LOCATOR_VERSION = '2'
+
+
+def query_reading_terms(query):
+    """Keep quoted search phrases intact when turning a query into locators."""
+    try:
+        terms = shlex.split(query)
+    except ValueError:
+        terms = query.replace('"', ' ').split()
+    return [term for term in terms if term.upper() not in {'AND', 'OR', 'NOT'}]
 
 
 _STOP_WORDS = frozenset("a an and are as at be by for from how in is it of on or the to was what which with".split())
@@ -134,7 +146,58 @@ def _operative_sections(text, body_ranges):
         rank = (not canonical, line.start())
         if family not in choices or rank < choices[family][0]:
             choices[family] = (rank, item)
+    # Numbered algorithm captions often contain a complete sentence and exceed
+    # the short-heading limit. They are still useful operative locations.
+    if 'algorithm' not in choices:
+        for line in re.finditer(r'(?im)^[ \t]*Algorithm\s+\d+(?!\d)[^\n\r]*', text):
+            body = next(((a, b) for a, b in body_ranges if a <= line.start() < b), None)
+            if body:
+                choices['algorithm'] = ((), {'title': line.group().strip()[:240], 'start': line.start(),
+                    'heading_end': line.end(), 'family': 'algorithm',
+                    'body_start': body[0], 'body_end': body[1]})
+                break
     return [choices[family][1] for family in families if family in choices]
+
+
+def _requested_sections(text, question, body_ranges):
+    """Resolve explicit numbered locations before ranking broad term hits.
+
+    Captions may be long and PDF text may wrap the label and number. Only
+    line-start targets are preferred; prose references to them are not targets.
+    Source text and offsets are never normalized or rewritten.
+    """
+    labels = {
+        'algorithm': r'(?:algorithm|alg\.?|算法)',
+        'section': r'(?:section|sec\.?|章节)',
+        'table': r'(?:table|表)',
+        'figure': r'(?:figure|fig\.?|图)',
+        'appendix': r'(?:appendix|附录)',
+    }
+    found = []
+    for family, label in labels.items():
+        for mention in re.finditer(label + r'\s*([A-Z](?:\.\d+)*|\d+(?:\.\d+)*)(?![A-Z0-9]|\.\d)', question, re.I):
+            number = mention.group(1)
+            prefix = label + r'\s*' + re.escape(number)
+            if family == 'section':
+                prefix = r'(?:' + label + r'\s*)?' + re.escape(number) + r'(?=\s|[.)]\s)'
+            pattern = re.compile(r'(?im)^[ \t]*(?:#{1,6}[ \t]*)?' + prefix
+                                 + r'(?!\w|\.\d)(?:\.(?!\d))?[^\n\r]*')
+            matches = []
+            for hit in pattern.finditer(text):
+                body = next(((a, b) for a, b in body_ranges if a <= hit.start() < b), None)
+                if body:
+                    item = {'title': hit.group().strip()[:240], 'start': hit.start(),
+                            'heading_end': hit.end(), 'family': family,
+                            'body_start': body[0], 'body_end': body[1]}
+                    # A wrapped introductory sentence can also start with an
+                    # algorithm label. Nearby numbered operations favor its
+                    # actual caption over such references to the algorithm.
+                    operations = len(re.findall(r'(?m)^[ \t]*\d+:[ \t]*',
+                        text[hit.end():min(body[1], hit.end() + 1600)])) if family == 'algorithm' else 0
+                    matches.append((operations, item))
+            if matches:
+                found.append(max(matches, key=lambda pair: (pair[0], -pair[1]['start']))[1])
+    return sorted({item['start']: item for item in found}.values(), key=lambda item: item['start'])[:2]
 
 
 def _operative_window(text, section, width):
@@ -157,16 +220,20 @@ def _operative_window(text, section, width):
 def select_focused_excerpt(text: str, limit: int, search_terms, reading_question: str = "") -> dict | None:
     """Return exact source spans plus audit metadata, or None for generic fallback.
 
-    Explicit English terms locate candidates. English words in the reading
-    question only break ties between those candidates; they cannot create a
-    match. After a lexical match, method/algorithm/implementation context can
+    Explicit numbered locations in the question get first access to the budget.
+    English terms locate other candidates; question words break lexical ties.
+    After a lexical match, method/algorithm/implementation context can
     expose operations absent from an introductory mention. Up to four windows
     are selected, counting span markers in ``limit``. Bibliography-only matches
     never consume the allowance. A match or heading is a location hint, not
     proof of scientific relevance.
     """
     terms = _normalize_terms(search_terms)
-    if not text or not terms or limit <= 0:
+    if not text or limit <= 0:
+        return None
+    body_ranges = _body_ranges(text)
+    targets = _requested_sections(text, reading_question, body_ranges)
+    if not terms and not targets:
         return None
     marker_allowance = len(f"[SOURCE SPAN {len(text)}:{len(text)}]\n") + 2
     available = limit - marker_allowance
@@ -180,7 +247,6 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
                              if word.casefold() not in _STOP_WORDS})[:32]
     question_patterns = [_pattern(word) for word in question_words]
     candidates = set()
-    body_ranges = _body_ranges(text)
     for body_start, body_end in body_ranges:
         for pattern in patterns:
             # Repeated occurrences in one small neighborhood need only one
@@ -192,7 +258,7 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
                     continue
                 seen_buckets.add(bucket)
                 candidates.add(_window(text, hit.start(), hit.end(), width, body_start, body_end))
-    if not candidates:
+    if not candidates and not targets:
         return None
     ranked = []
     for start, end in candidates:
@@ -202,6 +268,19 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
         ranked.append((start, end, matched, question_hits))
     selected, covered, section_context = [], set(), []
     windows_used = 0
+    for section in targets:
+        remaining = limit - len(_render(text, selected)) - marker_allowance
+        target_width = min(remaining, max(width, available // 2))
+        if target_width <= 0:
+            break
+        start, end = _operative_window(text, section, target_width)
+        merged = _merge(selected + [(start, end)])
+        if end > section['start'] and len(_render(text, merged)) <= limit:
+            selected = merged
+            covered.update(i for i, pattern in enumerate(patterns) if pattern.search(text[start:end]))
+            section_context.append({k: section[k] for k in ('title', 'family', 'start')})
+            section_context[-1].update(end=end, explicitly_requested=True)
+            windows_used += 1
     for _ in range(4):
         if not ranked:
             break
@@ -222,7 +301,7 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
             break
         if not accepted:
             break
-        if windows_used == 1:
+        if windows_used == 1 and not targets:
             # Keep the strongest actual keyword passage. Before spending the
             # rest on repeated broad mentions, reserve context for real method
             # and implementation sections, even if they use different terms.
@@ -252,7 +331,7 @@ def select_focused_excerpt(text: str, limit: int, search_terms, reading_question
                           if any(patterns[index].search(text[start:end]) for start, end in selected)],
         "reading_question": reading_question,
         "section_context": section_context,
-        "selection_note": "Continuous source windows located by explicit terms; question words only rank matching windows. "
+        "selection_note": "Continuous source windows prioritize explicitly requested numbered locations, then lexical matches. "
                           "Method, algorithm and implementation heading context supplements repeated introductory mentions. "
                           "Offsets refer to untouched source text. Bibliography-only matches are excluded. "
                           "Lexical matching does not establish scientific relevance, correctness or exhaustive reading.",

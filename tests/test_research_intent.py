@@ -16,7 +16,8 @@ from research_idea.store import Store
 
 
 def read_payload(task):
-    return json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+    from research_idea.research_context import expand_task_payload
+    return expand_task_payload(json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0]))
 
 
 def intent(topic, mode='refine', relation='joint'):

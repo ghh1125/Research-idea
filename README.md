@@ -283,6 +283,8 @@ Instructions have three lifetimes. **Reply instructions** such as “at most 250
 
 Assistant hypotheses do not automatically become user decisions. Later calls receive active notes, their original messages, the current problem version, and relevant earlier conversation—not the entire history in every prompt. Expired instructions remain traceable without becoming active again. The full record remains stored locally.
 
+You can point to a specific passage during discussion, such as “check the update rule after Algorithm 1.” Follow-up reading prioritizes the current question and requested location instead of reusing an old reading question. Paper selection also receives the current problem argument to identify work most likely to address the difficulty, beyond topical similarity. Later reasoning shares exact repeated material through references; source evidence, conditions, user messages, and active requirements remain available. Stored project records and reports are not rewritten or shortened.
+
 `/open PROJECT_DIR` restores the pause point and next-step guidance. Closing the window, restarting the CLI, or switching models does not discard these records. Time spent waiting for user input does not count toward the research budget; discussion calls and additional reading do.
 
 The command-line `start/run/resume` commands use automatic completion for new projects. Projects paused in the interactive window retain their discussion state and need `/continue` from that window.

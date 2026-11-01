@@ -2,6 +2,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+import json
 
 from research_idea.config import DEFAULTS
 from research_idea.controller import Controller, check_references
@@ -12,6 +13,47 @@ from research_idea.store import Store
 
 
 class QuestionSourceContextTests(unittest.TestCase):
+    def test_new_reading_request_supersedes_old_selection_and_keeps_paper_specific_questions(self):
+        from research_idea.backend_types import BackendResult
+        class Reader:
+            name = 'source-test'
+            def __init__(self):
+                self.payloads = []
+            def generate(self, task):
+                data = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
+                self.payloads.append(data)
+                quote = 'The update retains the observed state.'
+                return BackendResult({'observations': [dict(statement='Updates retain the observed state.',
+                    quote=quote, kind='author_claim', conditions='Specified update rule.', source_section='Algorithm 1')],
+                    'reading_points': [dict(role='processing', text='The source specifies an update rule.',
+                        information_type='paper_claim', observation_indices=['0'])]})
+        with tempfile.TemporaryDirectory() as temp:
+            store = Store(Path(temp))
+            try:
+                for pid in ('a', 'b'):
+                    paper = normalize_paper({'id': pid, 'title': pid, 'content_kind': 'full_text',
+                        'text': 'Introduction\nBroad preference learning.\n\n' * 300 +
+                        'Algorithm 1 UPDATE\nThe update retains the observed state.\n\nMore details.'})
+                    paper['selection'] = {'phase': 'problem', 'reading_question': 'OLD question about motivation'}
+                    store.put('papers', paper)
+                backend = Reader()
+                controller = Controller(store, backend, dict(DEFAULTS, builtin_skills=False, source_chars=1500))
+                controller.phase = 'problem'
+                candidate = {'proposal': {'title': 'current question', 'closest_work_ids': []},
+                             'retrieved_work_ids': ['a', 'b']}
+                requests = [{'paper_ids': [pid], 'question': f'核对 Algorithm 1 的更新规则，论文 {pid}',
+                             'search_terms': ['broad preference']} for pid in ('a', 'b')]
+                controller.focus_sources(candidate, ['a', 'b'], reading_question='Combined questions',
+                                         acquisition_requests=requests)
+                self.assertEqual([p['reading_question'] for p in backend.payloads], [r['question'] for r in requests])
+                for payload in backend.payloads:
+                    self.assertIn('The update retains the observed state.', payload['excerpt'])
+                    self.assertTrue(payload['reading_selection']['section_context'][0]['explicitly_requested'])
+                self.assertEqual(len(store.rows('evidence')), 2)
+                self.assertEqual(len(store.get('source_understandings')), 2)
+            finally:
+                store.close()
+
     def test_reread_design_source_has_metadata_and_invalidates_when_its_text_changes(self):
         with tempfile.TemporaryDirectory() as temp:
             store = Store(Path(temp))

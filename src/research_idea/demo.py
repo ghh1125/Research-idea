@@ -46,6 +46,8 @@ class DemoBackend:
 
     def generate(self, task):
         payload = json.loads(task.prompt.split("BEGIN_RESEARCH_DATA\n", 1)[1].split("\nEND_RESEARCH_DATA", 1)[0])
+        from .research_context import expand_task_payload
+        payload = expand_task_payload(payload)
         refs = [e["id"] for e in payload.get("evidence", [])]
         papers = [p["id"] for p in payload.get("papers", [])]
         if task.stage == 'interpret_research':

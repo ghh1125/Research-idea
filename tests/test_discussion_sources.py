@@ -55,6 +55,7 @@ class SourceController:
 
     def select_search_results(self, keys, limit, candidate=None, *, checkpoint_design=False, selection_phase=None):
         self.calls.append(('select', keys, limit, selection_phase))
+        self.selection_context = deepcopy(candidate)
         selected = self.available[:limit]
         for paper_id in selected:
             self.store.put('papers', {'id': paper_id, 'title': paper_id,
@@ -118,6 +119,18 @@ class DiscussionSourceTests(unittest.TestCase):
         again = research_requests(self.controller, self.request(), key='turn-1')
         self.assertEqual(first, again)
         self.assertEqual(self.controller.calls, calls)
+
+    def test_selection_receives_the_problem_argument_not_only_topic_words(self):
+        from research_idea.discussion_sources import comparison_arguments
+        problem = {'opportunities': [{'id': 'p1', 'question': 'What remains after useful feedback?',
+            'prior_art_delta': 'Existing active elicitation already obtains new information.',
+            'research_need': 'Understand which observation conditions still matter.'}]}
+        arguments = comparison_arguments(problem)
+        research_requests(self.controller, self.request(), key='comparison',
+                          reading_context={'problem_arguments': arguments})
+        search = self.controller.selection_context['proposal']['comparison_search']
+        self.assertEqual(search['problem_arguments'], arguments)
+        self.assertEqual(search['questions'][0]['question'], self.request()[0]['question'])
 
     def test_failed_reading_reuses_persisted_selection_and_restores_phase(self):
         self.controller.fail_reading = True
@@ -258,13 +271,18 @@ class DiscussionSourceTests(unittest.TestCase):
         class Backend:
             name = 'selection-test'
             def generate(self, task):
+                import json
+                self.payload = json.loads(task.prompt.split('BEGIN_RESEARCH_DATA\n')[1].split('\nEND_RESEARCH_DATA')[0])
                 return BackendResult({'selection_summary': 'Read two sources relevant to the question.',
                     'selected': [{'paper_id': pid, 'reason': 'Directly addresses the question.',
                         'reading_question': 'What remains after the method works?',
                         'reading_role': 'method', 'route_ids': []} for pid in ('new1', 'new2')]})
         controller = Controller(self.store, Backend(), dict(DEFAULTS, max_papers=1,
             builtin_skills=False, fetch_full_text=False))
-        candidate = {'id': 'question_test', 'proposal': {'problem': 'What remains?'}, 'retrieved_work_ids': []}
+        comparison = {'comparison_need': 'Could an existing acquisition method already solve this?',
+                      'questions': [{'question': 'What signal does it observe?', 'query': 'feedback acquisition'}]}
+        candidate = {'id': 'question_test', 'proposal': {'problem': 'What remains?',
+                     'comparison_search': comparison}, 'retrieved_work_ids': []}
         with patch('research_idea.controller.enrich_screening_pool',
                    side_effect=lambda pool, **kw: (pool, {'attempted': 0, 'enriched': 0, 'pages': []})), \
              patch.object(controller, 'retrieve_full_texts', return_value=False) as retrieve:
@@ -274,6 +292,7 @@ class DiscussionSourceTests(unittest.TestCase):
         retrieve.assert_not_called()  # The caller saves selected IDs before downloading.
         self.assertEqual(self.store.rows('candidates'), [])
         self.assertIn('new1', controller.initial_paper_ids())
+        self.assertEqual(controller.backend.payload['comparison_search'], comparison)
 
 
 if __name__ == '__main__':

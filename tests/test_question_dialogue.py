@@ -82,7 +82,8 @@ class QuestionDialogueTests(unittest.TestCase):
                 memory_updates=[dict(action='replace', entry_id=memory_id, scope='research', content=content,
                                      source_message_id=msg['id'])])
         self.backend.answer = answer
-        def acquire(controller, requests, key):
+        def acquire(controller, requests, key, reading_context=None):
+            self.assertTrue(reading_context['problem_arguments'])
             controller.store.put('papers', dict(id='new-paper', title='New', content_kind='notes', text='New reading.'))
             return {'performed': True, 'search_status': 'completed', 'readings': []}
         with patch('research_idea.discussion_sources.research_requests', side_effect=acquire):

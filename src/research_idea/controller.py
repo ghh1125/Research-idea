@@ -777,11 +777,12 @@ class Controller:
             excerpt = select_excerpt(text, self.config["source_chars"])
             requests = [item for item in (acquisition_requests or [])
                         if not item['paper_ids'] or paper['id'] in item['paper_ids']]
-            question = '\n'.join(dict.fromkeys(line for value in [reading_question or
-                paper.get('selection', {}).get('reading_question', ''), *[item['question'] for item in requests]]
+            # A new discussion request supersedes the question stored when the
+            # paper was first selected. Keep each paper's explicit requests local.
+            questions = [item['question'] for item in requests] or [reading_question or
+                paper.get('selection', {}).get('reading_question', '')]
+            question = '\n'.join(dict.fromkeys(line for value in questions
                 for line in value.splitlines() if line.strip()))
-            if self.phase == 'problem' and paper.get('selection', {}).get('phase') == 'problem':
-                question = paper['selection'].get('reading_question') or question
             selection = None
             if self.phase == 'orientation':
                 from .orientation import orientation_excerpt
@@ -980,8 +981,8 @@ class Controller:
             if candidate:
                 payload['design_search_plan'] = candidate.get('design_search_plan', {})
                 payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
-                if phase == 'neighbor':
-                    payload['comparison_search'] = candidate['proposal']['comparison_search']
+                if phase in {'neighbor', 'problem'}:
+                    payload['comparison_search'] = candidate['proposal'].get('comparison_search', {})
                     payload['known_papers'] = [{key: p.get(key) for key in ('id', 'title', 'url')}
                                                for p in papers]
             allowed = {paper['id'] for paper in pool}

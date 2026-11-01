@@ -3,10 +3,47 @@ from copy import deepcopy
 import json
 import unittest
 
-from research_idea.research_context import compact_research_context
+from research_idea.research_context import compact_research_context, compact_task_payload, expand_task_payload
 
 
 class ResearchContextTests(unittest.TestCase):
+    def test_task_view_roundtrips_without_changing_evidence_memory_or_current_problem(self):
+        argument = {'id': 'p1', 'question': 'A useful question',
+                    'reason': 'A substantive relation with its qualification. ' * 50,
+                    'evidence_ids': ['ev_one']}
+        evidence = {'id': 'ev_one', 'quote': 'Exact supplied source. ' * 40, 'conditions': 'Only with labels.'}
+        payload = {'problem_cases': [argument], 'argument_revisions': {'p1': {'after': argument, 'reason': 'revised'}},
+                   'problem_model': {'opportunities': [argument]},
+                   'evidence': [evidence, evidence], 'current_user_message': {'content': argument['reason']},
+                   'active_memory': [{'content': argument['reason'], 'source_message_id': 'm1'}]}
+        original = deepcopy(payload)
+        compact = compact_task_payload('map', payload)
+        self.assertEqual(expand_task_payload(compact), original)
+        self.assertEqual(payload, original)
+        for key in ('evidence', 'current_user_message', 'active_memory'):
+            self.assertEqual(compact[key], original[key])
+        self.assertLess(len(json.dumps(compact)), len(json.dumps(payload)) * .8)
+
+    def test_changed_condition_is_never_deduplicated_as_same_argument(self):
+        first = {'reason': 'Established mechanism. ' * 40, 'condition': 'labels available'}
+        second = dict(first, condition='labels unavailable')
+        payload = {'problem_cases': [first, second]}
+        compact = compact_task_payload('map', payload)
+        self.assertEqual(compact['problem_cases'][1]['condition'], 'labels unavailable')
+        self.assertEqual(expand_task_payload(compact), payload)
+
+    def test_small_payload_and_reading_or_legacy_tasks_keep_original_shape(self):
+        payload = {'excerpt': 'Original text. ' * 100, 'candidate': {'x': 'long text ' * 100}}
+        payload['previous_candidate'] = deepcopy(payload['candidate'])
+        for stage in ('read_problem_source', 'extract', 'develop', 'review'):
+            self.assertEqual(compact_task_payload(stage, payload), payload)
+        self.assertEqual(compact_task_payload('frame_question', {'topic': 'small'}), {'topic': 'small'})
+
+    def test_json_pointer_escaping_and_chained_references_roundtrip(self):
+        shared = {'x': 'explanation ' * 80}
+        payload = {'a/~b': shared, 'copy': shared, 'nested': {'copy': shared}}
+        self.assertEqual(expand_task_payload(compact_task_payload('map', payload)), payload)
+
     def test_large_inventories_and_transport_logs_are_reduced_without_losing_evidence(self):
         evidence = {'id': 'ev_1', 'paper_id': 'p1', 'quote': 'The exact source quote with its conditions.',
                     'kind': 'reported_result', 'conditions': 'one model, equal compute', 'start': 12, 'end': 61}

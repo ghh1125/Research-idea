@@ -6,6 +6,59 @@ from research_idea.focused_reading import select_focused_excerpt
 
 
 class FocusedReadingTests(unittest.TestCase):
+    def test_explicit_algorithm_overrides_broad_intro_hits_and_reads_following_rule(self):
+        rule = 'When edits are small retain the current estimate; otherwise infer from the edits.'
+        text = 'Introduction\nSee Algorithm 1 for details. Preference learning motivates this study.\n\n' * 150
+        text += '3 Learning from retrieved experience\n\n'
+        text += 'Algorithm 1 LEARN(x). ' + 'A description of all supplied inputs. ' * 10 + '\n'
+        text += '1: Retrieve a context.\n2: Observe edits.\n3: Update the estimate.\n\n' + rule + '\n\n'
+        text += 'Further explanation. ' * 500
+        result = select_focused_excerpt(text, 4000, ['preference learning'], '核对 Algorithm 1及其后一段')
+        self.assert_exact_spans(text, result, 4000)
+        self.assertIn(rule, result['excerpt'])
+        self.assertTrue(result['section_context'][0]['explicitly_requested'])
+
+    def test_explicit_wrapped_location_works_without_search_terms_and_excludes_references(self):
+        text = 'Main text.\nReferences\nAlgorithm 2 A cited method.\n\nAppendix A\n'
+        text += 'Algorithm\n2. UPDATE\nThe appendix rule uses observed feedback.\n'
+        result = select_focused_excerpt(text, 600, [], 'Please inspect Algorithm 2.')
+        self.assert_exact_spans(text, result, 600)
+        self.assertIn('appendix rule', result['excerpt'])
+        self.assertNotIn('A cited method', result['excerpt'])
+
+    def test_requested_algorithm_is_not_confused_with_larger_number(self):
+        text = 'Algorithm 10 Wrong target.\n' + 'Unrelated explanation. ' * 100
+        text += '\n\nAlgorithm 1. Correct target.\nOnly the smaller numbered algorithm matters.'
+        result = select_focused_excerpt(text, 400, [], 'Algorithm 1')
+        self.assert_exact_spans(text, result, 400)
+        self.assertIn('Correct target', result['excerpt'])
+        self.assertNotIn('Wrong target', result['excerpt'])
+        self.assertIsNone(select_focused_excerpt(text, 400, [], 'Algorithm 3'))
+
+    def test_algorithm_caption_outranks_line_wrapped_prose_reference(self):
+        text = 'Algorithm 1 illustrates our idea.\n\n' + 'Background prose. ' * 200
+        text += '\n\nAlgorithm 1 UPDATE\n1: Read observations.\n2: Update state.\n\nThe next explanation.'
+        result = select_focused_excerpt(text, 500, [], 'Read Algorithm 1')
+        self.assert_exact_spans(text, result, 500)
+        self.assertIn('2: Update state.', result['excerpt'])
+        self.assertNotIn('illustrates our idea', result['excerpt'])
+
+    def test_numbered_section_target_is_not_an_algorithm_line(self):
+        text = '3: Update state.\n\n' + 'Intervening material. ' * 100
+        text += '\n\n3 Learning from interaction\nThis section explains feedback.'
+        result = select_focused_excerpt(text, 400, [], 'Read Section 3')
+        self.assert_exact_spans(text, result, 400)
+        self.assertIn('This section explains feedback.', result['excerpt'])
+        self.assertNotIn('3: Update state', result['excerpt'])
+
+    def test_quoted_query_phrases_survive_conversion(self):
+        from research_idea.focused_reading import query_reading_terms
+        terms = query_reading_terms('"preference learning" OR "edit distance"')
+        text = 'We use edit\ndistance to measure the cost.'
+        result = select_focused_excerpt(text, 300, terms)
+        self.assert_exact_spans(text, result, 300)
+        self.assertEqual(result['matched_terms'], ['edit distance'])
+
     def test_pdf_small_caps_locate_method_and_exclude_bibliography_only(self):
         from research_idea.focused_reading import _body_ranges
         text = ('I NTRODUCTION\nBroad goal.\n\nM ETHODOLOGY\n'

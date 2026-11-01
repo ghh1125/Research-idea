@@ -271,11 +271,13 @@ def discuss(controller, message):
         store.set('pending_discussion', {'key': token, 'result': result})
     working = apply_discussion(controller, checkpoint, result, context)
     if result['research_requests']:
-        from .discussion_sources import research_requests
+        from .discussion_sources import research_requests, comparison_arguments
         from .source_understanding import understanding_context, reading_result_view
         effective_intent = (result.get('updated_intent') or [context.get('research_intent')])[0]
-        reading_options = {'reading_context': {'research_intent': effective_intent,
-                           'user_goal': effective_intent['goal']}} if result.get('updated_intent') else {}
+        reading_context = {'problem_arguments': comparison_arguments(working)}
+        if result.get('updated_intent'):
+            reading_context.update(research_intent=effective_intent, user_goal=effective_intent['goal'])
+        reading_options = {'reading_context': reading_context}
         try:
             work = research_requests(controller, result['research_requests'], key=['discussion', message['id']], **reading_options)
         finally:

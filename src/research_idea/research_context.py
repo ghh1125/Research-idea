@@ -6,6 +6,69 @@ is a deterministic view: it never paraphrases evidence or invents a token count.
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+
+
+COMPACT_TASK_STAGES = frozenset({
+    'explore_problems', 'plan_problem_reading', 'deepen_problem', 'reconsider_problems',
+    'map', 'discuss_direction', 'discuss_question', 'frame_question',
+})
+
+
+def expand_task_payload(payload):
+    """Resolve the lossless view for the offline backend and verification tools."""
+    def expand(value, trail=()):
+        if isinstance(value, dict):
+            if set(value) == {'$research_context_ref'}:
+                pointer = value['$research_context_ref']
+                if not isinstance(pointer, str) or not pointer.startswith('/') or pointer in trail:
+                    raise ValueError('Invalid or cyclic research context reference')
+                target = payload
+                for part in pointer[1:].split('/'):
+                    key = part.replace('~1', '/').replace('~0', '~')
+                    target = target[int(key)] if isinstance(target, list) else target[key]
+                return expand(target, trail + (pointer,))
+            return {key: expand(item, trail) for key, item in value.items()}
+        if isinstance(value, list):
+            return [expand(item, trail) for item in value]
+        return deepcopy(value)
+    return expand(payload)
+
+
+def compact_task_payload(stage, payload):
+    """Share exact repeated research material in the model view, never in storage.
+
+    Backward JSON-pointer references preserve content without a model summary,
+    token-based truncation, or guessing which scientific argument matters.
+    Evidence, current user input and memory stay inline, including duplicates.
+    """
+    if stage not in COMPACT_TASK_STAGES:
+        return deepcopy(payload)
+    protected = {'evidence', 'excerpt', 'topic', 'user_notes', 'constraints', 'research_intent',
+                 'current_user_message', 'conversation', 'recent_messages', 'memory',
+                 'conversation_memory', 'reasoning_notes', 'previous_discussion_focus',
+                 'active_memory', 'memory_sources', 'recent_history', 'retrieved_history',
+                 'unreviewed_user_messages'}
+    seen = {}
+
+    def visit(value, path):
+        if isinstance(value, (str, dict, list)):
+            signature = json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False)
+            if len(signature) >= 400:
+                if signature in seen:
+                    return {'$research_context_ref': seen[signature]}
+                seen[signature] = path
+        if isinstance(value, dict):
+            return {key: deepcopy(item) if key in protected else visit(
+                item, path + '/' + key.replace('~', '~0').replace('/', '~1'))
+                for key, item in value.items()}
+        if isinstance(value, list):
+            return [visit(item, path + '/' + str(index)) for index, item in enumerate(value)]
+        return deepcopy(value)
+
+    # The root is always an object, not a reference.
+    return {key: deepcopy(value) if key in protected else visit(
+        value, '/' + key.replace('~', '~0').replace('/', '~1')) for key, value in payload.items()}
 
 
 def _coverage(value):

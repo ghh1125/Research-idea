@@ -1,10 +1,11 @@
 """Bounded, resumable source work driven by a concrete research question."""
 from .store import digest
+from .focused_reading import LOCATOR_VERSION, query_reading_terms
 
 
 def _reading_scope(controller):
     """Explicit settings invalidate saved work; incidental new papers do not."""
-    return [controller.store.get('source_revision', 0), controller.guidance_keys.get('inspect_source'),
+    return [LOCATOR_VERSION, controller.store.get('source_revision', 0), controller.guidance_keys.get('inspect_source'),
             controller.guidance_keys.get('read_problem_source'), controller.store.get('research_intent'),
             {name: controller.config.get(name) for name in ('auto_search', 'search_source',
                 'search_venues', 'fetch_full_text', 'source_chars', 'deep_reading',
@@ -41,6 +42,13 @@ def validate_requests(requests, paper_ids):
             raise ValueError('Read only supplied paper IDs; use a query to find new papers')
 
 
+def comparison_arguments(problem):
+    """Carry the current argument to source selection, not only query words."""
+    cases = problem.get('opportunities', problem.get('problem_seeds', [problem]))
+    fields = ('id', 'question', 'entry_reason', 'prior_art_delta', 'research_need')
+    return [{key: case[key] for key in fields if key in case} for case in cases]
+
+
 def research_requests(controller, requests, *, key, reading_context=None):
     """Search metadata, select up to two sources total, then read relevant text.
 
@@ -72,6 +80,7 @@ def research_requests(controller, requests, *, key, reading_context=None):
             'retrieved_work_ids': []}
         if reading_context:
             candidate['reading_context'] = reading_context
+            candidate['proposal']['comparison_search']['problem_arguments'] = reading_context.get('problem_arguments', [])
         if 'selected_ids' not in entry:
             selected = list(dict.fromkeys(pid for r in requests for pid in r['paper_ids']))[:2]
             keys = []
@@ -102,7 +111,7 @@ def research_requests(controller, requests, *, key, reading_context=None):
         controller.retrieve_full_texts(selected)
         readings = controller.focus_sources(candidate, selected, reading_question=question,
             acquisition_requests=[{'information': r['question'], 'question': r['question'],
-                                   'paper_ids': r['paper_ids'], 'search_terms': r['query'].split()}
+                                   'paper_ids': r['paper_ids'], 'search_terms': query_reading_terms(r['query'])}
                                   for r in requests]) if selected else []
         refs = set(store.get('question_source_evidence', []))
         refs.update(eid for reading in readings for eid in reading['evidence_ids'])
@@ -144,4 +153,5 @@ def investigate_problem(controller, seed):
         requests = target_requests(controller, targets) + plans[fingerprint]['requests']
         plans[fingerprint]['resolved_requests'] = requests[:2]
         store.set('problem_reading_plans', plans)
-    return research_requests(controller, plans[fingerprint]['resolved_requests'], key=['problem', fingerprint])
+    return research_requests(controller, plans[fingerprint]['resolved_requests'], key=['problem', fingerprint],
+                             reading_context={'problem_arguments': comparison_arguments(seed)})
