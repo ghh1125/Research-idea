@@ -10,11 +10,11 @@ Start with a research direction. You can also provide initial ideas, reference p
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-The current version, **v0.7.0**, preserves the research purpose across search, discussion, and writing. It distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. The conversational CLI, two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
+The current version, **v0.8.0**, adds a local Web interface design preview and preserves the research purpose across search, discussion, and writing. It distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. The conversational CLI, two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
-**Upcoming Web interface:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. It is not connected to the research backend yet; the CLI remains the working application.
+**Web interface preview:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. It is not connected to the research backend yet; the CLI remains the working application.
 
 ## 2. What makes a good research idea?
 
@@ -154,7 +154,7 @@ research-idea doctor
 
 This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage (Chinese)](docs/advanced-usage.md#虚拟环境安装).
 
-### Upgrade to v0.7.0
+### Upgrade to v0.8.0
 
 Close the running Research-idea window, then run these commands **inside your existing repository directory**.
 
@@ -174,7 +174,7 @@ py -3 -m pipx reinstall research-idea
 research-idea --version
 ```
 
-The version should show `0.7.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
+The version should show `0.8.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
 
 ### Open the conversation window
 

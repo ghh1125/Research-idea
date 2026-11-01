@@ -1,8 +1,8 @@
 # v0.8.0 Web interface preview / Web 界面预览
 
-This is an interactive design preview, not a working research frontend. The released application remains v0.7.0. Model discovery, account checks, search, research runs, and project persistence are demonstrated with sample data; they are not connected to the CLI backend.
+This is an interactive design preview, not a working research frontend. Version v0.8.0 includes this preview alongside the working CLI. Model discovery, account checks, search, research runs, and project persistence are demonstrated with sample data; they are not connected to the CLI backend.
 
-这是 v0.8.0 的交互设计预览。当前应用仍为 v0.7.0；此页面尚未接入研究引擎、模型自动获取、账户检测或真实项目存储。按钮用于体验交互，不会发起研究调用。
+这是 v0.8.0 的交互设计预览。v0.8.0 同时保留可运行的 CLI；此页面尚未接入研究引擎、模型自动获取、账户检测或真实项目存储。按钮用于体验交互，不会发起研究调用。
 
 ## Open locally / 本地查看
 
