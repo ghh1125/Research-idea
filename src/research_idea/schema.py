@@ -75,10 +75,11 @@ PROBLEM_READING = obj(reason=STR, requests=array(RESEARCH_REQUEST), citation_tar
 REASONING_NOTE = obj(kind=string(['user_objection', 'analysis_revision', 'open_question']),
     problem_id=STR, user_quote=STR, judgment=STR, reason=STR, revisit_when=STR,
     evidence_ids=STRINGS, replaces=STRINGS)
-DISCUSS_DIRECTION = obj(answer=STR, memory_updates=MEMORY_UPDATES, updated_intent=array(RESEARCH_INTENT),
+DISCUSSION_FOCUS = array(obj(question=STR, why_it_matters=STR))
+DISCUSS_DIRECTION = obj(discussion_focus=DISCUSSION_FOCUS, answer=STR, memory_updates=MEMORY_UPDATES, updated_intent=array(RESEARCH_INTENT),
     updated_pool=array(PROBLEM_POOL), research_requests=array(RESEARCH_REQUEST),
     reasoning_updates=array(REASONING_NOTE))
-DISCUSS_QUESTION = obj(**DISCUSS_PROBLEM['properties'], updated_intent=array(RESEARCH_INTENT), research_requests=array(RESEARCH_REQUEST),
+DISCUSS_QUESTION = obj(discussion_focus=DISCUSSION_FOCUS, **DISCUSS_PROBLEM['properties'], updated_intent=array(RESEARCH_INTENT), research_requests=array(RESEARCH_REQUEST),
     reasoning_updates=array(REASONING_NOTE),
     updated_background=array(obj(research_frame=RESEARCH_FRAME, approach_landscape=array(APPROACH))))
 FRAME_QUESTION = obj(title=STR, background=STR, existing_methods=STR, problem=STR,

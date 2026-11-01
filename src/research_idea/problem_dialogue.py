@@ -241,6 +241,7 @@ def apply_discussion(controller, checkpoint, result, context):
 def discuss(controller, message):
     from .reasoning_memory import revised_reasoning
     from .research_intent import revised_intent
+    from .discussion_focus import validate_focus, previous_focus, rendered_answer, saved_focus
     store = controller.store
     checkpoint = deepcopy(store.get('problem_checkpoint'))
     if store.get('workflow') != 'question':
@@ -255,6 +256,7 @@ def discuss(controller, message):
     pending = store.get('pending_discussion') or {}
     token = digest([checkpoint['checkpoint_id'], checkpoint['revision'], message['id']]) if checkpoint.get('checkpoint_id') else digest([checkpoint, message['id']])
     def checked(value):
+        validate_focus(value)
         revised_intent(controller, value, message)
         apply_discussion(controller, checkpoint, value, context)
         revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
@@ -264,6 +266,7 @@ def discuss(controller, message):
     else:
         result = controller.task(stage, {**context, **memory, 'discussion_kind': kind,
             'problem_model': checkpoint['current'], 'current_user_message': message,
+            'previous_discussion_focus': previous_focus(checkpoint),
             'source_work_done': False}, checked, publish=False)
         store.set('pending_discussion', {'key': token, 'result': result})
     working = apply_discussion(controller, checkpoint, result, context)
@@ -287,6 +290,7 @@ def discuss(controller, message):
         context['source_understanding_coverage'] = view['coverage']
         working_checkpoint = {**checkpoint, 'current': working}
         def checked_followup(value):
+            validate_focus(value)
             revised_intent(controller, value, message)
             apply_discussion(controller, working_checkpoint, value, context)
             revised_reasoning(store, value.get('reasoning_updates', []), message, checkpoint)
@@ -296,6 +300,7 @@ def discuss(controller, message):
         followup = controller.task(stage, {**context, **memory, 'discussion_kind': kind,
             'problem_model': working, 'current_user_message': message, 'source_work_done': True,
             'reading_result': reading_result_view(work), 'previous_discussion': result,
+            'previous_discussion_focus': previous_focus(checkpoint),
             'research_intent': effective_intent,
             'saved_research_intent': store.get('research_intent'),
             'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them. research_intent is provisional for this reading, not yet saved. Return updated_intent as the final complete revision against saved_research_intent; [] means keep the saved intent.'}, checked_followup, publish=False)
@@ -307,7 +312,9 @@ def discuss(controller, message):
         if intent_changes:
             working['formulation'] = []
         working['research_intent'] = current_intent
-    checkpoint.update(research_intent=current_intent, current=working, revision=checkpoint['revision'] + 1,
+    result = {**result, 'answer': rendered_answer(result)}
+    checkpoint.update(discussion_focus=saved_focus(result, message),
+                      research_intent=current_intent, current=working, revision=checkpoint['revision'] + 1,
                       source_key=source_key(controller), state='discussing')
     checkpoint['revisions'].append({'revision': checkpoint['revision'], 'source_message_id': message['id'],
                                     'answer': result['answer'], 'current': deepcopy(working), 'time': now()})

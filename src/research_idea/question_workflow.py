@@ -29,7 +29,7 @@ def _confirm(controller, checkpoint, cycle, *, explicit):
     store = controller.store
     checkpoint = deepcopy(checkpoint)
     checkpoint.setdefault('kind', 'problem')  # v0.4 checkpoints discussed problems.
-    checkpoint.update(state='confirmed', confirmed_revision=checkpoint['revision'],
+    checkpoint.update(state='confirmed', discussion_focus=[], confirmed_revision=checkpoint['revision'],
                       confirmed_at=now(), confirmed_by='/continue' if explicit else 'batch')
     cycle = deepcopy(cycle)
     cycle.setdefault('confirmations', {})[_kind(checkpoint)] = _confirmation(checkpoint)

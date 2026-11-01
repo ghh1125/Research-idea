@@ -177,7 +177,7 @@ class UnderstandingTests(unittest.TestCase):
             seen.append(data)
             if data['source_work_done'] and fail[0]:
                 raise RuntimeError('followup interrupted')
-            return BackendResult(dict(answer='按部署时的反馈来讨论。', memory_updates=[], reasoning_updates=[],
+            return BackendResult(dict(answer='按部署时的反馈来讨论。', discussion_focus=[], memory_updates=[], reasoning_updates=[],
                 updated_pool=[], updated_intent=[revised], research_requests=[] if data['source_work_done'] else
                 [dict(question='部署时怎样获得反馈？', query='', paper_ids=['routing'])]))
         self.backend.generate = generate

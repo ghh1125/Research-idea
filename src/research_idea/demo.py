@@ -71,7 +71,7 @@ class DemoBackend:
             output['pool'].setdefault('cross_paper_synthesis', [])
         elif task.stage in {'discuss_direction', 'discuss_question'}:
             output = {'answer': '已保留当前问题，可以继续讨论或 /continue。',
-                      'memory_updates': [], 'research_requests': [], 'reasoning_updates': [], 'updated_intent': []}
+                      'memory_updates': [], 'research_requests': [], 'reasoning_updates': [], 'updated_intent': [], 'discussion_focus': []}
             output.update({'updated_pool': []} if task.stage == 'discuss_direction' else
                           {'updated_problems': [], 'selected_problems': [], 'updated_background': []})
         elif task.stage == 'plan_search':

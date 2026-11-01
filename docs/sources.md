@@ -208,3 +208,9 @@
 - [IdeaScientist README](https://github.com/jiarui-liu/IdeaScientist) 的阶段与角色分工作为对照；本轮没有声称检查其内部实现，也不把单篇论文的 gap 直接当作用户研究目标。
 
 对应实现：`research_intent.py` 保存带出处的目标与关切、版本和问题表述；`question_workflow.py` 在检索前理解输入，交付时携带完整主线；`problem_discovery.py` 保留相关问题进入深入；`controller.py` 将综合/重构结果设为当前问题且保留原分析；`problem_dialogue.py` 原子提交用户纠正；motivation skill 各阶段参考分别说明如何使用这些状态。新增流程测试涵盖相连困难、独立方向、开放主题、被修订的假设和讨论后的恢复。程序校验只能确认结构和来源完整，科学判断仍由模型和研究者讨论完成。
+
+### 讨论引导与行为测试（2026-11-01）
+
+参考 [Intuit to Idea 的核心 skill](https://github.com/ShawnL1N/intuit-to-idea/blob/main/SKILL.md)、[机制比较指南](https://github.com/ShawnL1N/intuit-to-idea/blob/main/references/novelty-check.md)和[行为场景](https://github.com/ShawnL1N/intuit-to-idea/blob/main/evals/scenarios.md)：借鉴一次一个有判断价值的追问、纠正后实际改变理解，以及收窄范围仍需保留研究价值的做法。该仓库提供 skill 与测试说明，没有提供独立检索/记忆运行时或已完成的模型效果评测。
+
+本项目继续主动从文献发现问题，仅在已有讨论阶段按需追问；不要求用户提供创新，不恢复技术方案和实验设计。`discussion_focus.py` 将上一轮追问与用户决定分开保存并限制篇幅，`/continue` 不受未答问题阻挡。范围变化沿用既有版本和理由记录，真实多轮行为测试与程序状态测试分开报告。
