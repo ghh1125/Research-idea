@@ -87,7 +87,7 @@ flowchart TD
 
 控制器组织检索、阅读和分步骤分析，内置研究 skill 提供背景综合、问题发现、贡献对照和论证指导。状态保存在 SQLite，结果输出 Markdown 和 JSON。实现细节见[工作流](docs/workflow.md)、[架构](docs/architecture.md)与[开源思路借鉴](docs/sources.md)。
 
-## 4. 安装与启动 CLI
+## 4. 安装与启动：CLI / Web
 
 需要 **Python 3.11+ 和 Git**。使用 Codex 或 Claude 后端时，先在同一个系统环境中安装并登录对应 CLI。
 
@@ -175,7 +175,7 @@ research-idea --version
 
 版本应显示 `0.8.0`。如果使用虚拟环境安装，激活环境后，将 pipx 那一行替换为 `python -m pip install -e .`。重新输入 `research-idea` 启动，用 `/open 项目目录` 继续原来的讨论；对话、研究要点和进度保存在项目里。
 
-### 打开对话窗口
+### 启动 CLI：终端中进行真实研究
 
 以后在终端输入：
 
@@ -195,7 +195,27 @@ research-idea chat --project ./research-projects/my-idea --backend codex --model
 
 希望逐项选择主题、模型、论文和预算时，运行 `research-idea launch`。
 
-### 一条命令直接开始研究
+### 启动 Web：浏览器中查看交互预览
+
+先进入 **Research-idea 仓库根目录**，即包含 `pyproject.toml` 的目录。
+
+macOS / Linux：
+
+```bash
+python3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+```
+
+Windows（PowerShell）：
+
+```powershell
+py -3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+```
+
+保持该终端打开，在浏览器访问 **http://127.0.0.1:8769/**。按 **Ctrl+C** 关闭 Web 预览服务。
+
+**v0.8.0 的 Web 当前是交互预览**：可以体验对话、模型下拉、研究资料和设置，但还不能执行真实研究或自动获取账户模型。真实调研请使用上面的 `research-idea`。目前没有 `research-idea web` 子命令。更多说明见 [Web 预览](docs/web-preview/README.md)。
+
+### CLI：一条命令直接开始研究
 
 ```bash
 research-idea start "如何设计帮助 LLM agent 持续学习的交互环境" \

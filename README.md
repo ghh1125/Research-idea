@@ -88,7 +88,7 @@ Specific objections, reasons for changed judgments, and conditions for revisitin
 
 The controller coordinates search, reading, and staged analysis. Research skills guide background synthesis, problem discovery, contribution comparison, and argument development. State is stored in SQLite, with Markdown and JSON outputs. See the [workflow](docs/workflow.md), [architecture](docs/architecture.md), and [open-source inspirations](docs/sources.md) for implementation details; these documents are currently in Chinese.
 
-## 4. Installation and launch
+## 4. Installation and launch: CLI / Web
 
 Requires **Python 3.11+ and Git**. For a Codex or Claude backend, install and sign in to the corresponding CLI in the same system environment first.
 
@@ -176,7 +176,7 @@ research-idea --version
 
 The version should show `0.8.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
 
-### Open the conversation window
+### Launch the CLI: run real research in your terminal
 
 From your terminal, run:
 
@@ -196,7 +196,27 @@ Running the same `--project` command reopens that project's conversation, settin
 
 For a guided setup of the topic, model, papers, and budget, run `research-idea launch`.
 
-### Start a research run directly
+### Launch the Web preview: explore the interface in your browser
+
+Run from the **Research-idea repository root**, the directory containing `pyproject.toml`.
+
+macOS / Linux:
+
+```bash
+python3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+```
+
+Windows (PowerShell):
+
+```powershell
+py -3 -m http.server 8769 --bind 127.0.0.1 --directory docs/web-preview
+```
+
+Keep the terminal open and visit **http://127.0.0.1:8769/** in your browser. Press **Ctrl+C** to stop the preview server.
+
+**The v0.8.0 Web interface is currently an interactive preview.** You can explore the conversation, model dropdown, research materials, and settings, but it does not execute research or discover account models yet. Use `research-idea` above for real research. There is no `research-idea web` subcommand yet. See the [Web preview guide](docs/web-preview/README.md).
+
+### CLI: start a research run directly
 
 ```bash
 research-idea start "How can interactive environments help LLM agents keep learning?" \
