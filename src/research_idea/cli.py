@@ -397,9 +397,11 @@ def build_parser():
                        help="会议筛选，例如 ACL EMNLP NAACL COLM；名单见 venues")
         p.add_argument("--fetch-full-text", action=argparse.BooleanOptionalAction, default=None,
                        help="保存自动获取正文的设置；默认启用，--no-fetch-full-text 关闭")
-    p = command('web', '启动本地 Web 界面；模型列表读取 Codex，研究交互为预览。', 'research-idea web')
+    p = command('web', '启动本地研究工作台；讨论、调研与进度和 CLI 共用。', 'research-idea web --projects ./research-projects')
     p.add_argument('--port', type=int, default=8769, help='本地端口，默认 8769；0 自动分配')
     p.add_argument('--no-browser', action='store_true', help='不自动打开浏览器')
+    p.add_argument('--projects', type=Path, default=Path('research-projects'), help='研究项目根目录；自动发现其中的 CLI 项目')
+    p.add_argument('--output', type=Path, help='新研究的报告输出根目录')
     p.add_argument('--codex-bin', default='codex', help='Codex 可执行文件名称或路径')
     p.add_argument('--codex-profile', help='读取模型目录时使用的 Codex 配置档')
     p = command("init", "创建或配置研究项目，只保存主题和设置，不调用模型。",

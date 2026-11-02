@@ -14,7 +14,7 @@ The current version, **v0.8.0**, adds a local Web interface design preview and p
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
-**Web interface preview:** the [v0.8.0 interactive design preview](docs/web-preview/README.md) explores a simpler local chat interface with model dropdowns and expandable settings. Model discovery is connected to local Codex; research interactions remain a preview, and the CLI runs actual research.
+**Local Web workbench:** this local revision connects real discussion and research to the same SQLite projects used by the CLI. A warm paper interface includes a stage sidebar, pinned projects, recoverable trash, and Codex model/effort selection. See the [Web guide](docs/web-workbench.md).
 
 ## 2. What makes a good research idea?
 
@@ -196,9 +196,9 @@ Running the same `--project` command reopens that project's conversation, settin
 
 For a guided setup of the topic, model, papers, and budget, run `research-idea launch`.
 
-### Launch the Web preview: explore the interface in your browser
+### Launch the Web: research in your local browser
 
-After installation or upgrade, run from any directory. The sidebar switches or creates conversations; the central conversation shows stage progress. Settings and step details open in dialogs, including searches, paper evidence, skills, revisions, and usage. Sending discusses the current content; Continue advances to the next stage. Built-in skill text is read from the installed package, while research activity records remain demonstrations.
+The sidebar switches, creates and pins research projects, with six stages showing actual progress. Deletion moves projects to recoverable local trash. Send discusses the current content; Start begins literature research; Continue explicitly advances after each discussion pause. Papers, reports, notes and budgets come from actual project records.
 
 macOS / Linux:
 
@@ -214,7 +214,7 @@ research-idea web
 
 The browser opens **http://127.0.0.1:8769/** automatically. Keep the terminal open; press **Ctrl+C** to stop. Use `--no-browser` to suppress opening the browser, `--port 8770` to change the port, or `--codex-bin` / `--codex-profile` to select the local Codex installation and profile.
 
-**Model discovery now uses a real local service.** It reads the Codex cache and refreshes through the Codex model-list interface, shows the source, and updates reasoning options for the selected model. Failed refreshes preserve previous results. A catalog is not an entitlement check. Other providers are not connected yet. **Research conversations and steps remain an interactive preview**; use `research-idea` above for real research. The old `python -m http.server` command serves static files only and cannot discover local models. See the [Web guide](docs/web-preview/README.md).
+Use `research-idea web --projects ./research-projects --output ./results` to choose the project root and the output directory for new research. Existing CLI projects share their SQLite records and checkpoints. New Web projects default to `gpt-6-astra`; effort choices use Codex's original names from its local model catalog. Closing the browser leaves research running; Stop preserves completed checkpoints. A model catalog is not an entitlement check; other backends remain configurable through the CLI. The service listens only on loopback and checks origins and session tokens for writes. See the [Web guide](docs/web-workbench.md).
 
 ### CLI: start a research run directly
 
@@ -432,7 +432,7 @@ Every subcommand has a description, argument help, and examples. Use `research-i
 | `launch` | Run the guided setup, then start research; --setup-only saves without running. | `research-idea launch` |
 | `init` | Initialize the project and topic without calling a model. | `research-idea init "TOPIC" --project ./research-projects/my-idea` |
 | `start` | Configure a topic and materials, then run; use chat for interactive discussion pauses. | `research-idea start "TOPIC" --project ./research-projects/my-idea` |
-| `web` | Open the local Web interface with real Codex model discovery and preview research interactions. | `research-idea web`<br>`research-idea web --no-browser --port 8770` |
+| `web` | Open the local research workbench, sharing conversations, papers and checkpoints with the CLI. | `research-idea web`<br>`research-idea web --projects ./research-projects --port 8770` |
 | `run` | Start or continue using project settings; --replan reconsiders directions from current materials. | `research-idea run --project ./research-projects/my-idea` |
 | `resume` | Resume from successful checkpoints; interactive pauses still require /continue in chat. | `research-idea resume --project ./research-projects/my-idea` |
 | `add` | Import paper files without immediately calling a model to read them. | `research-idea add --project ./research-projects/my-idea paper.pdf notes.md` |

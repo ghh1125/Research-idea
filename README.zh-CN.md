@@ -12,7 +12,7 @@
 
 当前版本 **v0.8.0**，新增本地 Web 交互设计预览，并继续让检索、讨论和最终表达始终接续用户的研究主线：区分开放找方向与深化已有想法，保留相关困难之间的关系，说明为什么选择、综合或重构当前问题。对话式 CLI、两处讨论、带出处的会话记忆、论文链接、预算和中断恢复继续保留。详见[版本更新](CHANGELOG.md)。
 
-**Web 界面预览：** [v0.8.0 交互设计预览](docs/web-preview/README.md)采用简洁对话、模型下拉选择和按需展开的设置。模型目录已接入本机 Codex，研究流程仍为预览，实际研究继续使用 CLI。
+**本地 Web 工作台：** 本地改进版已接通真实对话、文献调研与检查点。暖纸色界面提供研究阶段侧栏、置顶、回收站、Codex 模型与思考档位选择。网页与 CLI 共用研究记录，见 [Web 使用说明](docs/web-workbench.md)。
 
 ## 2. 找 idea 的核心要求
 
@@ -195,9 +195,9 @@ research-idea chat --project ./research-projects/my-idea --backend codex --model
 
 希望逐项选择主题、模型、论文和预算时，运行 `research-idea launch`。
 
-### 启动 Web：浏览器中查看交互预览
+### 启动 Web：在本地浏览器中研究
 
-安装或升级后，可以在任意目录启动。左侧选择或新增对话，中间显示对话和阶段进度；系统设置以弹窗打开，研究步骤通过“查看详情”查看检索、论文依据、Skill、修改及调用记录。发送用于讨论当前内容，“继续”才推进下一阶段。内置 Skill 原文可读取查看，研究过程记录仍为演示。
+左侧选择、新建、置顶研究，查看六阶段进度。删除会移入可恢复的本地回收站。发送消息讨论当前内容，“开始文献调研”启动真实研究；两次暂停后，只有点击继续才推进下一阶段。讨论、论文、报告、要点和预算都来自实际项目。
 
 macOS / Linux：
 
@@ -213,7 +213,7 @@ research-idea web
 
 浏览器会自动打开 **http://127.0.0.1:8769/**。保持终端打开，按 **Ctrl+C** 关闭服务。`research-idea web --no-browser` 只启动服务，`--port 8770` 更换端口；`--codex-bin` 与 `--codex-profile` 指定本机 Codex。
 
-**模型选择已接入真实本地服务**：自动读取 Codex 模型缓存，点击“刷新模型”调用 Codex 的模型目录接口；展示目录来源，思考强度跟随模型，读取失败保留上次结果。模型目录不等于调用权限验证。其他后端的目录尚未接入。**研究对话和步骤仍为交互预览**，实际调研请使用上面的 `research-idea`。以前的 `python -m http.server` 只能提供静态页面，不能获取本机模型。更多说明见 [Web 使用说明](docs/web-preview/README.md)。
+使用 `research-idea web --projects ./research-projects --output ./results` 指定研究和新报告的目录。网页自动发现其中的 CLI 项目，共用 SQLite 记录与检查点。新建项目默认 `gpt-6-astra`；思考档位使用 Codex 原始名称并跟随本机模型目录。关闭网页不停止后台任务，重新打开即可继续查看；“停止运行”保留已完成的步骤。模型目录不等于调用权限验证，其他后端仍通过 CLI 配置。服务仅监听本机地址，写入校验同源地址与会话令牌。更多说明见 [Web 使用说明](docs/web-workbench.md)。
 
 ### CLI：一条命令直接开始研究
 
@@ -433,7 +433,7 @@ Windows 也可以直接输入 `/output D:\ResearchResults`；带空格的路径�
 | `launch` | 逐项询问设置，完成后开始研究；加 --setup-only 只保存。 | `research-idea launch` |
 | `init` | 只初始化项目和主题，不调用模型。 | `research-idea init "TOPIC" --project ./research-projects/my-idea` |
 | `start` | 配置主题和材料后直接运行；需要暂停讨论时使用 chat。 | `research-idea start "TOPIC" --project ./research-projects/my-idea` |
-| `web` | 启动本地 Web；真实读取 Codex 模型目录，研究交互为预览。 | `research-idea web`<br>`research-idea web --no-browser --port 8770` |
+| `web` | 启动本地研究工作台，与 CLI 共用对话、论文和检查点。 | `research-idea web`<br>`research-idea web --projects ./research-projects --port 8770` |
 | `run` | 按项目设置开始或继续研究；--replan 用当前材料重新探索方向。 | `research-idea run --project ./research-projects/my-idea` |
 | `resume` | 恢复已有项目并复用成功步骤；交互暂停仍需回窗口 /continue。 | `research-idea resume --project ./research-projects/my-idea` |
 | `add` | 导入论文文件，不立即调用模型精读。 | `research-idea add --project ./research-projects/my-idea paper.pdf notes.md` |

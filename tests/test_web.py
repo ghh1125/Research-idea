@@ -1,6 +1,8 @@
 import http.client
 import json
 import threading
+import tempfile
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -10,7 +12,8 @@ from research_idea.web import make_server
 
 class WebTests(unittest.TestCase):
     def setUp(self):
-        self.server = make_server(0)
+        self.temp = tempfile.TemporaryDirectory()
+        self.server = make_server(0, projects=Path(self.temp.name) / 'projects')
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 
@@ -18,6 +21,7 @@ class WebTests(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+        self.temp.cleanup()
 
     def get(self, path, headers=None):
         conn = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=3)
@@ -31,7 +35,9 @@ class WebTests(unittest.TestCase):
     def test_html_and_parser(self):
         status, body = self.get('/')
         self.assertEqual(status, 200)
-        self.assertIn(b'/api/models?', body)
+        self.assertIn(b'/app.js', body)
+        self.assertIn('研究进程'.encode(), body)
+        self.assertIn(b'/api/models?', self.get('/app.js')[1])
         args = build_parser().parse_args(['web', '--no-browser', '--port', '0'])
         self.assertTrue(args.no_browser)
         self.assertEqual(args.port, 0)
