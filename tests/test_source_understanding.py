@@ -193,6 +193,9 @@ class UnderstandingTests(unittest.TestCase):
         self.assertEqual([stage for stage, _, _ in self.backend.calls].count('read_problem_source'), 1)
         followup = seen[-1]
         self.assertEqual(followup['research_intent'], revised)
+        self.assertEqual(followup['research_mode']['kind'], 'focused_question')
+        self.assertEqual(followup['research_mode']['goal'], revised['goal'])
+        self.assertEqual(followup['research_mode']['compare'], 'explanations_and_existing_responses')
         self.assertEqual(followup['saved_research_intent'], old)
         self.assertEqual(len(followup['source_understandings']), 1)
         self.assertNotIn('reading_points', followup['reading_result']['readings'][0])

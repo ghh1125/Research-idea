@@ -10,6 +10,8 @@ PROMPT_VERSION = "42"
 
 
 def stage_version(stage):
+    if stage in {'discuss_direction', 'discuss_question'}:
+        return '58'
     if stage == 'synthesize_landscape':
         return '57'
     if stage in {'skim_papers', 'synthesize_landscape', 'plan_search', 'screen_papers',

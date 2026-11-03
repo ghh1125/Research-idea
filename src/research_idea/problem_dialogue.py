@@ -243,6 +243,7 @@ def apply_discussion(controller, checkpoint, result, context):
 def discuss(controller, message):
     from .reasoning_memory import revised_reasoning
     from .research_intent import revised_intent
+    from .landscape import research_mode
     from .discussion_focus import validate_focus, previous_focus, rendered_answer, saved_focus
     store = controller.store
     checkpoint = deepcopy(store.get('problem_checkpoint'))
@@ -306,6 +307,7 @@ def discuss(controller, message):
             'reading_result': reading_result_view(work), 'previous_discussion': result,
             'previous_discussion_focus': previous_focus(checkpoint),
             'research_intent': effective_intent,
+            'research_mode': research_mode(effective_intent),
             'saved_research_intent': store.get('research_intent'),
             'memory_instruction': 'Return the final complete memory_updates and reasoning_updates for this turn against active_memory and reasoning_notes. Replace the preliminary suggestions; do not concatenate them. research_intent is provisional for this reading, not yet saved. Return updated_intent as the final complete revision against saved_research_intent; [] means keep the saved intent.'}, checked_followup, publish=False)
         working = apply_discussion(controller, working_checkpoint, followup, context)
