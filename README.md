@@ -224,6 +224,8 @@ The browser opens **http://127.0.0.1:8769/** automatically. Keep the terminal op
 
 Use `research-idea web --projects ./research-projects --output ./results` to choose the project root and the output directory for new research. Existing CLI projects share their SQLite records and checkpoints. New Web projects default to `gpt-6-astra`; effort choices use Codex's original names from its local model catalog. Closing the browser leaves research running; Stop preserves completed checkpoints. A model catalog is not an entitlement check; other backends remain configurable through the CLI. The service listens only on loopback and checks origins and session tokens for writes. See the [Web guide](docs/web-workbench.md).
 
+**No CLI commands needed in the browser:** choose the model and effort from dropdowns; adjust dates, venues, and budgets in Settings. Use **＋** to add papers or a research brief, and **Records** to revisit discussions or search conversation history. Messages discuss the current step; **Continue** advances it. The top-right **? guide** explains the Web controls. See the [Web guide](docs/web-workbench.md).
+
 ### CLI: start a research run directly
 
 ```bash

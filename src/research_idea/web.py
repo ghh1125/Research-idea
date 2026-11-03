@@ -69,6 +69,9 @@ def make_server(port=8769, *, codex_bin='codex', profile=None, projects=None, ou
                            'text/javascript; charset=utf-8' if url.path.endswith('.js') else 'text/css; charset=utf-8')
             elif url.path == '/api/session':
                 self.reply(200, {'token': token, 'projects_root': str(workspace.root)})
+            elif url.path == '/api/help':
+                from .web_commands import help_text
+                self.reply(200, {'text': help_text()})
             elif url.path == '/api/projects':
                 self.reply(200, {'projects': workspace.list_projects()})
             elif url.path == '/api/trash':
@@ -112,16 +115,20 @@ def make_server(port=8769, *, codex_bin='codex', profile=None, projects=None, ou
                 self.reply(415, {'error': 'JSON required'})
                 return
             try:
+                path = urlsplit(self.path).path
                 size = int(self.headers.get('Content-Length', '0'))
-                if not 0 < size <= 256 * 1024:
+                upload = re.fullmatch(r'/api/projects/([\w-]+)/attachments', path)
+                if not 0 < size <= (12 * 1024 * 1024 if upload else 256 * 1024):
                     self.reply(413, {'error': '请求过大或为空'})
                     return
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data, dict):
                     raise ValueError('请求必须是 JSON 对象')
-                path = urlsplit(self.path).path
+                if upload:
+                    self.reply(200, workspace.import_uploads(upload[1], data.get('files')))
+                    return
                 if path == '/api/projects':
-                    self.reply(201, workspace.create(data.get('title', ''), data.get('model', 'gpt-6-astra'), data.get('effort', 'medium')))
+                    self.reply(201, workspace.create(data.get('title', ''), data.get('model'), data.get('effort'), inherit=data.get('inherit')))
                     return
                 if match := re.fullmatch(r'/api/trash/([\w-]+)/restore', path):
                     self.reply(200, workspace.restore(match[1]))

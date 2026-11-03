@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+import base64
+import binascii
 import json
 import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 import sys
 import threading
+import tempfile
 import time
 import uuid
 
@@ -23,7 +27,10 @@ from .landscape import reference_papers
 
 
 SETTINGS = {'model', 'reasoning_effort', 'max_calls', 'max_seconds', 'timeout_s',
-            'max_papers', 'max_candidates', 'constraints', 'auto_search'}
+            'max_papers', 'max_candidates', 'constraints', 'auto_search',
+            'search_results_per_query', 'search_date_mode', 'strategy_months', 'novelty_months',
+            'search_since', 'search_until', 'conference_policy', 'search_venues', 'search_source',
+            'arxiv_categories'}
 PUBLIC_SETTINGS = SETTINGS | {'backend', 'output_dir', 'search_source'}
 STEPS = ['明确方向', '文献调研', '方向讨论', '深入分析', '问题讨论', '研究主张']
 
@@ -50,11 +57,14 @@ class WebWorkspace:
             raise FileNotFoundError('研究项目不存在')
         return path
 
-    def create(self, title='', model='gpt-6-astra', effort='medium'):
+    def create(self, title='', model=None, effort=None, *, inherit=None):
         if not isinstance(title, str) or len(title) > 8000:
             raise ValueError('研究方向最多 8000 字')
+        previous = load_config(self.project(inherit)) if inherit else None
+        model = model if model is not None else previous['model'] if previous else 'gpt-6-astra'
+        effort = effort if effort is not None else previous['reasoning_effort'] if previous else 'medium'
         from .config import REASONING_EFFORTS
-        if not isinstance(model, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_./:-]{0,149}', model):
+        if not isinstance(model, str) or model and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_./:-]{0,149}', model):
             raise ValueError('无效的模型名称')
         if effort not in ('', *REASONING_EFFORTS):
             raise ValueError('无效的思考强度')
@@ -67,6 +77,8 @@ class WebWorkspace:
         if self.profile:
             args += ['--codex-profile', self.profile]
         project = initialize(build_parser().parse_args(args))
+        if previous:
+            write_config(project, {**previous, 'model': model, 'reasoning_effort': effort})
         store = Store(project)
         try:
             store.set_many({'topic': title.strip(), 'status': 'initialized'})
@@ -202,16 +214,19 @@ class WebWorkspace:
             rows = store.db.execute("SELECT id,timestamp,payload FROM events WHERE kind='web_output' ORDER BY id DESC LIMIT 240").fetchall()
             events = [{'id': r[0], 'time': r[1], **json.loads(r[2])} for r in reversed(rows)]
             report_path = saved_report(store)
+            from .citations import Citations
+            citations = Citations.from_store(store)
             result.update(config={k: cfg[k] for k in PUBLIC_SETTINGS}, path=str(project),
                           checkpoint_time=checkpoint.get('created_at'),
                           messages=transcript(store), events=events,
                           memory=memory_text(store), problem=problem_text(store, detail=True),
                           report=report_path.read_text(encoding='utf-8') if report_path.is_file() else '',
                           report_path=str(report_path) if report_path.is_file() else '',
-                          papers=[{k: p.get(k) for k in ('id', 'title', 'url', 'year', 'abstract', 'content_kind', 'authors')}
+                          papers=[{**{k: p.get(k) for k in ('id', 'title', 'url', 'year', 'abstract', 'content_kind', 'authors')},
+                                   'text_excerpt': str(p.get('text') or '')[:8000]}
                                   for p in reference_papers(store)],
                           literature_landscape=store.get('literature_landscape'),
-                          evidence=store.rows('evidence'), last_job=last_job)
+                          evidence=[{**e, 'display_text': citations.block(e)} for e in citations.evidence.values()], last_job=last_job)
             return result
         finally:
             store.close()
@@ -219,9 +234,15 @@ class WebWorkspace:
     def configure(self, ident, values):
         if not isinstance(values, dict) or not values or set(values) - SETTINGS:
             raise ValueError('不支持的设置字段')
-        if 'model' in values and (not isinstance(values['model'], str) or
+        if 'model' in values and (not isinstance(values['model'], str) or values['model'] and
                 not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_./:-]{0,149}', values['model'])):
             raise ValueError('无效的模型名称')
+        if 'search_venues' in values:
+            from .venues import normalize_venues
+            raw = values['search_venues']
+            if not isinstance(raw, list) or any(not isinstance(v, str) for v in raw):
+                raise ValueError('会议名单需要使用会议名称列表')
+            values = {**values, 'search_venues': normalize_venues(raw)}
         project = self.project(ident)
         with self.lock:
             self.require_idle(ident)
@@ -238,6 +259,57 @@ class WebWorkspace:
         if job and not job['done'].is_set():
             raise RuntimeError('本研究正在运行，请先停止或等待完成')
 
+    def import_uploads(self, ident, uploads):
+        """Import selected bytes, never a client-supplied path, using the CLI importer."""
+        if not isinstance(uploads, list) or not 1 <= len(uploads) <= 10:
+            raise ValueError('请选择 1–10 个论文文件')
+        decoded, total = [], 0
+        for item in uploads:
+            if not isinstance(item, dict) or not isinstance(item.get('name'), str) or not isinstance(item.get('data'), str):
+                raise ValueError('无效的附件')
+            name = item['name']
+            if not name or len(name) > 180 or '/' in name or '\\' in name or any(ord(c) < 32 for c in name):
+                raise ValueError('附件名称不能包含路径或控制字符')
+            if Path(name).suffix.lower() not in {'.pdf', '.txt', '.md', '.json'}:
+                raise ValueError('论文支持 PDF、TXT、Markdown 和论文 JSON')
+            try:
+                raw = base64.b64decode(item['data'], validate=True)
+            except (ValueError, binascii.Error):
+                raise ValueError('附件传输不完整，请重新选择文件') from None
+            total += len(raw)
+            if not raw or total > 8 * 1024 * 1024:
+                raise ValueError('附件不能为空，合计最多 8 MB')
+            decoded.append((name, raw))
+        project = self.project(ident)
+        with self.lock:
+            self.require_idle(ident)
+        with project_lock(project):
+            root = (project / 'uploads').resolve()
+            if root.parent != project:
+                raise ValueError('附件目录必须位于当前研究中')
+            root.mkdir(exist_ok=True)
+            folder = Path(tempfile.mkdtemp(prefix='papers-', dir=root))
+            try:
+                from .cli import read_paper_records, import_papers
+                paths = []
+                for i, (name, raw) in enumerate(decoded):
+                    sub = folder / str(i)
+                    sub.mkdir()
+                    path = sub / name
+                    path.write_bytes(raw)
+                    paths.append((path, False))
+                records = read_paper_records(paths)
+                store = Store(project)
+                try:
+                    added = import_papers(store, records)
+                finally:
+                    store.close()
+            except Exception:
+                shutil.rmtree(folder)
+                raise
+        self.record(project, 'paper', f'已导入 {len(records)} 条论文资料（新增 {added} 篇），可在文献页查看。尚未调用模型阅读。')
+        return {'imported': len(records), 'added': added}
+
     def record(self, project, tag, text):
         store = Store(project)
         try:
@@ -252,6 +324,9 @@ class WebWorkspace:
             raise ValueError('消息最多 32000 字，且不能包含空字符')
         if mode == 'chat' and not message.strip():
             raise ValueError('请先输入研究方向或讨论意见')
+        if mode == 'chat' and message.lstrip().startswith('/'):
+            from .web_commands import execute
+            return execute(self, ident, message.strip())
         project = self.project(ident)
         with self.lock:
             self.require_idle(ident)

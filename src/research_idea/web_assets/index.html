@@ -33,7 +33,7 @@
     <main class="workspace">
       <header class="topbar">
         <div class="breadcrumb"><button id="menu" class="icon-button mobile-only" aria-label="展开侧栏">☰</button><span class="muted">工作空间</span><span class="slash">/</span><strong id="project-title">新的研究</strong></div>
-        <div class="header-actions"><span id="save-status" class="save-status">保存在本机</span><button id="help-open" class="icon-button" aria-label="使用指南" title="使用指南">?</button><button id="settings-open" class="icon-button" aria-label="研究设置" title="研究设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg></button></div>
+        <div class="header-actions"><span id="save-status" class="save-status">保存在本机</span><button id="records-open" class="text-button" title="历史对话与当前讨论">记录</button><button id="help-open" class="icon-button" aria-label="使用指南" title="使用指南">?</button><button id="settings-open" class="icon-button" aria-label="研究设置" title="研究设置"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/></svg></button></div>
       </header>
       <nav id="tabs" class="tabs" aria-label="研究内容"><button data-tab="discussion" aria-current="page">讨论</button><button data-tab="papers">文献 <span id="paper-count">0</span></button><button data-tab="report">研究主张</button><button data-tab="memory">研究要点</button><span id="stage-badge" class="stage-badge">准备开始</span></nav>
       <div id="scroll-region" class="scroll-region">
@@ -46,25 +46,37 @@
           <label for="composer" class="sr-only">研究方向或讨论意见</label>
           <textarea id="composer" rows="1" maxlength="32000" placeholder="说说你想研究什么，也可以补充初步想法与困惑…"></textarea>
           <div class="composer-toolbar">
-            <div class="model-controls"><span class="model-dot"></span><label class="sr-only" for="model">模型</label><select id="model"><option value="gpt-6-astra">GPT 6 astra</option></select><span class="control-divider"></span><label class="sr-only" for="effort">思考强度</label><select id="effort"><option value="medium">medium</option></select></div>
+            <div class="model-controls"><button id="attachment-open" type="button" class="icon-button" title="添加论文或研究说明" aria-label="添加附件">＋</button><span class="model-dot"></span><label class="sr-only" for="model">模型</label><select id="model"><option value="gpt-6-astra">GPT 6 astra</option></select><span class="control-divider"></span><label class="sr-only" for="effort">思考强度</label><select id="effort"><option value="medium">标准 · medium</option></select></div>
             <button id="send" type="submit" class="send-button" aria-label="发送消息"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
           </div>
         </form>
-        <div class="composer-caption"><span>Enter 发送 · Shift + Enter 换行</span><span>先讨论，再推进。每一步由你决定。</span></div>
+        <div class="composer-caption"><span>Enter 发送 · Shift + Enter 换行</span><span id="discussion-hint">发消息讨论当前这一步，满意后点击继续。</span></div>
       </section>
     </main>
   </div>
   <dialog id="settings-dialog" class="modal">
     <form id="settings-form">
       <div class="modal-heading"><div><span class="eyebrow">WORKSPACE SETTINGS</span><h2>为这次研究设定边界</h2></div><button type="button" class="icon-button" data-close="settings-dialog" aria-label="关闭设置">×</button></div>
-      <p class="muted">设置仅用于当前研究；已保存的对话与进度会继续保留。</p>
+      <p class="muted">设置用于当前研究；新建研究会沿用。模型与思考强度在输入框下方选择。</p>
+      <div class="settings-actions"><button id="refresh-models" type="button" class="button secondary">刷新模型</button><button id="account-open" type="button" class="button secondary">查看登录方式</button></div>
       <div class="settings-grid">
         <label>模型调用上限<input name="max_calls" type="number" min="1" max="10000" required></label>
-        <label>运行时间上限（分钟）<input name="minutes" type="number" min="1" max="10080" required></label>
+        <label>运行时间上限（分钟）<input name="minutes" type="number" min="0.016" step="any" max="10080" required></label>
         <label>背景正文选读上限<input name="max_papers" type="number" min="1" max="100" required></label>
         <label>单次调用超时（秒）<input name="timeout_s" type="number" min="1" max="86400" required></label>
       </div>
       <label class="checkbox-label"><input name="auto_search" type="checkbox"> 自动检索文献并尝试读取全文</label>
+      <details class="settings-section" id="search-settings"><summary>文献范围与阅读</summary>
+        <p class="muted small">默认检索会议论文与 CS arXiv。会议取最新公开一届，较新工作优先；arXiv 按下方时间窗口检索。</p>
+        <label class="field-label">arXiv 时间范围<select name="search_date_mode"><option value="rolling">动态窗口 · 按运行当天计算</option><option value="fixed">固定起止日期</option></select></label>
+        <div class="settings-grid" id="rolling-dates"><label>背景与已有方法（最近几个月）<input name="strategy_months" type="number" min="1" max="120"></label><label>动机与贡献对照（最近几个月）<input name="novelty_months" type="number" min="1" max="120"></label></div>
+        <div class="settings-grid" id="fixed-dates" hidden><label>起始日期<input name="search_since" type="date"></label><label>截止日期<input name="search_until" type="date"></label></div>
+        <label class="field-label">会议时间<select name="conference_policy"><option value="latest">每个会议最新公开的一届</option><option value="window">与 arXiv 使用相同日期窗口</option></select></label>
+        <label class="field-label">参考会议<input name="search_venues" placeholder="ACL EMNLP COLM ICLR，或 ai-recommended"></label>
+        <p class="muted small">用空格或逗号分隔。ai-recommended 选择推荐名单；留空则按主题检索。</p>
+        <div class="settings-grid"><label>每条检索先筛的论文数<input name="search_results_per_query" type="number" min="1" max="100" required></label><label>优先问题数量<input name="max_candidates" type="number" min="1" max="10" required></label></div>
+        <p class="muted small">首批摘要泛读最多 40 篇。正文选读上限控制背景阅读，之后按问题需要补读；所有调用共用总预算。</p>
+      </details>
       <label class="field-label">资源与研究约束<textarea name="constraints" rows="3" placeholder="例如：可用算力、研究周期、已有数据。未知条件可以保持待定。"></textarea></label>
       <div class="location-info"><span>当前项目</span><code id="project-path"></code><span>报告保存目录</span><code id="output-path"></code></div>
       <p id="settings-error" class="inline-error" role="alert"></p>
@@ -76,7 +88,20 @@
     <div class="guide-step"><b>01</b><div><h3>先说出你想探索什么</h3><p>输入领域、初步想法和困惑，不需要先准备一个完整的论文题目。发送后先与模型讨论。</p></div></div>
     <div class="guide-step"><b>02</b><div><h3>调研之后，停下来一起想</h3><p>点击“开始文献调研”。工具会梳理文献并暂停讨论方向；认可后继续深入，再讨论问题是否值得研究。</p></div></div>
     <div class="guide-step"><b>03</b><div><h3>满意之后，再推进下一步</h3><p>普通消息用于追问和纠正。“继续下一阶段”才推进流程。最终主张生成后，也可以继续提出修改意见。</p></div></div>
+    <div class="guide-step"><b>04</b><div><h3>需要什么，就从对应入口打开</h3><p><strong>模型与思考强度：</strong>输入框下方选择，自动保存。目录不完整时在设置中点“刷新模型”。</p><p><strong>论文和研究说明：</strong>输入框旁点击“＋”。论文加入文献库；研究说明先放入输入框，由你确认发送。</p><p><strong>预算、日期与会议：</strong>右上角设置。时间按分钟填写；“文献范围与阅读”中修改日期和会议。</p><p><strong>查过程与依据：</strong>讨论中的过程记录可展开或弹窗查看。上方“文献”中查看摘要、泛读笔记、原文位置和论文链接。</p><p><strong>修改与追溯：</strong>“记录”中查看当前讨论、搜索旧对话；“研究要点”显示持续保留的要求。直接发消息纠正即可。</p><p><strong>查看和下载结果：</strong>上方“研究主张” → “导出 Markdown”。设置中可以查看自动保存位置。</p><p><strong>切换和管理：</strong>左侧新建、选择研究；悬停可置顶或移至回收站。新建沿用设置，已用预算从零开始。</p></div></div>
     <div class="help-note">关闭网页不会停止后台研究。再次打开即可恢复。需要暂停时使用“停止运行”；关闭本地服务会停止任务并保留已完成的检查点。</div>
+    <details class="settings-section"><summary>可选：熟悉 CLI 的用户也可输入快捷命令</summary><div id="command-guide" class="prose">正在读取网页命令说明…</div></details>
+  </dialog>
+  <dialog id="result-dialog" class="modal result-modal"><div class="modal-heading"><h2 id="result-title">详情</h2><button class="icon-button" data-close="result-dialog" aria-label="关闭详情">×</button></div><div id="result-body" class="prose"></div></dialog>
+  <dialog id="records-dialog" class="modal">
+    <div class="modal-heading"><h2>讨论与记录</h2><button class="icon-button" data-close="records-dialog" aria-label="关闭记录">×</button></div>
+    <p class="muted">查看已保存的内容不会调用模型。需要修改判断，回到输入框直接说。</p>
+    <div class="settings-actions"><button class="button secondary" data-command="/problems detail">当前讨论</button><button class="button secondary" data-command="/status">研究状态</button><button class="button secondary" data-command="/details">最近一步分析</button><button class="button secondary" data-command="/config">当前设置</button></div>
+    <form id="history-form"><label class="field-label">查找历史对话<input id="history-query" placeholder="输入关键词；留空查看最近对话" maxlength="1000"></label><button class="button primary" type="submit">查看对话记录</button></form>
+  </dialog>
+  <dialog id="attachment-dialog" class="modal">
+    <div class="modal-heading"><h2>添加资料</h2><button class="icon-button" data-close="attachment-dialog" aria-label="关闭附件">×</button></div>
+    <form id="attachment-form"><label class="field-label">资料用途<select id="attachment-kind"><option value="papers">论文资料 · 加入文献库</option><option value="brief">研究说明 · 放入输入框讨论</option></select></label><label class="field-label">选择文件<input id="attachment-files" type="file" multiple accept=".pdf,.txt,.md,.json"></label><p class="muted small">论文支持 PDF、TXT、Markdown 和论文 JSON；研究说明支持 UTF-8 文本。一次最多 10 个文件、合计 8 MB。导入后不会自动调用模型。</p><p id="attachment-error" class="inline-error" role="alert"></p><button class="button primary" type="submit">添加资料</button></form>
   </dialog>
   <dialog id="trash-dialog" class="modal">
     <div class="modal-heading"><div><span class="eyebrow">RECYCLE BIN</span><h2>暂时收起的研究</h2></div><button class="icon-button" data-close="trash-dialog" aria-label="关闭回收站">×</button></div>

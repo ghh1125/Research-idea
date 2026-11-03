@@ -536,7 +536,7 @@ class Chat:
                     status = store.get('status', 'initialized')
                     kind = discussion_kind(store.get('problem_checkpoint') or {}, status)
                     hint = '\n\n' + discussion_hint(kind) if kind else ''
-                    self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(store.rows('papers'))}；原文依据：{len(store.rows('evidence'))}" + hint)
+                    self.show('system', f"项目：{self.project}\n主题：{store.get('topic', '未设置')}\n进展：{STATUS_LABELS.get(status, status)}\n模型：{self.cfg['model'] or '继承配置'} · {self.cfg['reasoning_effort'] or '继承强度'}\n调用：{store.get('calls_used', 0)}/{self.cfg['max_calls']}（本项目累计，讨论与研究合计）\n时间：{store.get('elapsed_s', 0) / 60:.1f}/{self.cfg['max_seconds'] / 60:g} 分\n论文：{len(Citations.from_store(store).papers)}；原文依据：{len(store.rows('evidence'))}" + hint)
                 elif command == '/papers':
                     kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
                     citations = Citations.from_store(store)

@@ -1,30 +1,44 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const state = {token: '', projects: [], project: null, tab: 'discussion', models: [], busy: false, fetching: false, fingerprint: '', toastTimer: null, connected: true};
+const state = {token: '', projects: [], project: null, tab: 'discussion', models: [], busy: false, fetching: false, fingerprint: '', toastTimer: null, connected: true, details: false, viewStates: new Map()};
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const storage = {
   get(key) { try { return localStorage.getItem('research-idea:' + key) || ''; } catch { return ''; } },
   set(key, value) { try { localStorage.setItem('research-idea:' + key, value); } catch { /* Private browsing can disable storage. */ } }
 };
 const modelName = id => ({'gpt-6-astra': 'GPT 6 astra', 'gpt-6.1-sol': 'GPT 6.1 sol', 'gpt-6.1-terra': 'GPT 6.1 terra', 'gpt-6-sol': 'GPT 6 sol', 'gpt-6-luna': 'GPT 6 luna'}[id] || id || '沿用 Codex');
-const effortName = id => id || 'inherit';
+const effortName = id => ({'':'沿用配置',low:'轻量 · low',medium:'标准 · medium',high:'深入 · high'}[id] || id);
 const labels = {start:'开始',search:'检索文献',paper:'找到论文',read:'阅读文献',analysis:'分析进展',skill:'研究方法',concept:'研究构思',direction:'方向讨论',problem:'问题讨论',idea:'研究主张',error:'这一步未完成',budget:'预算提醒',stopped:'已暂停',update:'本轮修改',detail:'详细分析',retry:'正在重试',recovered:'已恢复',gap:'文献获取情况',saved:'已保存',system:'研究设置'};
 
 function inline(text) {
-  return esc(text).replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  // Escape each source token once; never run replacements on generated HTML.
+  let result='', offset=0;
+  const pattern=/`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)|\*\*([^*]+)\*\*|(https?:\/\/[^\s<>`()[\]]+)/g;
+  for (const m of String(text).matchAll(pattern)) {
+    result+=esc(text.slice(offset,m.index));
+    if(m[1]) result+='<code>'+esc(m[1])+'</code>';
+    else if(m[2]) result+=`<a href="${esc(m[3])}" target="_blank" rel="noopener noreferrer">${esc(m[2])}</a>`;
+    else if(m[4]) result+='<strong>'+esc(m[4])+'</strong>';
+    else result+=`<a href="${esc(m[5])}" target="_blank" rel="noopener noreferrer">${esc(m[5])}</a>`;
+    offset=m.index+m[0].length;
+  }
+  return result+esc(text.slice(offset));
 }
 function markdown(text) {
   // Deliberately render a small Markdown subset; raw HTML is always escaped.
   const lines = String(text || '').split('\n');
-  let html = '', list = '', code = false, paragraph = [];
+  let html = '', list = '', code = false, paragraph = [], details = 0;
   const flush = () => { if (paragraph.length) { html += '<p>' + paragraph.map(inline).join('<br>') + '</p>'; paragraph = []; } };
   const closeList = () => { if (list) { html += `</${list}>`; list = ''; } };
   for (let i=0; i<lines.length; i++) {
     const line=lines[i];
     if (line.trim().startsWith('```')) { flush(); closeList(); html += code ? '</code></pre>' : '<pre><code>'; code = !code; continue; }
     if (code) { html += esc(line) + '\n'; continue; }
+    // Recognize only our report's exact disclosure markup; no arbitrary HTML.
+    if (line.trim()==='<details>') { flush(); closeList(); html+='<details class="report-detail">'; details++; continue; }
+    const summary=line.trim().match(/^<summary>(.*)<\/summary>$/);
+    if (summary && details) { flush(); closeList(); html+='<summary>'+inline(summary[1])+'</summary>'; continue; }
+    if(line.trim()==='</details>' && details) { flush(); closeList(); html+='</details>'; details--; continue; }
     if (!line.trim()) { flush(); closeList(); continue; }
     if (line.includes('|') && i+1<lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1])) {
       flush();closeList();const cells=s=>s.trim().replace(/^\|/,'').replace(/\|$/,'').split('|');
@@ -42,11 +56,12 @@ function markdown(text) {
     else { closeList(); paragraph.push(line); }
   }
   flush(); closeList(); if (code) html += '</code></pre>';
+  html+='</details>'.repeat(details);
   return html;
 }
 
 async function api(path, data) {
-  const options = {headers: {}, signal: AbortSignal.timeout(25000)};
+  const options = {headers: {}, signal: AbortSignal.timeout(path.endsWith('/attachments') ? 600000 : 25000)};
   if (data !== undefined) {
     options.method = 'POST'; options.headers = {'Content-Type':'application/json', 'X-Research-Token':state.token}; options.body = JSON.stringify(data);
   }
@@ -95,7 +110,7 @@ function emptyPanel(symbol, heading, text) { return `<div class="empty-panel"><d
 function timeline(p) {
   const entries = p.messages.map((m,i) => ({key:'m'+(m.id || i),time:m.time, role:m.role,text:m.content}));
   for (const e of p.events) {
-    if (['assistant','thinking','context','system','evidence','saved'].includes(e.tag)) continue;
+    if (e.tag === 'assistant') continue;
     entries.push({key:'e'+e.id,time:e.time,tag:e.tag,text:e.text});
   }
   if (p.can_continue && p.checkpoint_time && !p.events.some(e=>['direction','problem'].includes(e.tag))) {
@@ -109,36 +124,48 @@ function timeline(p) {
       return `<article class="message ${user ? 'user' : 'assistant'}"><div class="message-heading">${user ? '<span>你</span>' : `<span class="mini-mark">R</span><span>${e.tag ? esc(labels[e.tag]) : 'Research Idea'}</span>`}<time>${formatTime(e.time)}</time></div><div class="prose">${markdown(e.text)}</div></article>`;
     }
     const error = ['error','budget','stopped'].includes(e.tag);
-    return `<details class="activity ${error ? 'error' : ''}" data-detail="${e.key}" ${error ? 'open' : ''}><summary><span>${esc(labels[e.tag] || '研究进展')}</span><span>· ${esc(e.text.split('\n')[0].slice(0,70))}</span></summary><div class="prose">${markdown(e.text)}</div></details>`;
+    return `<details class="activity ${error ? 'error' : ''}" data-detail="${e.key}" ${error || state.details ? 'open' : ''}><summary><span>${esc(labels[e.tag] || ({evidence:'原文依据',thinking:'处理进展',context:'本轮参考材料',command:'快捷操作'}[e.tag]) || '研究进展')}</span><span>· ${esc(e.text.split('\n')[0].slice(0,70))}</span></summary><button class="text-button" data-activity="${esc(e.key)}">弹窗查看完整内容</button><div class="prose">${markdown(e.text)}</div></details>`;
   }).join('');
 }
 function renderContent(force=false) {
   const p = state.project;
   if (!p) return;
-  const signature = JSON.stringify([state.tab,p.id,p.messages,p.events,p.report,p.problem,p.memory,p.papers,p.evidence,p.literature_landscape]);
+  const signature = JSON.stringify([state.tab,p.id,p.status,p.stage,p.can_continue,p.checkpoint_time,p.messages,p.events,p.report,p.problem,p.memory,p.papers,p.evidence,p.literature_landscape]);
   if (!force && signature === state.fingerprint) return;
   state.fingerprint = signature;
   const region = $('scroll-region'); const nearBottom = region.scrollHeight-region.scrollTop-region.clientHeight < 120;
-  const expanded = new Set([...$('content').querySelectorAll('details[open][data-detail]')].map(el => el.dataset.detail));
+  rememberView();
+  const viewKey=p.id+':'+state.tab;
+  const previous=state.viewStates.get(viewKey);
   if (state.tab === 'discussion') $('content').innerHTML = timeline(p);
   else if (state.tab === 'papers') {
-    $('content').innerHTML = p.papers.length ? `<div class="panel-heading"><div><span class="eyebrow">READING DESK</span><h2>研究所依据的文献</h2><p>${p.papers.length} 篇资料 · ${p.evidence.length} 条原文依据</p></div></div><div class="panel-note">资料类型按实际获取情况显示。只有摘要的论文不会被标记为已读全文。</div>` + p.papers.map(paper => `<article class="paper-card"><div class="paper-meta"><span>${esc(paper.year || '年份待核对')}</span><span>${esc(paper.content_kind === 'full_text' ? '全文资料' : paper.content_kind === 'abstract' ? '摘要资料' : paper.content_kind || '待阅读')}</span></div><h3>${/^https?:\/\//.test(paper.url || '') ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener noreferrer">${esc(paper.title)}</a>` : esc(paper.title)}</h3>${paper.abstract ? `<details><summary>查看摘要</summary><p>${esc(paper.abstract)}</p></details>` : ''}${skimDetails(paper.id, p.literature_landscape)}${p.evidence.filter(e => e.paper_id === paper.id).map(e => `<details><summary>原文依据</summary><div class="prose">${markdown(e.quote || e.statement || '')}</div></details>`).join('')}</article>`).join('') : emptyPanel('⌁','给想法找到依据','开始文献调研后，真实检索与阅读的资料会出现在这里。已有 CLI 项目的论文也会同步显示。');
+    $('content').innerHTML = p.papers.length ? `<div class="panel-heading"><div><span class="eyebrow">READING DESK</span><h2>研究所依据的文献</h2><p>${p.papers.length} 篇资料 · ${p.evidence.length} 条原文依据</p></div></div><div class="panel-note">资料类型按实际获取情况显示。只有摘要的论文不会被标记为已读全文。</div>` + p.papers.map(paper => `<article class="paper-card"><div class="paper-meta"><span>${esc(paper.year || '年份待核对')}</span><span>${esc(paper.content_kind === 'full_text' ? '全文资料' : paper.content_kind === 'abstract' ? '摘要资料' : paper.content_kind === 'notes' ? '导入文本' : '待阅读')}</span></div><h3>${/^https?:\/\//.test(paper.url || '') ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener noreferrer">${esc(paper.title)}</a>` : esc(paper.title)}</h3>${paper.abstract ? `<details data-detail="abstract-${esc(paper.id)}"><summary>查看摘要</summary><p>${esc(paper.abstract)}</p></details>` : ''}${paper.text_excerpt ? `<details data-detail="text-${esc(paper.id)}"><summary>查看${paper.content_kind === 'full_text' ? '正文' : '导入文本'}节选</summary><div class="prose">${markdown(paper.text_excerpt)}</div><p class="muted small">此处最多展示前 8000 字，完整材料已保存在项目中。</p></details>` : ''}${skimDetails(paper.id, p.literature_landscape)}${p.evidence.filter(e => e.paper_id === paper.id).map(e => `<details data-detail="evidence-${esc(e.id)}"><summary>原文依据${e.page ? ' · 第'+esc(e.page)+'页' : ''}</summary><div class="prose">${markdown(e.display_text || e.quote || e.statement || '')}</div></details>`).join('')}</article>`).join('') : emptyPanel('⌁','给想法找到依据','开始文献调研后，真实检索与阅读的资料会出现在这里。已有 CLI 项目的论文也会同步显示。');
   } else if (state.tab === 'report') {
     const body = p.report || (p.stage >= 2 ? p.problem : '');
     $('content').innerHTML = body ? `<div class="panel-heading"><div><span class="eyebrow">RESEARCH ARGUMENT</span><h2>${p.status === 'completed' ? '当前研究主张' : '正在形成的研究论证'}</h2><p>背景 → 已有方法 → 问题 → 动机 → 研究主张</p></div><div class="report-actions"><button class="button secondary" data-download="report">导出 Markdown</button><button class="button secondary" data-tab="discussion">回到讨论</button></div></div><div class="prose report-prose">${markdown(body)}</div>` : emptyPanel('◇','好的主张，来自充分的讨论','完成文献调研和两次讨论后，在这里查看研究问题、动机和依据。你仍然可以提出修改意见。');
   } else if (state.tab === 'memory') {
     $('content').innerHTML = `<div class="panel-heading"><div><span class="eyebrow">THINGS WE KEEP IN MIND</span><h2>让讨论沿着你的目标继续</h2><p>持续要求、当前意见与原话来源，由研究引擎保存。</p></div></div><div class="prose report-prose">${markdown(p.memory)}</div>`;
   }
-  for (const el of $('content').querySelectorAll('details[data-detail]')) if (expanded.has(el.dataset.detail)) el.open = true;
-  if (force) region.scrollTop = state.tab === 'discussion' && p.messages.length ? region.scrollHeight : 0;
+  $('content').dataset.view = viewKey;
+  for (const [i,el] of [...$('content').querySelectorAll('details')].entries()) {
+    el.dataset.detail ||= 'disclosure-'+i;
+    if(previous?.open.has(el.dataset.detail)) el.open=previous.open.get(el.dataset.detail);
+  }
+  if (force) region.scrollTop = previous?.scroll ?? (state.tab === 'discussion' && p.messages.length ? region.scrollHeight : 0);
   else if (nearBottom) region.scrollTop = region.scrollHeight;
+  else if (previous) region.scrollTop=previous.scroll;
+}
+
+function rememberView() {
+  const key=$('content').dataset.view;
+  if(key) state.viewStates.set(key,{scroll:$('scroll-region').scrollTop,open:new Map([...$('content').querySelectorAll('details[data-detail]')].map(el=>[el.dataset.detail,el.open]))});
 }
 
 function renderModels() {
   const cfg = state.project?.config || {model:'gpt-6-astra',reasoning_effort:'medium'};
-  const models = state.models.length ? state.models : [{id:'gpt-6-astra',levels:['low','medium','high']}];
+  const models = state.models;
   const choices = models.some(m => m.id === cfg.model) ? models : [{id:cfg.model,levels:[]},...models];
-  const modelHtml = choices.map(m => `<option value="${esc(m.id)}">${esc(modelName(m.id))}</option>`).join('');
+  const modelHtml = [{id:''},...choices.filter(m=>m.id)].map(m => `<option value="${esc(m.id)}">${esc(modelName(m.id))}</option>`).join('');
   if ($('model').innerHTML !== modelHtml) $('model').innerHTML = modelHtml;
   $('model').value = cfg.model;
   const levels = models.find(m => m.id === cfg.model)?.levels || ['low','medium','high'];
@@ -150,16 +177,19 @@ function renderModels() {
 
 function updateControls() {
   const p = state.project; const busy = !!(p?.busy || state.busy);
-  $('send').disabled = busy || !state.connected || !$('composer').value.trim();
+  const command=$('composer').value.trim().startsWith('/');
+  $('send').disabled = state.busy || (p?.busy && !command) || !state.connected || !$('composer').value.trim();
   $('new-project').disabled = state.busy || !state.connected;
-  for (const id of ['model','effort','settings-open','budget-open']) $(id).disabled = busy || !state.connected;
+  for (const id of ['model','effort','settings-open','budget-open','attachment-open']) $(id).disabled = busy || !state.connected;
   $('composer-area').hidden = state.tab !== 'discussion';
   $('composer').placeholder = p?.busy ? '运行中也可以先写下想法，完成后再发送…' : p?.messages.length ? '追问、纠正，或者补充你的想法…' : '说说你想研究什么，也可以补充初步想法与困惑…';
+  $('discussion-hint').textContent = p?.busy ? '运行中可写草稿；需要暂停时点击“停止运行”。' : p?.can_continue ? '发消息只讨论、修改当前这一步。满意后点击“继续”推进。' : p?.status==='completed' ? '还可以发消息修改研究主张，讨论满意后重新整理。' : '发消息先讨论；准备好后点击“开始文献调研”。';
   $('run-status').hidden = !p?.busy;
   if (p?.busy) {
     const latest = [...p.events].reverse().find(e => ['search','read','analysis','concept','thinking','retry','start'].includes(e.tag));
     $('run-status').innerHTML = `<span class="spinner"></span><span class="status-copy">${esc(p.stopping ? '正在停止并保留已完成的进度…' : p.external ? '此研究正在命令行中运行' : latest?.text.split('\n')[0].slice(0,100) || '正在处理')}</span>${p.external ? '' : `<button class="stop-button" data-action="stop" ${p.stopping || state.busy ? 'disabled' : ''}>停止运行</button>`}`;
   }
+  if(p?.can_continue && !busy && $('composer').value.trim()) $('discussion-hint').textContent='有未发送的意见：先发送并讨论，或清空输入后点击继续。';
   $('next-action').innerHTML = '';
   if (p && !p.busy && p.title !== '新的研究') {
     let heading, note, action, button;
@@ -198,24 +228,41 @@ async function refresh() {
 async function createProject() {
   saveDraft(); state.busy = true; updateControls();
   try {
-    const p = await api('/api/projects', {model:state.project?.config.model || 'gpt-6-astra',effort:state.project?.config.reasoning_effort || 'medium'});
+    const p = await api('/api/projects', state.project ? {inherit:state.project.id} : {});
     state.project=p; state.projects.unshift(p); storage.set('selected',p.id); $('composer').value='';resizeComposer(); setTab('discussion'); render(true); showSidebar(false); $('composer').focus();
   } finally { state.busy = false; updateControls(); }
 }
 async function configure(values) {
   if (!state.project) return;
   state.busy = true; updateControls();
-  try { state.project = await api('/api/projects/'+state.project.id+'/settings', values); renderModels(); notify('设置已保存'); }
+  try { state.project = await api('/api/projects/'+state.project.id+'/settings', values); render(); notify('设置已保存'); }
   finally { state.busy = false; updateControls(); }
 }
 async function action(mode, message='') {
   if (state.busy || !state.project) return;
+  const ident=state.project.id;
   state.busy = true; updateControls();
+  let result;
   try {
-    await api('/api/projects/'+state.project.id+'/actions',{action:mode,message});
-    if (mode === 'chat') { $('composer').value='';resizeComposer(); saveDraft(); }
+    result=await api('/api/projects/'+ident+'/actions',{action:mode,message});
+    if (mode === 'chat' && $('composer').value.trim()===message) { $('composer').value='';resizeComposer(); saveDraft(); }
   } finally { state.busy=false; updateControls(); }
+  if(result.project_id && result.project_id!==ident) await selectProject(result.project_id);
   await refresh();
+  if(result.command) {
+    if(result.details!==undefined) {
+      state.details=result.details;
+      for(const el of $('content').querySelectorAll('details.activity'))el.open=result.details;
+      rememberView();
+    }
+    if(['papers','report','memory'].includes(result.ui))setTab(result.ui);
+    else if(result.ui==='settings')openSettings();
+    else if(result.ui==='help')openHelp();
+    else if(['model','reasoning'].includes(result.ui)) {
+      const control=$(result.ui==='model'?'model':'effort');control.focus();
+      notify('在输入框下方选择'+(result.ui==='model'?'模型':'思考强度')+'，选择后自动保存。');
+    } else if(result.messages?.length) showResult(({'/history':'历史对话','/problems':'当前讨论','/status':'研究状态','/details':'最近一步分析','/config':'当前设置','/account':'登录方式'}[result.command]) || '操作结果', result.messages.map(m=>m.text).join('\n\n'));
+  }
 }
 function setTab(tab) {
   if (!['discussion','papers','report','memory'].includes(tab)) return;
@@ -226,9 +273,32 @@ function setTab(tab) {
 function openSettings() {
   if (!state.project || state.project.busy) return;
   const c=state.project.config, f=$('settings-form');
-  for(const k of ['max_calls','max_papers','timeout_s','constraints']) f.elements[k].value=c[k];
+  for(const k of ['max_calls','max_papers','timeout_s','constraints','search_date_mode','strategy_months','novelty_months','search_since','search_until','conference_policy','search_results_per_query','max_candidates']) f.elements[k].value=c[k] ?? '';
+  if(c.constraints.startsWith('Resources unspecified;')) f.elements.constraints.value='';
+  f.elements.search_venues.value=(c.search_venues || []).join(' ');
   f.elements.minutes.value=c.max_seconds/60; f.elements.auto_search.checked=c.auto_search;
-  $('project-path').textContent=state.project.path; $('output-path').textContent=c.output_dir || '项目默认目录'; $('settings-error').textContent=''; $('settings-dialog').showModal();
+  dateFields();
+  $('project-path').textContent=state.project.path; $('output-path').textContent=c.output_dir || '项目默认目录'; $('settings-error').textContent=''; if(!$('settings-dialog').open)$('settings-dialog').showModal();
+}
+function dateFields() {
+  const fixed=$('settings-form').elements.search_date_mode.value==='fixed';
+  $('fixed-dates').hidden=!fixed;$('rolling-dates').hidden=fixed;
+  for(const name of ['search_since','search_until']) $('settings-form').elements[name].required=fixed;
+}
+function showResult(heading,text) {
+  $('result-title').textContent=heading;$('result-body').innerHTML=markdown(text);
+  if(!$('result-dialog').open)$('result-dialog').showModal();
+  $('result-dialog').scrollTop=0;
+}
+async function openHelp() {
+  if(!$('help-dialog').open)$('help-dialog').showModal();
+  try { const data=await api('/api/help'); $('command-guide').innerHTML=markdown(data.text); }
+  catch(error) { $('command-guide').textContent=error.message; }
+}
+async function refreshModels() {
+  const button=$('refresh-models');button.disabled=true;
+  try { const data=await api('/api/models?backend=codex&refresh=1');state.models=data.models || [];renderModels();notify(data.note || '已重新读取本机模型目录'); }
+  catch(error) { handleError(error); } finally {button.disabled=false;}
 }
 function downloadReport() {
   const p=state.project;const body=p.report || p.problem;if(!body)return;
@@ -267,12 +337,50 @@ $('composer-form').addEventListener('submit',event=>{event.preventDefault();cons
 $('model').addEventListener('change',()=>{const model=$('model').value;const m=state.models.find(m=>m.id===model);const effort=state.project.config.reasoning_effort;configure({model,reasoning_effort:m?.levels.includes(effort)?effort:(m?.default_effort || 'medium')}).catch(handleError);});
 $('effort').addEventListener('change',()=>configure({reasoning_effort:$('effort').value}).catch(handleError));
 $('settings-open').addEventListener('click',openSettings);$('budget-open').addEventListener('click',openSettings);
-$('help-open').addEventListener('click',()=>$('help-dialog').showModal());
+$('help-open').addEventListener('click',openHelp);
+$('refresh-models').addEventListener('click',refreshModels);
+$('account-open').addEventListener('click',()=>action('chat','/account').catch(handleError));
+$('settings-form').elements.search_date_mode.addEventListener('change',dateFields);
+$('records-open').addEventListener('click',()=>$('records-dialog').showModal());
+$('attachment-open').addEventListener('click',()=>{$('attachment-error').textContent='';$('attachment-dialog').showModal();});
+$('history-form').addEventListener('submit',event=>{event.preventDefault();action('chat','/history '+$('history-query').value.trim()).catch(handleError);});
+$('attachment-form').addEventListener('submit',async event=>{
+  event.preventDefault();const files=[...$('attachment-files').files],button=event.currentTarget.querySelector('button[type=submit]');
+  button.disabled=true;$('attachment-error').textContent='';
+  try {
+    if(!files.length || files.length>10 || files.reduce((n,f)=>n+f.size,0)>8*1024*1024)throw new Error('请选择 1–10 个文件，合计不超过 8 MB。');
+    if($('attachment-kind').value==='brief') {
+      if(files.some(f=>!/\.(txt|md)$/i.test(f.name)))throw new Error('研究说明请选择 TXT 或 Markdown 文本；PDF 可作为论文导入。');
+      let parts;
+      try {parts=await Promise.all(files.map(async f=>new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer())));}
+      catch {throw new Error('研究说明需要 UTF-8 编码，请转换后重试。');}
+      const combined=[$('composer').value,...parts].filter(Boolean).join('\n\n');
+      if(combined.length>32000)throw new Error('研究说明与当前草稿合计最多 32000 字，请分次发送。');
+      $('composer').value=combined;resizeComposer();saveDraft();setTab('discussion');notify('研究说明已放入输入框，请确认后发送。');
+    } else {
+      state.busy=true;updateControls();
+      const uploads=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve({name:f.name,data:reader.result.split(',')[1]});reader.onerror=()=>reject(new Error('文件读取失败，请重新选择。'));reader.readAsDataURL(f);} )));
+      const result=await api('/api/projects/'+state.project.id+'/attachments',{files:uploads});
+      state.busy=false;await refresh();setTab('papers');notify(`已导入 ${result.imported} 条论文资料。`);
+    }
+    $('attachment-files').value='';$('attachment-dialog').close();
+  } catch(error) {$('attachment-error').textContent=error.message;}
+  finally {button.disabled=false;state.busy=false;updateControls();}
+});
 $('trash-open').addEventListener('click',()=>{loadTrash().then(()=>$('trash-dialog').showModal()).catch(handleError);});
 $('menu').addEventListener('click',()=>showSidebar(true));$('scrim').addEventListener('click',()=>showSidebar(false));
 $('settings-form').addEventListener('submit',async event=>{
   event.preventDefault();const f=event.currentTarget;const button=f.querySelector('button[type=submit]');button.disabled=true;
-  try{await configure({max_calls:Number(f.elements.max_calls.value),max_seconds:Math.round(Number(f.elements.minutes.value)*60),max_papers:Number(f.elements.max_papers.value),timeout_s:Number(f.elements.timeout_s.value),constraints:f.elements.constraints.value,auto_search:f.elements.auto_search.checked});$('settings-dialog').close();}
+  try{
+    const values={max_calls:Number(f.elements.max_calls.value),max_seconds:Math.round(Number(f.elements.minutes.value)*60),max_papers:Number(f.elements.max_papers.value),timeout_s:Number(f.elements.timeout_s.value),constraints:f.elements.constraints.value || (state.project.config.constraints.startsWith('Resources unspecified;') ? state.project.config.constraints : ''),auto_search:f.elements.auto_search.checked,
+      search_date_mode:f.elements.search_date_mode.value,conference_policy:f.elements.conference_policy.value,
+      search_venues:f.elements.search_venues.value.split(/[\s,，]+/).filter(Boolean),
+      search_results_per_query:Number(f.elements.search_results_per_query.value),max_candidates:Number(f.elements.max_candidates.value)};
+    if(values.search_venues.length)values.search_source='hybrid';
+    if(values.search_date_mode==='fixed'){values.search_since=f.elements.search_since.value;values.search_until=f.elements.search_until.value;}
+    else {values.strategy_months=Number(f.elements.strategy_months.value);values.novelty_months=Number(f.elements.novelty_months.value);}
+    await configure(values);$('settings-dialog').close();
+  }
   catch(error){$('settings-error').textContent=error.message;}
   finally{button.disabled=false;}
 });
@@ -285,6 +393,11 @@ document.addEventListener('click',event=>{
   if(b.dataset.archive)projectOperation(b.dataset.archive,'archive').catch(handleError);
   if(b.dataset.restore)restoreProject(b.dataset.restore).catch(handleError);
   if(b.dataset.download)downloadReport();
+  if(b.dataset.command)action('chat',b.dataset.command).catch(handleError);
+  if(b.dataset.activity){
+    const e=state.project.events.find(e=>'e'+e.id===b.dataset.activity);
+    if(e)showResult(labels[e.tag] || '过程详情',e.text);
+  }
   if(b.dataset.action){
     if(b.dataset.action==='retry'){const last=[...state.project.messages].reverse().find(m=>m.role==='user');if(last)action('chat',last.content).catch(handleError);}
     else action(b.dataset.action).catch(handleError);
@@ -317,5 +430,5 @@ function skimDetails(id, landscape) {
   const n = landscape?.notes?.find(n => n.paper_id === id);
   if (!n) return '';
   const fields = [['研究问题','problem'],['主要思路','approach'],['摘要中的作者主张','claimed_progress'],['明确条件','conditions'],['与当前方向的联系','connection'],['值得补读的问题','reading_question']];
-  return `<details><summary>查看泛读笔记</summary>${fields.filter(([,key]) => n[key]).map(([label,key]) => `<p><strong>${esc(label)}：</strong>${esc(n[key])}</p>`).join('')}<p>依据：${n.relevance === 'insufficient' ? '资料不足以形成摘要笔记' : '摘要泛读，未据此判定研究重叠'}</p></details>`;
+  return `<details data-detail="skim-${esc(id)}"><summary>查看泛读笔记</summary>${fields.filter(([,key]) => n[key]).map(([label,key]) => `<p><strong>${esc(label)}：</strong>${esc(n[key])}</p>`).join('')}<p>依据：${n.relevance === 'insufficient' ? '资料不足以形成摘要笔记' : '摘要泛读，未据此判定研究重叠'}</p></details>`;
 }

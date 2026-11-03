@@ -1,5 +1,6 @@
 """HTTP and process-boundary tests; synthetic workers never call a model."""
 import http.client
+import base64
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
@@ -134,6 +135,101 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/projects', {'model':[]})[0], 400)
         self.assertEqual(self.request('POST', '/api/projects', {'effort':'invented'})[0], 400)
 
+    def test_web_commands_use_shared_settings_without_model_or_conversation(self):
+        p = self.create()
+        with patch.object(self.server.workspace, 'work') as worker:
+            for command in ('/budget max_calls 230', '/date rolling 18 9', '/venues ACL COLM',
+                            '/reasoning inherit', '/model inherit', '/topic 我的研究问题'):
+                code, result = self.action(p['id'], 'chat', message=command)
+                self.assertEqual(code, 202, result)
+                self.assertTrue(result['command'].startswith('/'))
+            worker.assert_not_called()
+        changed = self.get(p['id'])
+        self.assertEqual(changed['title'], '我的研究问题')
+        self.assertEqual(changed['config']['max_calls'], 230)
+        self.assertEqual(changed['config']['strategy_months'], 18)
+        self.assertEqual(changed['config']['novelty_months'], 9)
+        self.assertEqual(changed['config']['search_venues'], ['ACL', 'COLM'])
+        self.assertEqual(changed['config']['model'], '')
+        self.assertEqual(changed['calls'], 0)
+        self.assertEqual(changed['messages'], [])
+        self.assertTrue(any(e['tag'] == 'system' for e in changed['events']))
+
+    def test_invalid_and_path_commands_never_fall_through_to_model(self):
+        p = self.create()
+        with patch.object(self.server.workspace, 'work') as worker:
+            for command in ('/budegt max_calls 7', '/budget max_calls -1', '/date rolling 6 12',
+                            '/papers /etc/passwd', '/input /etc/passwd', '/output /outside',
+                            '/open ../escape', '/continue wrong', '/venues NOT-A-VENUE'):
+                code, result = self.action(p['id'], 'chat', message=command)
+                self.assertEqual(code, 400, (command, result))
+            worker.assert_not_called()
+        changed = self.get(p['id'])
+        self.assertEqual(changed['title'], '新的研究')
+        self.assertEqual(changed['messages'], [])
+        self.assertEqual(changed['config']['max_calls'], 200)
+
+    def test_web_help_navigation_and_new_project_inherit_all_settings(self):
+        p = self.create(title='原主题')
+        self.action(p['id'], 'chat', message='/budget max_calls 241')
+        self.action(p['id'], 'chat', message='/date rolling 20 10')
+        self.action(p['id'], 'chat', message='/constraints 只能用 API')
+        for command, ui in (('/help', 'help'), ('/intro', 'help'), ('/model', 'model'),
+                            ('/papers', 'papers'), ('/report', 'report'), ('/memory', 'memory')):
+            code, result = self.action(p['id'], 'chat', message=command)
+            self.assertEqual(code, 202, result)
+            self.assertEqual(result['ui'], ui)
+        self.assertIn('研究设置', self.request('GET', '/api/help')[1]['text'])
+        code, result = self.action(p['id'], 'chat', message='/new 新主题')
+        self.assertEqual(code, 202, result)
+        new = self.get(result['project_id'])
+        self.assertEqual(new['title'], '新主题')
+        self.assertEqual(new['config']['max_calls'], 241)
+        self.assertEqual(new['config']['strategy_months'], 20)
+        self.assertEqual(new['config']['constraints'], '只能用 API')
+        self.assertEqual(new['calls'], 0)
+        self.assertEqual(new['messages'], [])
+        self.assertEqual(self.get(p['id'])['title'], '原主题')
+        code, opened = self.action(new['id'], 'chat', message='/open ' + p['id'])
+        self.assertEqual(code, 202, opened)
+        self.assertEqual(opened['project_id'], p['id'])
+
+    def test_slash_run_stop_and_status_use_the_existing_worker(self):
+        p = self.create(title='agent learning')
+        with self.fake_processes():
+            code, result = self.action(p['id'], 'chat', message='/run')
+            self.assertEqual(code, 202, result)
+            self.assertTrue(result['accepted'])
+            self.wait(p['id'], lambda data: data['can_continue'] and not data['busy'])
+            self.assertEqual(self.action(p['id'], 'chat', message='slow')[0], 202)
+            self.assertEqual(self.action(p['id'], 'chat', message='/status')[0], 202)
+            # Mutations remain blocked while the worker owns the project.
+            self.assertEqual(self.action(p['id'], 'chat', message='/budget max_calls 1')[0], 409)
+            self.assertEqual(self.action(p['id'], 'chat', message='/stop')[0], 202)
+            self.wait(p['id'])
+
+    def test_selected_files_import_atomically_without_running_a_model(self):
+        p = self.create()
+        route = '/api/projects/'+p['id']+'/attachments'
+        encoded = base64.b64encode('论文正文内容'.encode()).decode()
+        with patch.object(self.server.workspace, 'work') as worker:
+            code, result = self.request('POST', route, {'files':[{'name':'论文.md','data':encoded}]})
+            self.assertEqual(code, 200, result)
+            self.assertEqual(result['imported'], 1)
+            worker.assert_not_called()
+        snapshot = self.get(p['id'])
+        self.assertEqual(snapshot['papers'][0]['title'], '论文')
+        self.assertEqual(snapshot['calls'], 0)
+        self.assertEqual(snapshot['messages'], [])
+        original = snapshot['papers']
+        for files in ([{'name':'../outside.txt','data':encoded}], [{'name':'x.txt','data':'not base64'}],
+                      [{'name':'a.md','data':encoded}, {'name':'bad.json','data':encoded}],
+                      [{'name':'run.py','data':encoded}]):
+            code, result = self.request('POST', route, {'files':files})
+            self.assertEqual(code, 400, result)
+            self.assertEqual(self.get(p['id'])['papers'], original)
+        self.assertEqual(self.request('POST', route, {'files':[]}, {'X-Research-Token':''})[0], 403)
+
     def test_web_exposes_skimmed_papers_without_claiming_body_reading(self):
         p = self.create(title='A focused research question')
         store = Store(Path(p['path']))
@@ -150,6 +246,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(snapshot['papers'][0]['url'], 'https://example.org/paper')
         self.assertEqual(snapshot['evidence'], [])
         self.assertEqual(snapshot['literature_landscape']['notes'][0]['claimed_progress'], 'An author claim.')
+        _, result = self.action(p['id'], 'chat', message='/status')
+        self.assertIn('论文：1', result['messages'][0]['text'])
 
     def test_discussion_run_continue_and_reload_use_real_project_state(self):
         p = self.create()
