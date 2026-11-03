@@ -570,7 +570,7 @@ raise SystemExit(worker.main())
             self.assertEqual(store.task_summary(), {})
         finally:
             store.close()
-        self.assertIn('调用 0/80', ''.join(text for _, text in self.chat.toolbar()))
+        self.assertIn('调用 0/200', ''.join(text for _, text in self.chat.toolbar()))
         await self.chat.handle('/report')
         self.assertIn('尚无方案', self.events[-1][1])
 
@@ -589,7 +589,7 @@ raise SystemExit(worker.main())
         toolbar = ''.join(text for _, text in self.chat.toolbar())
         self.assertIn('研究主张已生成', toolbar)
         self.assertIn('本项目累计', toolbar)
-        self.assertIn('调用 61/80', toolbar)
+        self.assertIn('调用 61/200', toolbar)
         self.assertIn('/new 新研究', toolbar)
 
     async def test_new_topic_is_literal_and_prompt_history_is_cleared(self):
@@ -613,8 +613,8 @@ raise SystemExit(worker.main())
         store.set('elapsed_s', 120)
         store.close()
         text = ''.join(text for _, text in self.chat.toolbar())
-        self.assertIn('调用 7/80', text)
-        self.assertIn('时间 2.0/110', text)
+        self.assertIn('调用 7/200', text)
+        self.assertIn('时间 2.0/300', text)
 
     async def test_running_view_has_no_prompt_and_control_c_stops(self):
         from prompt_toolkit.input import create_pipe_input

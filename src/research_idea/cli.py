@@ -381,8 +381,8 @@ def build_parser():
                        help="Codex 思考强度；inherit 沿用后端配置，可用档位依模型而定")
         p.add_argument("--constraints", default=None, help="设备、时间、数据等研究资源条件；包含空格时加引号")
         for name, help_text in (("search-results-per-query", "每个查询召回的论文记录数，不是精读篇数"), ("max-papers", "背景正文选读上限；摘要泛读独立，后续定向补读共用总预算"), ("max-candidates", "优先问题数量；系统先比较不同问题再决定重点"),
-                                ("max-rounds", "Revision-round limit"), ("max-calls", "累计模型调用次数上限，包括讨论、分析、修复和重试"),
-                                ("max-seconds", "累计运行时间上限，单位秒；6600 为 110 分钟"),
+                                ("max-rounds", "Revision-round limit"), ("max-calls", "累计模型调用次数上限，默认 200；包括讨论、分析、修复和重试"),
+                                ("max-seconds", "累计运行时间上限，单位秒；默认 18000，即 300 分钟"),
                                 ("timeout-s", "单次模型调用超时，单位秒；1200 为 20 分钟")):
             p.add_argument("--" + name, type=int, default=None, help=argparse.SUPPRESS if name == "max-rounds" else help_text)
         p.add_argument("--codex-bin", default=None, help="Codex 可执行文件名称或完整路径")

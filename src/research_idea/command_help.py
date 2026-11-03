@@ -143,10 +143,10 @@ COMMAND_HELP = (
     CommandHelp('项目与设置', '/budget [设置项 数值]', '查看或修改调用、时间和选文上限。',
         '不带参数列出当前值；修改时每次传一个设置项和一个整数。\n'
         + '\n'.join(f'{key}：{label}' for key, label in BUDGET_LABELS.items())
-        + '\nmax_seconds 和 timeout_s 的单位是秒；例如 7200 秒为两小时。\n'
+        + '\nmax_seconds 和 timeout_s 的单位是秒；新项目默认 200 次调用、18000 秒（300 分钟）。\n'
         '调用包括讨论、研究、格式修复与失败重试；等待重试计入时间，等待用户输入不计入。\n'
         '提高上限不会清零已用预算；用 /run 恢复中断的研究，/new 开始新的计数。',
-        ('/budget', '/budget max_calls 100', '/budget max_seconds 7200', '/budget max_papers 6')),
+        ('/budget', '/budget max_calls 200', '/budget max_seconds 18000', '/budget max_papers 6')),
     CommandHelp('项目与设置', '/output [目录|default]', '查看或更改结果保存的父目录。',
         '不带参数显示位置；传目录会保存设置，有结果时重新导出，原文件保留；default 恢复默认。\n'
         '文件夹名固定为 idea-时间戳；同一项目继续运行沿用原名称。\n'

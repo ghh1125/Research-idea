@@ -1,20 +1,18 @@
-# Research-idea
+# Research-idea · v1.0.0
 
 [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md)
 
 ## 1. Purpose
 
-**Help researchers find a question worth studying in the LLM, NLP, and agent literature, and clearly explain its background, existing approaches, problem, and motivation.**
+**An interactive literature reading, analysis, and ideation workspace for LLM, NLP, and agent research. Understand existing work, connect the main approaches, and develop meaningful research questions through ongoing discussion.**
 
-Start with a research direction. You can also provide initial ideas, reference papers, and resource constraints. The system surveys the literature, groups the main approaches, examines several distinct and important problems, and discusses them with you before developing a coherent research argument.
+Start with a research direction. You can also provide initial ideas, reference papers, and resource constraints. The system searches multiple sources, reads abstracts broadly, synthesizes approach families, and examines relevant full-text passages. Author claims, conditions, and source evidence remain traceable. Discuss papers and research questions, correct the direction, and carry reading records and decisions forward into a coherent research argument.
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-The current version, **v0.8.0**, provides a local Web workbench and conversational CLI. It preserves the research purpose across search, discussion, and writing, distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. Two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
-
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
-**Local Web workbench:** this local revision connects real discussion and research to the same SQLite projects used by the CLI. A warm paper interface includes a stage sidebar, pinned projects, recoverable trash, and Codex model/effort selection. See the [Web guide](docs/web-workbench.md).
+**Local Web workbench:** discussion, literature research, and checkpoints share the same project records as the CLI. A warm paper interface includes a stage sidebar, pinned projects, recoverable trash, and Codex model/effort selection. See the [Web guide](docs/web-workbench.md).
 
 ## 2. What makes a good research idea?
 
@@ -164,7 +162,7 @@ research-idea doctor
 
 This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage (Chinese)](docs/advanced-usage.md#虚拟环境安装).
 
-### Upgrade to v0.8.0
+### Upgrade to v1.0.0
 
 Close the running Research-idea window, then run these commands **inside your existing repository directory**.
 
@@ -184,7 +182,7 @@ py -3 -m pipx reinstall research-idea
 research-idea --version
 ```
 
-The version should show `0.8.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
+The version should show `1.0.0`. If you installed into a virtual environment, activate it and replace the pipx command with `python -m pip install -e .`. Launch `research-idea` again and use `/open PROJECT_DIR` to continue an existing discussion; your project stores its conversation, notes, and progress.
 
 ### Launch the CLI: run real research in your terminal
 
@@ -234,7 +232,7 @@ research-idea start "How can interactive environments help LLM agents keep learn
   --backend codex --model gpt-6.1-sol --reasoning-effort high \
   --literature-preset ai-recent \
   --max-papers 6 --max-candidates 1 \
-  --max-calls 80 --max-seconds 6600 --timeout-s 1200
+  --max-calls 200 --max-seconds 18000 --timeout-s 1200
 ```
 
 To try the offline workflow, run `research-idea demo --project ./research-projects/demo`. The demo uses synthetic materials and a deterministic backend, without calling a real model.
@@ -301,7 +299,7 @@ Every command supports `/help COMMAND`, `/COMMAND --help`, and `/COMMAND -h`. Ta
 | `/memory` | Review active research notes, their source messages, objections, and reasons for changed judgments. | `/memory` |
 | `/history [keyword]` | View recent original messages or search older messages throughout the project. | `/history`<br>`/history research scope` |
 | `/config` | Inspect current model, search, budget, resource, and output settings; does not change them. | `/config` |
-| `/budget [KEY INTEGER]` | View limits or change one limit; time values are in seconds. Raising a limit preserves usage. | `/budget`<br>`/budget max_calls 100`<br>`/budget max_seconds 7200`<br>`/budget max_papers 6` |
+| `/budget [KEY INTEGER]` | View limits or change one limit; time values are in seconds. Raising a limit preserves usage. | `/budget`<br>`/budget max_calls 200`<br>`/budget max_seconds 18000`<br>`/budget max_papers 6` |
 | `/output [DIRECTORY\|default]` | View/change the result parent directory. Keeps the generated folder name; re-exports existing results and retains old files. | `/output`<br>`/output ~/research-results`<br>`/output default` |
 | `/new [direction]` | Create an empty project with inherited settings and zero usage; previous conversation and papers remain in the old project. | `/new`<br>`/new Multi-agent collaboration` |
 | `/open PROJECT_DIR` | Open a project and restore settings, conversation, and pause state; a new path initializes a project. Use the project directory, not the report folder. | `/open ./research-projects/my-idea` |
@@ -391,7 +389,7 @@ An ordinary discussion turn usually adds one model call. A turn requiring litera
 
 Full texts are read in selected sections as needed; idea development uses the resulting analyses and source evidence. Search request logs and section indexes are summarized in the ideation context, while full indexes, locations, and records remain in the project for targeted reading. Source quotations, applicable conditions, and citation locations are preserved. Reading summaries avoid repeated explanations; use `/details` for full analysis and `/evidence` for full evidence. `[context]` shows input characters, not tokens or the account's context limit.
 
-**Estimates are different from budget limits.** The defaults of 80 calls and 110 minutes are adjustable cumulative ceilings, not a fixed duration or a target to exhaust. To allow two hours, set `/budget max_seconds 7200`. If a budget runs out, raise the limit and use `/run` to continue.
+**Estimates are different from budget limits.** New projects allow **200 model calls and 300 minutes of cumulative runtime** by default, leaving room for broad reading, deeper analysis, and repeated discussion. Work stops when its task is complete; the budget is not a target to exhaust. The CLI, setup wizard, and Web share these call and runtime defaults. Existing projects retain their settings; use `/budget max_calls 200` and `/budget max_seconds 18000`, or Web settings, to adopt the new budget. If a budget runs out, raise it and use `/run` to continue.
 
 ### Budgets and recovery
 
@@ -400,11 +398,11 @@ Full texts are read in selected sections as needed; idea development uses the re
 | Paper metadata results per query | `/budget search_results_per_query 20` | 20 |
 | Background body-reading ceiling | `/budget max_papers 6` | Up to 6, not a quota; abstract reading is separate and targeted follow-up shares the total budget |
 | Number of priority problems | `/budget max_candidates 1` | 1; compare different problems before choosing a focus |
-| Model call limit | `/budget max_calls 80` | 80 |
-| Cumulative runtime in seconds | `/budget max_seconds 6600` | 110 minutes |
+| Model call limit | `/budget max_calls 200` | 200 |
+| Cumulative runtime in seconds | `/budget max_seconds 18000` | 300 minutes |
 | Timeout per model call in seconds | `/budget timeout_s 1200` | 20 minutes |
 
-The footer's **“调用 3/80” means the project has used 3 model calls out of a limit of 80**, not that it has read three papers. Discussion, research, structured-output repair, and failed retries share the budget. You can raise the limit and continue after reaching it.
+The footer's **“调用 3/200” means the project has used 3 model calls out of a limit of 200**, not that it has read three papers. Discussion, research, structured-output repair, and failed retries share the budget. You can raise the limit and continue after reaching it.
 
 Clearing input, exiting, or reopening a project preserves cumulative usage. **`/new` starts a new research project with zero usage**, inheriting the current model, date, and budget settings. The previous project remains available through `/open`.
 
@@ -506,8 +504,8 @@ reasoning_effort = "high"
 conference_policy = "latest"
 max_papers = 6
 max_candidates = 1
-max_calls = 80
-max_seconds = 6600
+max_calls = 200
+max_seconds = 18000
 timeout_s = 1200
 ```
 

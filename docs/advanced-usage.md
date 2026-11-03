@@ -278,8 +278,8 @@ search_results_per_query = 20
 search_date_mode = "rolling"
 strategy_months = 12
 novelty_months = 6
-max_calls = 80
-max_seconds = 3600
+max_calls = 200
+max_seconds = 18000
 timeout_s = 180
 source_chars = 24000
 deep_reading = true
@@ -289,7 +289,7 @@ auto_search = true
 constraints = "单张24GB GPU；两周；允许小规模微调；禁止调用推理时真实答案"
 ```
 
-- 新建项目默认上限为 80 次；旧项目显式设置的上限不变。上限不是必须用满的目标。`max_followup_reads = 0` 关闭额外补读，`deep_reading = false` 恢复简要证据抽取。
+- 新建项目默认上限为 200 次调用、300 分钟累计运行时间；旧项目显式设置的上限不变。上限不是必须用满的目标。`max_followup_reads = 0` 关闭额外补读，`deep_reading = false` 恢复简要证据抽取。
 - `max_calls` 是持久化的后端 `generate` 调用次数，结构化输出修复也计入。API 每次最多三次 HTTP 尝试，并记录已知尝试数；CLI 内部请求次数未知。
 - `max_seconds` 是项目累计控制器运行时间，在任务边界检查并保存。强制杀死进程可能丢失最后一个检查点之后的时间；它不是操作系统级全局计费限额。
 - 每次后端调用有本地超时，API 请求在可终止子进程中执行。断开连接不能保证远端服务立刻停止推理或计费。

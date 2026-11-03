@@ -11,7 +11,7 @@ REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max",
 DEFAULTS = {
     "backend": "codex", "model": "", "api_provider": "openai-compatible",
     "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY",
-    "timeout_s": 180, "max_calls": 80, "max_seconds": 3600,
+    "timeout_s": 180, "max_calls": 200, "max_seconds": 18000,
     "max_output_tokens": 8192, "api_max_tokens_field": "max_completion_tokens",
     "codex_bin": "codex", "codex_profile": "", "reasoning_effort": "",
     "output_dir": "",

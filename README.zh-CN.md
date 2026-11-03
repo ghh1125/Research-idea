@@ -1,18 +1,16 @@
-# Research-idea
+# Research-idea · v1.0.0
 
 [![English](https://img.shields.io/badge/Language-English-blue)](README.md)
 
 ## 1. 我们的目的
 
-**帮助研究者从 LLM、NLP、Agent 文献中，找到一个真正值得研究的问题，并把背景、现有方法、问题和动机讲清楚。**
+**面向 LLM、NLP、Agent 研究的文献阅读分析与研究构思工具：读懂已有工作、综合主要思路，通过持续讨论找到值得研究的问题，讲清背景、现有方法、问题和动机。**
 
-你输入研究方向，也可以补充初步想法、参考论文和资源条件。系统调研文献，归纳解决这个方向的几类主要思路，深入比较不同的重要问题，再和你讨论、修正，最终形成一条连贯的研究论证。
+你输入研究方向，也可以补充初步想法、参考论文和资源条件。系统完成多来源检索、摘要泛读、方法综合和按需正文分析，保留作者主张、适用条件与原文出处。你可以围绕论文和研究问题反复讨论、纠正方向，阅读记录与关键判断持续保存，最终形成一条连贯的研究论证。
 
 最终内容聚焦五件事：**背景中的需要是什么 → 现有方法已经做到了什么 → 为什么还会遇到重要问题 → 为什么值得研究它 → 一句核心研究主张。** 研究主张说明想推进什么认识或能力。当前流程到这里结束，不继续展开技术路线、实现方案或实验计划。
 
-当前版本 **v0.8.0**，提供本地 Web 工作台与对话式 CLI。检索、讨论和最终表达始终接续用户的研究主线：区分开放找方向与深化已有想法，保留相关困难之间的关系，说明为什么选择、综合或重构当前问题。两处讨论、带出处的会话记忆、论文链接、预算和中断恢复继续保留。详见[版本更新](CHANGELOG.md)。
-
-**本地 Web 工作台：** 本地改进版已接通真实对话、文献调研与检查点。暖纸色界面提供研究阶段侧栏、置顶、回收站、Codex 模型与思考档位选择。网页与 CLI 共用研究记录，见 [Web 使用说明](docs/web-workbench.md)。
+**本地 Web 工作台：** 对话、文献调研与检查点共用同一套研究记录。暖纸色界面提供研究阶段侧栏、置顶、回收站、Codex 模型与思考档位选择。网页与 CLI 共用研究记录，见 [Web 使用说明](docs/web-workbench.md)。
 
 ## 2. 找 idea 的核心要求
 
@@ -163,7 +161,7 @@ research-idea doctor
 
 安装使用本地仓库的可编辑模式，请保留仓库目录。已有可用的虚拟环境或本地启动命令可以继续使用，无需重复安装。开发用的虚拟环境安装方式见 [进阶使用](docs/advanced-usage.md#虚拟环境安装)。
 
-### 升级到 v0.8.0
+### 升级到 v1.0.0
 
 先退出正在运行的 Research-idea 窗口，再**进入原来的仓库目录**执行。
 
@@ -183,7 +181,7 @@ py -3 -m pipx reinstall research-idea
 research-idea --version
 ```
 
-版本应显示 `0.8.0`。如果使用虚拟环境安装，激活环境后，将 pipx 那一行替换为 `python -m pip install -e .`。重新输入 `research-idea` 启动，用 `/open 项目目录` 继续原来的讨论；对话、研究要点和进度保存在项目里。
+版本应显示 `1.0.0`。如果使用虚拟环境安装，激活环境后，将 pipx 那一行替换为 `python -m pip install -e .`。重新输入 `research-idea` 启动，用 `/open 项目目录` 继续原来的讨论；对话、研究要点和进度保存在项目里。
 
 ### 启动 CLI：终端中进行真实研究
 
@@ -233,7 +231,7 @@ research-idea start "如何设计帮助 LLM agent 持续学习的交互环境" \
   --backend codex --model gpt-6.1-sol --reasoning-effort high \
   --literature-preset ai-recent \
   --max-papers 6 --max-candidates 1 \
-  --max-calls 80 --max-seconds 6600 --timeout-s 1200
+  --max-calls 200 --max-seconds 18000 --timeout-s 1200
 ```
 
 只想体验离线流程时，运行 `research-idea demo --project ./research-projects/demo`。Demo 使用合成材料与确定性后端，不调用真实模型。
@@ -302,7 +300,7 @@ research-idea start "如何设计帮助 LLM agent 持续学习的交互环境" \
 | `/memory` | 查看持续保留的研究要点和讨论理由。 | `/memory` |
 | `/history [关键词]` | 查看原始对话，或查找较早的讨论。 | `/history`<br>`/history 研究范围` |
 | `/config` | 查看当前项目的模型、范围、预算等配置。 | `/config` |
-| `/budget [设置项 数值]` | 查看或修改调用、时间和选文上限。 | `/budget`<br>`/budget max_calls 100`<br>`/budget max_seconds 7200`<br>`/budget max_papers 6` |
+| `/budget [设置项 数值]` | 查看或修改调用、时间和选文上限。 | `/budget`<br>`/budget max_calls 200`<br>`/budget max_seconds 18000`<br>`/budget max_papers 6` |
 | `/output [目录\|default]` | 查看或更改结果保存的父目录。 | `/output`<br>`/output ~/research-results`<br>`/output "D:\Research Results"`<br>`/output default` |
 | `/new [研究方向]` | 新建空白研究，沿用设置并从零计数。 | `/new`<br>`/new 多智能体如何持续改进协作` |
 | `/open 项目目录` | 打开项目，恢复对话、设置和讨论位置。 | `/open ./research-projects/my-idea` |
@@ -392,7 +390,7 @@ Enter 发送；先按 Esc 再按 Enter 换行；Tab 补全命令；↑↓ 浏览
 
 正文按需要选段阅读；构思时使用泛读概览、论文短笔记及已读正文依据。检索请求日志与章节目录在构思上下文中改为覆盖摘要，完整目录、位置和记录保留在项目中，供定向阅读使用。原文引文、适用条件及引用位置完整保留。CLI 阅读摘要不再重复输出同一解释；`/details` 查看完整分析，`/evidence` 查看完整证据。`[context]` 显示输入字符数，不是 token 数或账户上下文上限。
 
-**预估用量与预算上限不同。** 默认的 80 次调用、110 分钟是可调整的累计上限，不是固定耗时或必须用满的调用数。希望预留完整两小时，可设置 `/budget max_seconds 7200`；预算用完后也可提高上限，再输入 `/run` 继续。
+**预估用量与预算上限不同。** 新项目默认允许累计 **200 次模型调用、300 分钟运行时间**，为广泛阅读、深入分析和多轮讨论预留空间；完成所需工作后就会停止，不以用满预算为目标。CLI、启动向导和 Web 使用相同的调用与总时长默认值。已有项目保留原设置，需要采用新预算时输入 `/budget max_calls 200` 和 `/budget max_seconds 18000`，或在 Web 设置中修改。预算用完后可以提高上限，再输入 `/run` 继续。
 
 ### 预算与恢复
 
@@ -401,11 +399,11 @@ Enter 发送；先按 Esc 再按 Enter 换行；Tab 补全命令；↑↓ 浏览
 | 每个查询召回的论文元数据数 | `/budget search_results_per_query 20` | 20 |
 | 背景正文选读上限 | `/budget max_papers 6` | 最多 6 篇，可少选；摘要泛读独立，后续定向补读共用总预算 |
 | 优先问题数量 | `/budget max_candidates 1` | 1；先比较不同问题，再决定重点 |
-| 模型调用上限 | `/budget max_calls 80` | 80 |
-| 累计运行时间（秒） | `/budget max_seconds 6600` | 110 分钟 |
+| 模型调用上限 | `/budget max_calls 200` | 200 |
+| 累计运行时间（秒） | `/budget max_seconds 18000` | 300 分钟 |
 | 单次模型调用超时（秒） | `/budget timeout_s 1200` | 20 分钟 |
 
-底部的 **“调用 3/80”表示本项目累计使用了 3 次模型调用，上限为 80 次**，不是论文数量。讨论、研究、结构化输出修复和失败重试共享预算；达到预算后可以提高上限并继续。
+底部的 **“调用 3/200”表示本项目累计使用了 3 次模型调用，上限为 200 次**，不是论文数量。讨论、研究、结构化输出修复和失败重试共享预算；达到预算后可以提高上限并继续。
 
 清空输入、退出或重新打开项目都会保留累计用量。**`/new` 才开始计数为零的新研究**，并沿用当前模型、日期与预算设置。原项目保留，可用 `/open` 返回。
 
@@ -507,8 +505,8 @@ reasoning_effort = "high"
 conference_policy = "latest"
 max_papers = 6
 max_candidates = 1
-max_calls = 80
-max_seconds = 6600
+max_calls = 200
+max_seconds = 18000
 timeout_s = 1200
 ```
 

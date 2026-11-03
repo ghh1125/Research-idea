@@ -165,7 +165,7 @@ def initialize(args):
                 args.reasoning_effort = 'medium'
         if args.literature_preset is None and args.search_source is None and args.venues is None:
             args.literature_preset = 'ai-recent'
-        for key, value in {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2, 'max_seconds': 6600, 'timeout_s': 1200}.items():
+        for key, value in {'max_papers': 6, 'max_candidates': 1, 'max_rounds': 2, 'timeout_s': 1200}.items():
             if getattr(args, key) is None:
                 setattr(args, key, value)
     with project_lock(project):
@@ -634,7 +634,7 @@ class Chat:
                 self.settings(**{key: int(number)})
             else:
                 self.show('budget', '\n'.join(f'{BUDGET_LABELS[k]}：{self.cfg[k]}  ·  {k}' for k in BUDGET_KEYS)
-                          + '\n\n“调用”包含讨论、分析、格式修复和失败重试；等待重试计入累计时间。上限不必用满。\n例如 /budget max_calls 100 · /budget max_papers 6')
+                          + '\n\n“调用”包含讨论、分析、格式修复和失败重试；等待重试计入累计时间。上限不必用满。\n例如 /budget max_calls 200 · /budget max_seconds 18000')
         elif command == '/venues':
             from .venues import normalize_venues, supported_venues
             if value:

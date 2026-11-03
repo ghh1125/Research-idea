@@ -82,7 +82,7 @@ function renderSidebar() {
   $('steps').innerHTML = steps.map((s,i) => `<li class="step ${s.state}" ${s.state === 'current' ? 'aria-current="step"' : ''}><span class="step-marker">${s.state === 'complete' ? '✓' : String(i+1).padStart(2,'0')}</span><span>${esc(s.label)}${s.state === 'current' ? `<small>${p?.busy ? (p.mode === 'chat' ? '正在讨论' : '进行中') : p?.can_continue ? '等待你的讨论' : p?.interrupted ? '可恢复' : '当前阶段'}</small>` : ''}</span></li>`).join('');
   $('stage-counter').textContent = p?.status === 'completed' ? '已完成' : `${(p?.stage || 0)+1} / 6`;
   $('stage-note').textContent = p?.busy ? '进度随实际研究步骤更新，关闭网页后仍可继续。' : p?.can_continue ? '可以追问、纠正或补充。讨论满意后，再进入下一步。' : '从你关心的方向出发，逐步形成有依据的研究主张。';
-  $('usage').innerHTML = `<div>${p?.calls || 0} <small>/ ${p?.max_calls || 80} 次</small></div><div>${Math.floor((p?.elapsed || 0)/60)} <small>/ ${Math.floor((p?.max_seconds || 6600)/60)} 分钟</small></div>`;
+  $('usage').innerHTML = `<div>${p?.calls || 0} <small>/ ${p?.max_calls || 200} 次</small></div><div>${Math.floor((p?.elapsed || 0)/60)} <small>/ ${Math.floor((p?.max_seconds || 18000)/60)} 分钟</small></div>`;
   $('project-title').textContent = title(p?.title);
   $('paper-count').textContent = p?.paper_count || 0;
   $('stage-badge').textContent = p?.stopping ? '正在停止' : p?.busy ? '进行中' : p?.interrupted ? '已中断 · 可恢复' : p?.status === 'completed' ? '已形成研究主张' : p?.can_continue ? '等待讨论' : steps[p?.stage || 0].label;
