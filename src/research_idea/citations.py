@@ -34,7 +34,8 @@ class Citations:
 
     @classmethod
     def from_store(cls, store):
-        return cls(store.rows('papers'), store.rows('evidence'))
+        from .landscape import reference_papers
+        return cls(reference_papers(store), store.rows('evidence'))
 
     def paper(self, paper_id):
         paper = self.papers.get(paper_id, {})

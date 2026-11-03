@@ -28,13 +28,15 @@ def source_key(controller):
     ids.update(e['paper_id'] for e in controller.store.rows('evidence') if e['id'] in question_refs)
     # Model/account changes do not erase the human's problem choice. Source or
     # scope changes do require updating the problem discussion on the new basis.
-    return digest([controller.store.get('source_revision', 0), controller.store.get('topic'), controller.config['constraints'],
+    components = [controller.store.get('source_revision', 0), controller.store.get('topic'), controller.config['constraints'],
         controller.config['max_candidates'],
         {k: controller.config.get(k) for k in ('search_source', 'search_venues', 'max_papers',
             'search_date_mode', 'search_since', 'search_until', 'strategy_months', 'novelty_months',
             'conference_policy', 'search_cs_only', 'arxiv_categories', 'deep_reading',
             'source_chars', 'max_paper_read_chunks', 'max_followup_reads')},
-        [{k: p.get(k) for k in ('id', 'text', 'abstract', 'content_kind')} for p in controller.store.rows('papers') if p['id'] in ids]])
+        [{k: p.get(k) for k in ('id', 'text', 'abstract', 'content_kind')} for p in controller.store.rows('papers') if p['id'] in ids]]
+    landscape_key = (controller.store.get('literature_landscape') or {}).get('key')
+    return digest(components + [landscape_key] if landscape_key else components)
 
 
 def open_checkpoint(controller, problem, kind='problem'):
@@ -96,7 +98,7 @@ def _discuss_legacy(controller, message):
     from .controller import check_references
     store = controller.store
     checkpoint = store.get('problem_checkpoint')
-    context = controller.ideation_context()
+    context = controller.ideation_context(focus=message['content'])
     memory = memory_context(store, message['content'])
     supplied = supplied_user_ids(memory)
 
@@ -252,7 +254,7 @@ def discuss(controller, message):
     stage = 'discuss_direction' if kind == 'direction' else 'discuss_question'
     memory = memory_context(store, message['content'])
     supplied = supplied_user_ids(memory)
-    context = controller.ideation_context()
+    context = controller.ideation_context(focus=message['content'])
     pending = store.get('pending_discussion') or {}
     token = digest([checkpoint['checkpoint_id'], checkpoint['revision'], message['id']]) if checkpoint.get('checkpoint_id') else digest([checkpoint, message['id']])
     def checked(value):
@@ -286,7 +288,7 @@ def discuss(controller, message):
             saved = deepcopy(store.get('problem_checkpoint'))
             saved['source_key'] = source_key(controller)
             store.set('problem_checkpoint', saved)
-        context = controller.ideation_context()
+        context = controller.ideation_context(focus=message['content'])
         view = understanding_context(controller, intent_key=digest(effective_intent))
         context['source_understandings'] = view['readings']
         context['source_understanding_coverage'] = view['coverage']

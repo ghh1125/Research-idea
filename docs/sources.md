@@ -214,3 +214,10 @@
 参考 [Intuit to Idea 的核心 skill](https://github.com/ShawnL1N/intuit-to-idea/blob/main/SKILL.md)、[机制比较指南](https://github.com/ShawnL1N/intuit-to-idea/blob/main/references/novelty-check.md)和[行为场景](https://github.com/ShawnL1N/intuit-to-idea/blob/main/evals/scenarios.md)：借鉴一次一个有判断价值的追问、纠正后实际改变理解，以及收窄范围仍需保留研究价值的做法。该仓库提供 skill 与测试说明，没有提供独立检索/记忆运行时或已完成的模型效果评测。
 
 本项目继续主动从文献发现问题，仅在已有讨论阶段按需追问；不要求用户提供创新，不恢复技术方案和实验设计。`discussion_focus.py` 将上一轮追问与用户决定分开保存并限制篇幅，`/continue` 不受未答问题阻挡。范围变化沿用既有版本和理由记录，真实多轮行为测试与程序状态测试分开报告。
+
+
+## 2026-11-03：广泛泛读与持续文献上下文
+
+参考 [ARIS research-lit](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-lit/SKILL.md) 的先概览再按需读章节、按主题综合；参考 [Supervisor-Skills deep-research](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/SKILL.md) 的多视角覆盖，以及 [synthesis-framework](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/references/synthesis-framework.md) 的按问题和方法类别组织；参考 [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/roles.py) 的具体阅读问题和累积笔记。
+
+采用这些设计原则，自行实现批次缓存、原摘要存储、方法概览、讨论参考与来源提升；未复制上述源码、训练流程或评分门槛。40/8/16/6 是本项目的初始工程配置，不是外部工作的最优数量结论。正文阅读仍服务于具体判断，不用标题相似淘汰问题。

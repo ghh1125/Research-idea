@@ -56,7 +56,9 @@ def research_requests(controller, requests, *, key, reading_context=None):
     and successful task results, rather than picking another pair each time.
     """
     store = controller.store
-    validate_requests(requests, {p['id'] for p in store.rows('papers')})
+    from .landscape import reference_papers
+    available = {p['id']: p for p in reference_papers(store)}
+    validate_requests(requests, set(available))
     ledger = store.get('problem_research_ledger', {})
     fingerprint_parts = [key, requests, _reading_scope(controller)]
     if reading_context:
@@ -107,6 +109,12 @@ def research_requests(controller, requests, *, key, reading_context=None):
             ledger[fingerprint] = entry
             store.set('problem_research_ledger', ledger)
         selected = entry['selected_ids']
+        # Abstract-only references enter the body-reading corpus only when a
+        # concrete question requests them. Skimming never spends this quota.
+        stored = {p['id'] for p in store.rows('papers')}
+        for paper_id in selected:
+            if paper_id not in stored and paper_id in available:
+                store.put('papers', available[paper_id])
         candidate['retrieved_work_ids'] = selected
         controller.retrieve_full_texts(selected)
         readings = controller.focus_sources(candidate, selected, reading_question=question,
@@ -136,7 +144,7 @@ def investigate_problem(controller, seed):
                           getattr(controller, 'skill_key', '')])
     if fingerprint not in plans:
         from .citation_discovery import reference_passages, validate_targets
-        context = controller.ideation_context()
+        context = controller.ideation_context(focus=seed.get('question', ''))
         relevant_ids = {p['id'] for p in context['papers']}
         passages = reference_passages([p for p in store.rows('papers') if p['id'] in relevant_ids])
         def check_plan(value):

@@ -10,6 +10,12 @@ PROMPT_VERSION = "42"
 
 
 def stage_version(stage):
+    if stage == 'synthesize_landscape':
+        return '57'
+    if stage in {'skim_papers', 'synthesize_landscape', 'plan_search', 'screen_papers',
+                 'explore_problems', 'plan_problem_reading', 'deepen_problem', 'reconsider_problems',
+                 'map', 'discuss_direction', 'discuss_question', 'frame_question'}:
+        return '56'
     if stage in {'discuss_direction', 'discuss_question', 'deepen_problem', 'map'}:
         return '55'
     if stage == "read_problem_source":
@@ -266,6 +272,8 @@ INSTRUCTIONS['map'] += """
 
 from .intent_instructions import extend as _extend_intent_instructions
 _extend_intent_instructions(INSTRUCTIONS)
+from .landscape_instructions import extend as _extend_landscape_instructions
+_extend_landscape_instructions(INSTRUCTIONS)
 
 from .source_understanding import READING_INSTRUCTIONS
 INSTRUCTIONS['read_problem_source'] = READING_INSTRUCTIONS

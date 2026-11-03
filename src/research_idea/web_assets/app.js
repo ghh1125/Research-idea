@@ -115,14 +115,14 @@ function timeline(p) {
 function renderContent(force=false) {
   const p = state.project;
   if (!p) return;
-  const signature = JSON.stringify([state.tab,p.id,p.messages,p.events,p.report,p.problem,p.memory,p.papers,p.evidence]);
+  const signature = JSON.stringify([state.tab,p.id,p.messages,p.events,p.report,p.problem,p.memory,p.papers,p.evidence,p.literature_landscape]);
   if (!force && signature === state.fingerprint) return;
   state.fingerprint = signature;
   const region = $('scroll-region'); const nearBottom = region.scrollHeight-region.scrollTop-region.clientHeight < 120;
   const expanded = new Set([...$('content').querySelectorAll('details[open][data-detail]')].map(el => el.dataset.detail));
   if (state.tab === 'discussion') $('content').innerHTML = timeline(p);
   else if (state.tab === 'papers') {
-    $('content').innerHTML = p.papers.length ? `<div class="panel-heading"><div><span class="eyebrow">READING DESK</span><h2>研究所依据的文献</h2><p>${p.papers.length} 篇资料 · ${p.evidence.length} 条原文依据</p></div></div><div class="panel-note">资料类型按实际获取情况显示。只有摘要的论文不会被标记为已读全文。</div>` + p.papers.map(paper => `<article class="paper-card"><div class="paper-meta"><span>${esc(paper.year || '年份待核对')}</span><span>${esc(paper.content_kind === 'full_text' ? '全文资料' : paper.content_kind === 'abstract' ? '摘要资料' : paper.content_kind || '待阅读')}</span></div><h3>${/^https?:\/\//.test(paper.url || '') ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener noreferrer">${esc(paper.title)}</a>` : esc(paper.title)}</h3>${paper.abstract ? `<details><summary>查看摘要</summary><p>${esc(paper.abstract)}</p></details>` : ''}${p.evidence.filter(e => e.paper_id === paper.id).map(e => `<details><summary>原文依据</summary><div class="prose">${markdown(e.quote || e.statement || '')}</div></details>`).join('')}</article>`).join('') : emptyPanel('⌁','给想法找到依据','开始文献调研后，真实检索与阅读的资料会出现在这里。已有 CLI 项目的论文也会同步显示。');
+    $('content').innerHTML = p.papers.length ? `<div class="panel-heading"><div><span class="eyebrow">READING DESK</span><h2>研究所依据的文献</h2><p>${p.papers.length} 篇资料 · ${p.evidence.length} 条原文依据</p></div></div><div class="panel-note">资料类型按实际获取情况显示。只有摘要的论文不会被标记为已读全文。</div>` + p.papers.map(paper => `<article class="paper-card"><div class="paper-meta"><span>${esc(paper.year || '年份待核对')}</span><span>${esc(paper.content_kind === 'full_text' ? '全文资料' : paper.content_kind === 'abstract' ? '摘要资料' : paper.content_kind || '待阅读')}</span></div><h3>${/^https?:\/\//.test(paper.url || '') ? `<a href="${esc(paper.url)}" target="_blank" rel="noopener noreferrer">${esc(paper.title)}</a>` : esc(paper.title)}</h3>${paper.abstract ? `<details><summary>查看摘要</summary><p>${esc(paper.abstract)}</p></details>` : ''}${skimDetails(paper.id, p.literature_landscape)}${p.evidence.filter(e => e.paper_id === paper.id).map(e => `<details><summary>原文依据</summary><div class="prose">${markdown(e.quote || e.statement || '')}</div></details>`).join('')}</article>`).join('') : emptyPanel('⌁','给想法找到依据','开始文献调研后，真实检索与阅读的资料会出现在这里。已有 CLI 项目的论文也会同步显示。');
   } else if (state.tab === 'report') {
     const body = p.report || (p.stage >= 2 ? p.problem : '');
     $('content').innerHTML = body ? `<div class="panel-heading"><div><span class="eyebrow">RESEARCH ARGUMENT</span><h2>${p.status === 'completed' ? '当前研究主张' : '正在形成的研究论证'}</h2><p>背景 → 已有方法 → 问题 → 动机 → 研究主张</p></div><div class="report-actions"><button class="button secondary" data-download="report">导出 Markdown</button><button class="button secondary" data-tab="discussion">回到讨论</button></div></div><div class="prose report-prose">${markdown(body)}</div>` : emptyPanel('◇','好的主张，来自充分的讨论','完成文献调研和两次讨论后，在这里查看研究问题、动机和依据。你仍然可以提出修改意见。');
@@ -312,3 +312,10 @@ matchMedia('(max-width:760px)').addEventListener('change',()=>showSidebar(false)
 boot();
 setInterval(()=>{if(!state.token||!state.project)boot();else refresh();},2000);
 window.addEventListener('beforeunload',saveDraft);
+
+function skimDetails(id, landscape) {
+  const n = landscape?.notes?.find(n => n.paper_id === id);
+  if (!n) return '';
+  const fields = [['研究问题','problem'],['主要思路','approach'],['摘要中的作者主张','claimed_progress'],['明确条件','conditions'],['与当前方向的联系','connection'],['值得补读的问题','reading_question']];
+  return `<details><summary>查看泛读笔记</summary>${fields.filter(([,key]) => n[key]).map(([label,key]) => `<p><strong>${esc(label)}：</strong>${esc(n[key])}</p>`).join('')}<p>依据：${n.relevance === 'insufficient' ? '资料不足以形成摘要笔记' : '摘要泛读，未据此判定研究重叠'}</p></details>`;
+}

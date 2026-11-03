@@ -211,7 +211,8 @@ def export_report(store: Store, output_dir: Path | None = None):
     target = output_directory(store, output_dir)
     target.mkdir(parents=True, exist_ok=True)
     candidates = [] if store.get("workflow") == "question" else store.rows("candidates")
-    papers = store.rows("papers")
+    from .landscape import reference_papers
+    papers = reference_papers(store)
     evidence = store.rows("evidence")
     citations = Citations(papers, evidence)
     demo = store.get("demo", False)
@@ -230,6 +231,7 @@ def export_report(store: Store, output_dir: Path | None = None):
         "problem_exploration": store.get("problem_exploration", {}), "problem_cases": store.get("problem_cases", []),
         "problem_checkpoint": store.get("problem_checkpoint"),
         "discussion_checkpoints": store.get("discussion_checkpoints", []),
+        "literature_landscape": store.get("literature_landscape"),
         "research_brief": store.get("research_brief"), "workflow": store.get("workflow"),
         "question_brief_provenance": store.get("question_brief_provenance"),
         "problem_research_ledger": store.get("problem_research_ledger", {}),
@@ -286,6 +288,14 @@ def export_report(store: Store, output_dir: Path | None = None):
     else:
         lines.extend([data['no_candidate_reason'] or "方案正在形成中，可从已保存的进度继续运行。", ""])
     lines.extend(["<details>", "<summary>详细分析与原文依据</summary>", "", f"项目状态：{data['status']}；模型任务调用：{data['calls_used']}", "", "以下保留文献分析、讨论版本和原文依据。", ""])
+    if data['literature_landscape']:
+        landscape = data['literature_landscape']
+        lines.extend(['## 泛读文献与主要思路', '',
+                      activity_summary('synthesize_landscape', landscape['overview'], citations), '',
+                      '以下为摘要层面的阅读笔记；具体方法与结果以实际读取的正文为依据。', '',
+                      table(['论文', '研究问题', '主要思路', '作者主张', '明确条件', '研究联系', '值得补读'],
+                            [(citations.paper(n['paper_id']), n['problem'], n['approach'], n['claimed_progress'],
+                              n['conditions'], n['connection'], n['reading_question']) for n in landscape['notes']]), ''])
     if data['workflow'] == 'question' and data['problem_checkpoint']:
         from .problem_dialogue import problem_text
         lines.extend(['## 完整问题推导', '', problem_text(store, detail=True), ''])

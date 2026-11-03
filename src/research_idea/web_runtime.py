@@ -19,6 +19,7 @@ from .locking import project_lock
 from .output_paths import saved_report
 from .problem_dialogue import WAITING_BY_KIND, problem_text
 from .store import Store
+from .landscape import reference_papers
 
 
 SETTINGS = {'model', 'reasoning_effort', 'max_calls', 'max_seconds', 'timeout_s',
@@ -195,7 +196,7 @@ class WebWorkspace:
                       'calls': store.get('calls_used', 0), 'max_calls': cfg['max_calls'],
                       'elapsed': max(store.get('elapsed_s', 0), base_time + extra_time),
                       'max_seconds': cfg['max_seconds'], 'model': cfg['model'],
-                      'paper_count': store.db.execute('SELECT COUNT(*) FROM papers').fetchone()[0]}
+                      'paper_count': len(reference_papers(store))}
             if brief:
                 return result
             rows = store.db.execute("SELECT id,timestamp,payload FROM events WHERE kind='web_output' ORDER BY id DESC LIMIT 240").fetchall()
@@ -208,7 +209,8 @@ class WebWorkspace:
                           report=report_path.read_text(encoding='utf-8') if report_path.is_file() else '',
                           report_path=str(report_path) if report_path.is_file() else '',
                           papers=[{k: p.get(k) for k in ('id', 'title', 'url', 'year', 'abstract', 'content_kind', 'authors')}
-                                  for p in store.rows('papers')],
+                                  for p in reference_papers(store)],
+                          literature_landscape=store.get('literature_landscape'),
                           evidence=store.rows('evidence'), last_job=last_job)
             return result
         finally:

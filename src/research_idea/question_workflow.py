@@ -175,7 +175,7 @@ def run_questions(controller, interactive=False, continue_problem=False):
         controller.phase = 'ideation'
         if not checkpoint:
             if cycle['stage'] == 'reading':
-                controller.progress('[concept] 调研背景与主要方法，寻找几个值得深入讨论的问题。')
+                controller.progress('[concept] 调研背景与主要方法，理解研究需要和已有回应。')
                 try:
                     from .research_intent import ensure_intent
                     ensure_intent(controller)

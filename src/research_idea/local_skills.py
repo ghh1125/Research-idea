@@ -16,6 +16,7 @@ MAX_FILE_BYTES = 32 * 1024
 MAX_DISCOVERY_ENTRIES = 5000
 MAX_DEPTH = 3
 ALL_STAGES = ("interpret_research", "read_problem_source", "reconsider_problems", "frame_question", "discuss_direction", "discuss_question", "plan_problem_reading", "plan_search", "screen_papers", "extract", "read_section", "paper_card", "audit_claims", "explore_problems", "deepen_problem", "discuss_problem", "map", "propose", "develop", "review", "refine", "inspect_source", "design_transfer")
+ALL_STAGES += ('skim_papers', 'synthesize_landscape')
 BUILTIN_ROOT = Path(__file__).parent / "builtin_skills"
 BUILTIN_NAMES = (
     "research-idea-read-evidence", "research-idea-motivation", "research-idea-compare-methods",
@@ -48,6 +49,10 @@ STAGE_MAP = {
     "novelty-check": ("review", "inspect_source"),
     "research-lit": ("extract", "map", "inspect_source"),
 }
+
+
+STAGE_MAP["research-idea-motivation"] += ("skim_papers", "synthesize_landscape")
+STAGE_MAP["research-idea-read-evidence"] += ("skim_papers",)
 
 
 class LocalSkillError(ValueError):
@@ -261,6 +266,7 @@ def load_selected_skills(selectors: list[str], project: Path, extra_roots: list[
 
 
 MOTIVATION_REFERENCES = {
+    'skim_papers': 'landscape.md', 'synthesize_landscape': 'landscape.md',
     'interpret_research': 'intent.md', 'plan_search': 'intent.md',
     'explore_problems': 'synthesis.md', 'deepen_problem': 'explanations.md',
     'reconsider_problems': 'reconsider.md', 'frame_question': 'framing.md',

@@ -540,7 +540,7 @@ class Chat:
                 elif command == '/papers':
                     kinds = {'full_text': '已获取正文', 'abstract': '摘要与元数据', 'notes': '导入的笔记'}
                     citations = Citations.from_store(store)
-                    self.show('paper', '\n\n'.join(f"{i}. {citations.paper(p['id'])} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}" for i, p in enumerate(store.rows('papers'), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
+                    self.show('paper', '\n\n'.join(f"{i}. {citations.paper(p['id'])} ({p.get('year') or '年份未标注'})\n   {p.get('venue') or '预印本 / 导入资料'} · {kinds.get(p.get('content_kind'), '论文资料')}" for i, p in enumerate(citations.papers.values(), 1)) or '暂无论文；/run 自动检索，或 /papers 路径 导入。')
                 elif command == '/evidence':
                     citations = Citations.from_store(store)
                     entries = list(citations.evidence.values())
@@ -614,7 +614,7 @@ class Chat:
                 '会议时间：' + ('各会议最新公开的一届；本届未公开则选上一届' if cfg['conference_policy'] == 'latest' else '按上述日期窗口'),
                 '参考顺序：围绕同一问题，优先较新会议届次；较早论文补足关键方法与脉络',
                 '会议：' + ('、'.join(cfg['search_venues']) or '按主题检索'),
-                f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 初次选读规模 {cfg['max_papers']} 篇；问题补读共用总预算",
+                f"选文：每次查询 {cfg['search_results_per_query']} 篇元数据 → 首批摘要泛读最多40篇 → 背景正文选读上限 {cfg['max_papers']} 篇；问题补读共用总预算",
                 '产出：背景、现有方法、问题、动机与研究主张；方向与问题两处可交互讨论',
                 f"预算：{cfg['max_calls']} 次调用 / {cfg['max_seconds'] / 60:g} 分钟",
                 '输出父目录：' + str(output_parent(self.project, cfg)) + '（文件夹自动命名 idea-时间戳）',

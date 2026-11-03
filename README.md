@@ -10,7 +10,7 @@ Start with a research direction. You can also provide initial ideas, reference p
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-The current version, **v0.8.0**, adds a local Web interface design preview and preserves the research purpose across search, discussion, and writing. It distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. The conversational CLI, two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
+The current version, **v0.8.0**, provides a local Web workbench and conversational CLI. It preserves the research purpose across search, discussion, and writing, distinguishes open-ended exploration from refining an existing idea, keeps related concerns connected, and explains why the resulting question is selected, combined, or reframed. Two discussion pauses, sourced memory, paper links, budgets, and resumable runs remain available. See the [changelog](CHANGELOG.md).
 
 **Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
 
@@ -33,8 +33,8 @@ The current workflow writes the background, existing approaches, problem, and mo
 ```mermaid
 flowchart TD
     U["Research direction, initial ideas, papers, and resources"]
-    A["Search and background reading: introductions, related work, conclusions"]
-    B["Synthesize progress and explore distinct problem directions"]
+    A["Broad abstract reading → approach synthesis → relevant background passages"]
+    B["Broad topic: compare problems; specific question: compare responses and explanations"]
     D["Direction discussion: question, correct, add, or remove directions"]
     C["Read relevant details, trace original works, and reconsider directions"]
     X["Explore each problem: possible causes → existing responses → remaining difficulty → research value"]
@@ -69,6 +69,14 @@ flowchart TD
 Use `/memory` to inspect the current interpretation and its source words. During either discussion, explain what the system misunderstood or how you want to change the focus. The revision is saved with the conversation and carried into later reasoning; temporary wording requests remain separate. No additional approval step is introduced.
 
 **Two pauses let you revise the reasoning before the final proposition.** The first discussion checks whether the direction has become too narrow or overlooks a more important question. After `/continue`, the system examines each problem in depth and compares their significance and priority. The second discussion focuses on the problems themselves: whether the difficulty matters, whether its causes make sense, and why existing approaches might still leave it unresolved. Another `/continue` produces the motivation and research proposition from the current discussion. Ordinary messages stay within the discussion rather than advancing automatically.
+
+**Abstract readings remain available in discussion.** The first pass covers up to 40 candidates across retrieval routes, in batches of at most 8 abstracts. It saves each paper's question, approach, author claims, stated conditions, relevance, and useful follow-up questions. Missing abstracts remain title-only leads. A separate synthesis connects approach families and competing explanations. If a missing route or terminology could change the picture, one optional supplement adds up to 2 queries and 16 candidates before updating the synthesis. Calls share the research budget and completed tasks are reused on resume.
+
+**Breadth and depth have separate roles.** Abstract notes live outside the body-reading quota and continue to inform ideation even when a paper is not selected for body reading. `max_papers` now allows up to 6 representative background reads by default, without the old two-thirds reservation; fewer can be selected. Later reading targets specific method or result passages. Discussion receives the overview and compact paper notes, plus up to 6 relevant abstract excerpts; complete abstracts remain stored. Papers can be requested by ID for focused reading. `/papers`, Web literature views, and report exports include skimmed sources; Web paper cards show the notes.
+
+**Feedback triggers source work only when new information is needed.** Wording and argument revisions reuse existing material. Competing explanations are compared against saved readings first. A disputed detail in a known paper calls for relevant passages; an uncovered approach or new research object calls for a targeted search. Each overview retains its original goal and queries, so a changed goal does not silently inherit an old coverage claim. Findings update the affected argument and motivation without restarting every paper. Messages stay in the current discussion; `/continue` advances.
+
+**A specific question stays the research focus.** Broad topics explore different important problems. Given a concrete question, the workflow instead compares existing responses, alternative explanations, synonymous terminology, and adjacent-field perspectives; one question is enough. Similar titles, method names, or abstract slogans never establish duplication. Substantive comparison considers the actual question, available information, mechanism, conditions, solved scope, and contribution, with targeted body reading when needed.
 
 **Build an understanding of the field before reading problem-specific details.** Before the first discussion, each available full text receives one scoped background read, prioritizing the introduction, related work, and conclusion. Discussion starts without requiring a complete analysis card and audit for every paper. After `/continue`, reading focuses on the closest work's methods, information sources, conditions, and results. It considers strong existing responses as well as potential new difficulties, rather than only collecting support for a hypothesis.
 
@@ -367,15 +375,15 @@ The `ai-recent` / `ai-recommended` presets include **NeurIPS, ICML, ICLR, ACL, E
 
 ### Estimated time and model calls
 
-For an initial selection of **about 4–6 papers, deeper comparison of 2–3 problems, and one research proposition**, allow roughly the following, excluding the time you spend reading and replying:
+For **about 30–40 abstract readings, up to 6 representative background reads, targeted investigation, and one research proposition**, allow roughly the following, excluding the time you spend reading and replying:
 
 | Stage or resource | Estimate |
 | --- | --- |
-| Before the first direction discussion (4–6 papers) | **About 10–25 minutes and 8–10 main calls** |
-| Complete automated research and synthesis | **About 30–90 minutes** |
-| Total model calls | **About 21–46** |
+| Before the first direction discussion | **About 15–40 minutes and 12–20 main calls** |
+| Complete automated research and synthesis | **About 40–110 minutes** |
+| Total model calls | **About 27–55** |
 
-These are planning estimates. Before the first discussion, the main steps are interpreting the research intent, search planning, screening, one background read per paper, and direction exploration. Three problems typically involve six main analysis calls: one exploration, three individual deep dives, one comparison, and one final proposition, plus search planning and reading calls. Downloads, reasoning effort, model speed, additional reading, and retries can extend the total.
+These are planning estimates. Before the first discussion, the main steps are interpreting the research intent, search planning, batched abstract reading, landscape synthesis, optional coverage expansion, representative background reading, and direction exploration. Three problems typically involve six main analysis calls: one exploration, three individual deep dives, one comparison, and one final proposition, plus search planning and reading calls. Downloads, reasoning effort, model speed, additional reading, and retries can extend the total.
 
 An ordinary discussion turn usually adds one model call. A turn requiring literature may also need search planning, reading, and updated analysis. Each problem or specific follow-up question selects a small number of additional papers as needed, usually at most two. All calls share the overall budget. Successful checkpoints are reused when resuming.
 
@@ -388,7 +396,7 @@ Full texts are read in selected sections as needed; idea development uses the re
 | Setting | Command | Default for a new chat project |
 | --- | --- | --- |
 | Paper metadata results per query | `/budget search_results_per_query 20` | 20 |
-| Initial reading selection | `/budget max_papers 6` | 6; usually about 4 are selected first, with targeted follow-up reading governed by the total budget |
+| Background body-reading ceiling | `/budget max_papers 6` | Up to 6, not a quota; abstract reading is separate and targeted follow-up shares the total budget |
 | Number of priority problems | `/budget max_candidates 1` | 1; compare different problems before choosing a focus |
 | Model call limit | `/budget max_calls 80` | 80 |
 | Cumulative runtime in seconds | `/budget max_seconds 6600` | 110 minutes |
@@ -465,7 +473,7 @@ Every subcommand has a description, argument help, and examples. Use `research-i
 | `--conference-policy latest` / `--conference-policy window` | Use the latest public conference edition or filter by the date window |
 | `--since YYYY-MM-DD --until YYYY-MM-DD` | Set fixed dates, also applied to conferences unless `--conference-policy latest` is explicit |
 | `--venues ACL COLM` / `--arxiv-categories cs.CL cs.AI` | Select conferences or arXiv categories |
-| `--max-papers` / `--max-candidates` | Set the initial reading selection and number of priority problems |
+| `--max-papers` / `--max-candidates` | Set the background body-reading ceiling and number of priority problems |
 | `--max-calls` / `--max-seconds` / `--timeout-s` | Set call and time limits |
 | `--skill /path/to/SKILL.md` | Add a local skill; repeatable. Built-in skills load by task stage |
 | `--no-search` | Use existing materials without online search |

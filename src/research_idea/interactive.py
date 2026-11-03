@@ -135,8 +135,8 @@ def configure_launch(args):
         args.constraints = ask('资源限制（如单卡24GB、两周；未知可回车）', cfg['constraints'])
     budget = {'max_papers': 6, 'max_candidates': 1,
               'max_calls': 80, 'max_seconds': 6600, 'timeout_s': 1200}
-    selection = choose('运行预算', ['初次选读6篇 / 1个优先问题 / 80次调用 / 110分钟', '沿用项目设置', '逐项设置'], 1 if existing else 0)
-    labels = {'max_papers': '初次选读规模', 'max_candidates': '优先问题数',
+    selection = choose('运行预算', ['背景正文最多6篇 / 1个优先问题 / 80次调用 / 110分钟', '沿用项目设置', '逐项设置'], 1 if existing else 0)
+    labels = {'max_papers': '背景正文选读上限', 'max_candidates': '优先问题数',
               'max_calls': '模型调用上限', 'max_seconds': '累计运行秒数上限', 'timeout_s': '单次模型调用超时秒数'}
     for key, value in budget.items():
         if getattr(args, key) is not None:

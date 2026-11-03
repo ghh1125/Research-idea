@@ -11,6 +11,7 @@ description: Synthesize literature into important research problems and convinci
 
 控制器按任务提供以下一个相关参考文件，不自动加载全部参考：
 - [理解研究主线](references/intent.md)：interpret_research、plan_search，区分目标、假设及关切关系。
+- [摘要泛读与视野](references/landscape.md)：skim_papers、synthesize_landscape，保留候选论文认识、综合主要路线，并按缺失信息补搜。
 - [综合文献](references/synthesis.md)：explore_problems，建立跨论文认识。
 - [比较原因](references/explanations.md)：deepen_problem，推导不同解释与动机。
 - [重新构思](references/reconsider.md)：reconsider_problems，新材料改变方向。

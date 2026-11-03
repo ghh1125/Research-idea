@@ -221,7 +221,7 @@ class Controller:
         self.skill_key = digest(self.skill_manifest)
         self.guidance_keys = {stage: digest([stage_version(stage), stage,
             [{k: s[k] for k in ("path", "sha256", "stages")} for s in self.skills if stage in s["stages"]]])
-            for stage in ("extract", "inspect_source", "read_section", "read_problem_source")}
+            for stage in ("extract", "inspect_source", "read_section", "read_problem_source", "skim_papers", "synthesize_landscape")}
         self.reading_settings = [config.get(key) for key in ("deep_reading", "max_paper_read_chunks", "max_followup_reads", "source_chars")]
         self.store.set("active_search_scope", {"source": config["search_source"],
                        "venues": config.get("search_venues", []), **config_scope(config)})
@@ -433,7 +433,7 @@ class Controller:
         present = {paper['id'] for paper in papers}
         return list(dict.fromkeys(pid for pid in list(saved) + manual_or_discovery if pid in present))
 
-    def ideation_context(self):
+    def ideation_context(self, focus=''):
         """Use discovery readings, not explanations generated for an older idea."""
         source_context = self.context()
         from .reasoning_memory import reasoning_context
@@ -473,6 +473,14 @@ class Controller:
                 'full_text_read_paper_ids': [pid for pid in selected if pid in full_text_ids & read_ids],
                 'abstract_only_paper_ids': [pid for pid in selected if pid in papers and pid not in full_text_ids],
                 'retrieval_failed_paper_ids': [pid for pid in selected if papers.get(pid, {}).get('full_text_error')]})
+        from .landscape import context_view, source_records, research_mode
+        context['literature_landscape'] = context_view(self.store, focus)
+        context['research_mode'] = research_mode(self.store.get('research_intent'))
+        present_papers = {p['id'] for p in context['papers']}
+        context['papers'].extend({k: p.get(k) for k in ('id', 'title', 'url', 'year', 'venue')}
+                                | {'content_kind': 'abstract' if p.get('abstract') else 'metadata',
+                                   'reading_basis': 'abstract_landscape'}
+                                for p in source_records(self.store) if p['id'] not in present_papers)
         return compact_research_context(context)
 
     def reading_papers(self):
@@ -612,6 +620,8 @@ class Controller:
                    "search_windows": {p: config_scope(self.config, p) for p in ('strategy', 'novelty')},
                    "purpose": 'technical_design' if candidate else 'strategy_discovery',
                    "research_intent": self.store.get("research_intent")}
+        from .landscape import research_mode
+        payload["research_mode"] = research_mode(self.store.get("research_intent"))
         if candidate is not None:
             payload["candidate"] = candidate["proposal"]
             payload['selected_opportunity'] = candidate.get('selected_opportunity', {})
@@ -685,13 +695,16 @@ class Controller:
             # An explicitly increased reading limit can use the newly available
             # allowance; consumed calls/time never make an input look new.
             'reading_limit': self.config['max_papers'],
+            'landscape_guidance': [self.guidance_keys.get(stage) for stage in ('skim_papers', 'synthesize_landscape')]
+                if self.store.get('workflow') == 'question' else None,
         })
         if self.store.get('discovery_input_key') == input_key:
             return
         self.progress(f"[strategy] 按当前研究要求探索文献 · {scope['since']} → {scope['until']}")
-        # The main deliverable is the idea: give discovery about two thirds
-        # of the reading budget, leaving the rest for technical references.
-        target = min(self.config['max_papers'], (2 * self.config['max_papers'] + 2) // 3)
+        # Representative background reads are a ceiling, not a quota. There is
+        # no reserved technical-design phase in the question workflow.
+        target = (self.config['max_papers'] if self.store.get('workflow') == 'question'
+                  else (2 * self.config['max_papers'] + 2) // 3)
         initial_ids = self.initial_paper_ids()
         self.store.set('initial_selection_paper_ids', initial_ids)
         paper_ids = {paper['id'] for paper in self.store.rows('papers')}
@@ -705,6 +718,9 @@ class Controller:
         for query in plan["queries"]:
             purpose = 'novelty' if query['purpose'] == 'motivation' else 'lineage' if query['purpose'] == 'background' else 'strategy'
             keys.append(self.search_once(query["query"], query["rationale"], max_new=0, purpose=purpose))
+        if self.store.get('workflow') == 'question':
+            from .landscape import prepare_landscape
+            keys = prepare_landscape(self, keys, plan)
         paper_ids = {paper['id'] for paper in self.store.rows('papers')}
         added = len(paper_ids - set(pending['starting_paper_ids']))
         limit = min(max(0, pending['max_new'] - added), max(0, self.config['max_papers'] - len(paper_ids)))
@@ -723,7 +739,7 @@ class Controller:
             audit = self.store.get('paper_selections', [])[-1:]
             selected = selected or bool(audit != previous_audit and audit
                 and audit[0].get('phase') == 'ideation'
-                and audit[0].get('queries') == [query['query'] for query in plan['queries']])
+                and audit[0].get('queries') == [self.store.get('search_ledger', {}).get(key, {}).get('query') for key in keys])
             if selected:
                 self.store.set('discovery_input_key', input_key)
                 self.store.set('discovery_refresh', None)
@@ -976,6 +992,10 @@ class Controller:
                 'known_papers': [{key: p.get(key) for key in ('id', 'title', 'selection')} for p in papers],
                 'papers': [{key: paper.get(key, '') for key in ('id', 'title', 'year', 'conference_year', 'publication_date', 'venue', 'discovery_provenance')}
                     | {'abstract': (paper.get('abstract') or '')[:1800]} for paper in pool]}
+            if candidate is None:
+                from .landscape import context_view, research_mode
+                payload['literature_landscape'] = context_view(self.store)
+                payload['research_mode'] = research_mode(self.store.get('research_intent'))
             if candidate and candidate.get('spec'):
                 payload['method_spec'] = candidate['spec']
             if candidate:

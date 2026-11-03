@@ -43,7 +43,7 @@ class SourceController:
         self.store.set('search_ledger', ledger)
         return key
 
-    def ideation_context(self):
+    def ideation_context(self, focus=''):
         return {'papers': self.store.rows('papers')}
 
     def task(self, stage, payload, checker, *, publish=True):

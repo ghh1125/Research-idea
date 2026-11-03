@@ -34,6 +34,14 @@ PLAN_SEARCH = obj(research_question=STR, scope=STR,
     assumptions=STRINGS)
 SCREEN_PAPERS = obj(selection_summary=STR,
     selected=array(obj(paper_id=STR, reason=STR, reading_question=STR, reading_role=string(["landscape", "method"]), route_ids=STRINGS)))
+SKIM_PAPERS = obj(notes=array(obj(paper_id=STR,
+    relevance=string(['direct', 'adjacent', 'unrelated', 'insufficient']),
+    problem=STR, approach=STR, claimed_progress=STR, conditions=STR, connection=STR, reading_question=STR)))
+LITERATURE_LANDSCAPE = obj(background=STR,
+    approaches=array(obj(name=STR, principle=STR, achieved_progress=STR, paper_ids=STRINGS)),
+    connections=array(obj(question=STR, reasoning=STR, paper_ids=STRINGS)),
+    coverage=STR, supplement_queries=array(obj(query=STR, reason=STR,
+        purpose=string(['strategy', 'lineage']))))
 EVIDENCE = obj(observations=array(obj(statement=STR, quote=STR, kind=string(["reported_result", "author_claim", "limitation"]), conditions=STR, source_section=STR)))
 READING_POINT = obj(role=string(['research_problem', 'prior_response', 'core_intuition',
     'input', 'information_source', 'processing', 'output', 'research_impact']),
@@ -172,6 +180,7 @@ SCHEMAS = {"plan_search": PLAN_SEARCH, "screen_papers": SCREEN_PAPERS, "extract"
 SCHEMAS.update(plan_problem_reading=PROBLEM_READING, discuss_direction=DISCUSS_DIRECTION,
                discuss_question=DISCUSS_QUESTION, frame_question=FRAME_QUESTION)
 SCHEMAS['interpret_research'] = RESEARCH_INTENT
+SCHEMAS.update(skim_papers=SKIM_PAPERS, synthesize_landscape=LITERATURE_LANDSCAPE)
 SCHEMAS['read_problem_source'] = PROBLEM_SOURCE
 SCHEMAS['reconsider_problems'] = obj(pool=PROBLEM_POOL,
     changes=array(obj(previous_ids=STRINGS, current_ids=STRINGS, reason=STR, evidence_ids=STRINGS)))

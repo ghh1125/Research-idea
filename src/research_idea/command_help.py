@@ -21,7 +21,7 @@ class CommandHelp:
 
 BUDGET_LABELS = {
     'search_results_per_query': '每次检索先筛的论文数',
-    'max_papers': '初次选读规模',
+    'max_papers': '背景正文选读上限',
     'max_candidates': '优先问题数量',
     'max_calls': '模型调用上限',
     'max_seconds': '累计时间（秒）',

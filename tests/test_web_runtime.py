@@ -134,6 +134,23 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.request('POST', '/api/projects', {'model':[]})[0], 400)
         self.assertEqual(self.request('POST', '/api/projects', {'effort':'invented'})[0], 400)
 
+    def test_web_exposes_skimmed_papers_without_claiming_body_reading(self):
+        p = self.create(title='A focused research question')
+        store = Store(Path(p['path']))
+        try:
+            store.set('literature_landscape', {'key': 'skim-v1', 'sources': [
+                {'id': 'skim-only', 'title': 'An adjacent approach', 'abstract': 'A source abstract.',
+                 'content_kind': 'abstract', 'url': 'https://example.org/paper'}],
+                'notes': [{'paper_id': 'skim-only', 'claimed_progress': 'An author claim.'}], 'overview': {}})
+        finally:
+            store.close()
+        snapshot = self.get(p['id'])
+        self.assertEqual(snapshot['paper_count'], 1)
+        self.assertEqual(snapshot['papers'][0]['content_kind'], 'abstract')
+        self.assertEqual(snapshot['papers'][0]['url'], 'https://example.org/paper')
+        self.assertEqual(snapshot['evidence'], [])
+        self.assertEqual(snapshot['literature_landscape']['notes'][0]['claimed_progress'], 'An author claim.')
+
     def test_discussion_run_continue_and_reload_use_real_project_state(self):
         p = self.create()
         ident = p['id']

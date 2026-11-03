@@ -40,3 +40,5 @@ Use unknown for unavailable details and uncertain for unsupported coverage. A co
 ## Problem-focused discussion (v0.5)
 
 在 plan_problem_reading、deepen_problem、discuss_question、frame_question 中，比较的是背景目标、已有有效回应、仍可能出现的困难及其原因。先找真正最接近的具体回应并读细节，再判断研究问题的区别。支持用户讨论改变方向和解释；既有方法的贡献应得到承认。不要为比较而先构造一个新算法，不输出技术方案或实验设计。
+
+标题、名称、关键词或摘要主张相似只能帮助找到比较对象，不能给出撞车结论。先说明原工作在什么问题、信息和条件下真正解决了什么，再比较用户的问题、动机与剩余需要。涉及放弃或缩小研究问题的判断，使用具体方法和解决范围；缺少细节时请求对应段落，而不把相关工作当成否定理由。

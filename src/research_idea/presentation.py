@@ -3,6 +3,8 @@ from __future__ import annotations
 
 
 STAGE_LABELS = {
+    'skim_papers': ('read', '摘要泛读 · 扩大文献视野'),
+    'synthesize_landscape': ('analysis', '综合文献 · 梳理主要思路'),
     "read_problem_source": ("read", "读懂已有方法与当前问题的关系"),
     "interpret_research": ("concept", "理解研究目标与关键关切"),
     "reconsider_problems": ("analysis", "新材料后的方向调整"),
@@ -197,7 +199,19 @@ def activity_summary(stage, result, citations=None):
             add('原文依据', list(dict.fromkeys(refs)))
         else:
             add('原文依据', ids)
-    if stage in {'discuss_direction', 'discuss_question', 'discuss_problem'}:
+    if stage == 'synthesize_landscape':
+        add('背景与已有进展', result.get('background'))
+        for approach in result.get('approaches', []):
+            section(approach['name'])
+            add('主要思路', approach['principle'])
+            add('作者报告的进展', approach['achieved_progress'])
+            for paper_id in approach['paper_ids']:
+                source(paper_id)
+        for connection in result.get('connections', []):
+            add('值得讨论的关系', connection['question'])
+            add('为什么', connection['reasoning'])
+        add('文献覆盖', result.get('coverage'))
+    elif stage in {'discuss_direction', 'discuss_question', 'discuss_problem'}:
         add('本轮讨论', result.get('answer'))
     elif stage in {'extract', 'read_section', 'inspect_source'}:
         for item in result.get('observations', []):
