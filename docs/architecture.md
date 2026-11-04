@@ -1,110 +1,109 @@
-# 架构与当前范围 · v1.0.0
+# Architecture and current scope · v1.0.0
 
-Python CLI 组织检索、阅读、问题分析和讨论。SQLite 保存项目及会话状态；模型只完成有界的结构化任务。产品以背景、现有方法、问题和动机为终点，不自动生成解决方案。
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](architecture.zh-CN.md)
 
-## 模块
+The Python CLI coordinates search, reading, problem analysis, and discussion. SQLite stores project and conversation state; models perform bounded, structured tasks. The product ends with the background, existing approaches, problem, and motivation, rather than automatically developing a solution.
 
-| 模块 | 职责 |
+## Modules
+
+| Module | Responsibility |
 | --- | --- |
-| `cli.py` / `chat.py` / `chat_worker.py` | 批处理与交互窗口、独立任务进程、命令及事件显示 |
-| `question_workflow.py` | 当前主流程、两处讨论暂停、确认与恢复、最终研究主张 |
-| `problem_discovery.py` | 方向探索、独立深入与比较交接 |
-| `problem_dialogue.py` | 方向/问题讨论、增量修订、原子保存对话与研究版本 |
-| `discussion_sources.py` | 具体问题触发的有界检索/补读、选择记录与恢复 |
-| `focused_reading.py` | 当前问题与指定编号优先的正文定位，保留连续原文及位置 |
-| `research_context.py` | 来源视图、运行记录压缩与模型输入的可还原去重 |
-| `conversation.py` | 原始历史、有效要求、旧消息检索、阶段作用域与迁移 |
-| `memory_scope.py` | 根据用户原话校正局部表达要求的期限，兼容旧会话 |
-| `discussion_focus.py` | 单个可选追问的校验、显示与跨轮接续，独立于用户研究决定 |
-| `discussion_changes.py` | 对比成功保存前后的讨论稿和要点，生成可查看的实际修改提示 |
-| `controller.py` | 来源与模型任务、结构/引用校验、缓存、预算 |
-| `paper_reading.py` / `claims.py` | 分块阅读、九维论文卡、作者主张和结果的联系 |
-| `literature.py` / `venues.py` / `fulltext.py` | 学术索引、会议来源、公开全文获取及去重 |
-| `schema.py` / `prompts.py` / `local_skills.py` | 任务输出结构、研究规范及按任务加载的 skill |
-| `store.py` / `report.py` / `presentation.py` | 持久化、Markdown/JSON 和可读显示 |
-| `backends/` | Codex、Claude Code、OpenAI-compatible、Anthropic 适配器 |
+| `cli.py` / `chat.py` / `chat_worker.py` | Batch and interactive interfaces, isolated workers, commands, and event presentation |
+| `question_workflow.py` | Main workflow, two discussion checkpoints, confirmation, recovery, and final research proposition |
+| `problem_discovery.py` | Direction exploration, independent analysis, and comparison handoffs |
+| `problem_dialogue.py` | Direction/problem discussion, incremental revision, atomic conversation and research-version commits |
+| `discussion_sources.py` | Bounded search and follow-up reading for specific questions, saved selections, and recovery |
+| `focused_reading.py` | Passage selection prioritizing the current question and explicit identifiers; contiguous text and locations |
+| `research_context.py` | Source views, compact run records, and reversible deduplication of model inputs |
+| `conversation.py` | Original history, active requirements, earlier-message retrieval, stage scope, and migration |
+| `memory_scope.py` | Correcting the lifetime of local presentation requirements from the user's original words, including older conversations |
+| `discussion_focus.py` | Validation, display, and continuation of one optional follow-up question, separate from user decisions |
+| `discussion_changes.py` | Comparing committed drafts and notes to display actual changes |
+| `controller.py` | Source and model tasks, structure/citation validation, caching, and budgets |
+| `paper_reading.py` / `claims.py` | Chunked reading, nine-dimension paper cards, and connections between author claims and results |
+| `literature.py` / `venues.py` / `fulltext.py` | Academic indexes, conference sources, public full-text retrieval, and deduplication |
+| `schema.py` / `prompts.py` / `local_skills.py` | Task schemas, research guidance, and task-specific skill loading |
+| `store.py` / `report.py` / `presentation.py` | Persistence, Markdown/JSON export, and readable presentation |
+| `backends/` | Codex, Claude Code, OpenAI-compatible, and Anthropic adapters |
 
-## 当前主流程
+## Main workflow
 
-`make_prompt` 仅在问题发现、讨论和最终整理阶段调用 `compact_task_payload`。完全相同且较长的研究记录共享前文 JSON pointer 引用，不进行语义摘要或按长度截断；不同条件不会被合并。证据和对话记忆保持内联。存储、缓存指纹、检查器及报告继续使用完整原始载荷，模型输出也必须是原有完整结构。`expand_task_payload` 供离线后端和测试验证还原，不增加真实模型调用。该措施减少重复，不保证任意大小的证据集都能满足模型上下文上限。
+`make_prompt` calls `compact_task_payload` only during problem discovery, discussion, and final framing. Long research records that are exactly identical share backward JSON pointer references. This does not summarize their meaning or truncate them by length; different conditions are not merged. Evidence and conversation memory remain inline. Storage, cache fingerprints, validators, and reports use the complete original payload; model output must retain the original complete structure. `expand_task_payload` verifies reconstruction for offline backends and tests without additional live model calls. This reduces duplication but does not guarantee that arbitrarily large evidence collections fit a model's context window.
 
-补读使用对应论文的本轮问题；没有新问题才回退到首次选文的问题。引号内检索短语保留为整体。显式编号优先定位正文或附录中的算法/章节/图表标题，再补充附近原文和关键词窗口，仍受 `source_chars` 限制且排除参考文献条目。定位版本加入补读缓存依据，避免复用旧选段；引文校验仍限定到实际提供的连续原文窗口。
+Follow-up reading uses this turn's question for the corresponding paper, falling back to the original selection question only when there is no new one. Quoted search phrases remain intact. Explicit identifiers prioritize algorithm, section, figure, or table headings in the main text or appendices, followed by nearby passages and keyword windows. Selection remains bounded by `source_chars` and excludes bibliography entries. The locator version participates in the reading cache key so old selections are not reused. Quote validation remains restricted to the contiguous source windows actually supplied.
 
 ```mermaid
 flowchart TD
-    A[研究目标与用户要求] --> J[interpret_research：目标、假设与关切关系]
-    J --> B[检索、筛选与正文阅读]
-    B --> C[explore_problems：方向与问题池]
-    C --> D[方向讨论与修订]
-    D -->|/continue| E[按问题补读、deepen_problem逐个深入]
-    E --> F[map：选择、综合或重构问题]
-    F --> G[问题讨论与修订]
-    G -->|/continue| H[frame_question：背景、方法、问题、动机]
-    D -.具体资料缺口.-> R[定向检索与阅读后更新判断]
-    G -.具体资料缺口.-> R
+    A[Research goal and user requirements] --> J[interpret_research: goals, hypotheses, and concern relationships]
+    J --> B[Search, selection, and text reading]
+    B --> C[explore_problems: directions and problem pool]
+    C --> D[Discuss and revise directions]
+    D -->|/continue| E[Targeted reading and independent deepen_problem calls]
+    E --> F[map: select, synthesize, or reframe a problem]
+    F --> G[Discuss and revise the problem]
+    G -->|/continue| H[frame_question: background, approaches, problem, motivation]
+    D -.Specific information gap.-> R[Targeted search and reading, then update the reasoning]
+    G -.Specific information gap.-> R
     R --> D
     R --> G
-    H --> I[研究主张与论文依据]
-    I -->|继续讨论| G
+    H --> I[Research proposition and paper evidence]
+    I -->|Further discussion| G
 ```
 
-`Controller.run_questions` 是 CLI 当前入口。旧版本的方案生成函数和数据结构保留供历史项目及兼容读取，当前命令不执行 `propose/develop/refine/review` 方法循环。
+`Controller.run_questions` is the current CLI entry point. Older solution-generation functions and data structures remain for historical projects and compatibility reads. Current commands do not execute the `propose/develop/refine/review` method loop.
 
-所有问题所需补充来源先获得，再逐个深入；每次深入保留同轮其他问题种子与用户关切关系，不带其他候选的优先级判断。`map` 比较各自价值，保留已深入的原论证。`frame_question` 读取当前讨论版本，输出 `title/background/existing_methods/problem/motivation/research_claim/why_priority` 以及论文、证据 ID，不包含方法或实验字段。
+Supplementary sources for every problem are acquired before independent analysis begins. Each analysis receives the other problem seeds from the same round and the relationships among user concerns, but not other candidates' priority judgments. `map` compares their value while retaining the original analyses. `frame_question` reads the current discussion version and outputs `title/background/existing_methods/problem/motivation/research_claim/why_priority`, together with paper and evidence IDs. There are no method or experiment fields.
 
-## 对话事务与记忆
+## Conversation transactions and memory
 
-用户原话先入库，再调用模型。讨论结果中的 `memory_updates` 只允许引用实际提供给模型的用户消息。更新支持 add/replace/remove；保留失效记录和替代关系。助手答复、研究版本、记忆和处理成功标记通过 `Store.set_many` 一起提交。
+The user's original message is stored before a model call. `memory_updates` may cite only user messages actually supplied to the model. Updates support add/replace/remove, retaining inactive records and replacement relationships. The assistant reply, research version, memory, and successful-processing marker are committed together through `Store.set_many`.
 
-记忆作用域包括 `turn`、`discussion`、`research`。单次答复的字数、格式等要求默认 `turn`；明确的长期偏好和最终报告要求继续保留。局部校正只处理表达要求，并核对对应原话，避免同一句中的长期研究约束被一起改短。`finish_turn` 在成功提交时结束本轮要求，`last_turn_changes` 标为仅本轮采用。读取旧会话时应用相同校正，下一次成功保存时写回；原始消息不变。过期记录保留出处，但不加入 `research_notes`。
+Memory scopes are `turn`, `discussion`, and `research`. Length or formatting instructions for one reply default to `turn`; explicit lasting preferences and final-report requirements remain active. Local corrections affect presentation requirements only and check the source wording so a lasting research constraint in the same sentence is not accidentally shortened. `finish_turn` ends turn-scoped requirements on successful commit and marks them as used only for that turn in `last_turn_changes`. Older conversations receive the same correction when read, persisted on the next successful save; original messages remain unchanged. Expired records retain provenance but are excluded from `research_notes`.
 
-`finish_turn` 同时计算并保存 `last_turn_changes`：根据实际数据比较背景、方法梳理、问题与选择、要点替换及讨论理由，不读取模型答复来推断修改。工作进程在提交后输出 `update` 事件，完整说明可由 `/memory` 重读。没有结构化修改的答复不改写问题稿。
+`finish_turn` also computes and saves `last_turn_changes`: actual data differences in background, approach synthesis, problems and selections, note replacements, and discussion reasoning. It does not infer changes from the wording of the assistant reply. The worker emits an `update` event after commit; `/memory` can display the complete account. A reply without structured changes does not overwrite the problem draft.
 
-来源补查是单独的可恢复工作：计划、选中论文、实际阅读记录保存后再生成讨论答复。最终模型回复失败时，消息仍是 pending；重发同文本复用原 ID。不同新消息保留为追加纠正，不删除旧原话。补查前的记忆建议不提前生效，由补查后的最终答复统一提交。
+Source follow-up is separately resumable work: plans, selected papers, and actual reading records are saved before generating the discussion reply. If the final model reply fails, the message remains pending; resending identical text reuses its original ID. Different new messages are retained as additional corrections without deleting earlier wording. Memory suggestions made before follow-up reading take effect only when the final post-reading reply commits.
 
-历史不等于当前要求。模型上下文组合现行要点、出处原话、近期消息、待处理用户消息与查询相关的早期内容；被替换的旧要求显式保持失效。所有原话仍在 SQLite，检索视图可以有界。
+History is not the same as current requirements. Model context combines active notes, source messages, recent messages, pending user messages, and relevant earlier content. Replaced requirements remain explicitly inactive. All original wording stays in SQLite; retrieval views can be bounded.
 
-历史召回使用本轮查询、当前问题和最近助手回复三类线索。直接匹配优先，其他结果交替填充剩余名额，最多补入 6 条用户原话；当前问题和助手线索各最多 1200 字符。长消息的连续节选按相关线索定位，原文不修改。`retrieval_hints` 明确来源，助手线索不加入可引用的用户消息集合；手动历史搜索不做隐式扩展。
+History retrieval uses three kinds of clues: this turn's query, the current problem, and the latest assistant reply. Direct matches take priority; other results alternate into the remaining slots, up to six user messages. Current-problem and assistant clues are each limited to 1,200 characters. Relevant clues locate contiguous excerpts in long messages without altering the originals. `retrieval_hints` identifies each clue's source; assistant clues are not added to the citable user-message set. Manual history searches do not expand implicitly.
 
-`discussion_key` 绑定阶段实例，`kind` 区分方向和问题；修订号变化不改变实例。`/continue` 只结束当前实例的临时要求。更换 checkpoint 前先迁移旧要点的阶段归属，避免把旧临时要求带入新阶段。
+`discussion_key` identifies a stage instance, while `kind` distinguishes direction and problem discussion; revision changes do not change the instance. `/continue` ends temporary requirements for the current instance only. Before replacing a checkpoint, older notes migrate to their original stage so temporary requirements do not leak into a new discussion.
 
-## 研究与来源状态
+## Research and source state
 
-- 项目状态包含 `awaiting_direction_discussion`、`awaiting_problem_discussion`、`running`、`completed`、`interrupted`、`budget_exhausted`、`blocked`。
-- checkpoint 保存 `kind/state/revision/original/current/revisions/source_key/confirmed_revision`。
-- `question_cycle` 保存步骤及互动模式；`question_brief_provenance` 记录整理正文使用的版本、确认来源与缓存标识。
-- 用户更改来源或研究范围使讨论失效并重开；控制器自己补查的来源更新保留在同一阶段。模型/思考强度更改保留选择，但影响后续任务缓存。
-- 新报告使用 `schema_version: 18`，包含当前研究主张、问题分析、检索记录、完整会话和记忆。新流程不混入旧技术方案。
+- Project states include `awaiting_direction_discussion`, `awaiting_problem_discussion`, `running`, `completed`, `interrupted`, `budget_exhausted`, and `blocked`.
+- Checkpoints store `kind/state/revision/original/current/revisions/source_key/confirmed_revision`.
+- `question_cycle` stores the step and interaction mode; `question_brief_provenance` records the version, confirmation source, and cache identifier used to frame the final text.
+- User changes to sources or research scope invalidate and reopen discussion. Sources added by the controller's own follow-up remain within the same stage. Changing model or effort preserves selections but affects subsequent task caching.
+- New reports use `schema_version: 18`, containing the current research proposition, problem analyses, search records, complete conversation, and memory. The new workflow does not mix in old technical proposals.
 
-引用校验检查 ID、原文位置、论文归属和实际引文；论文卡区分作者主张、结果及分析。模型可大胆推演新的困难，但不得把推演写成论文已经证明的结果。没有额外科学打分或发表保证门槛。
+Citation validation checks IDs, source locations, paper ownership, and actual quotations. Paper cards distinguish author claims, results, and analysis. Models may boldly infer new difficulties, but must not present those inferences as results already proved by a paper. No additional scientific scoring or publication-guarantee gate is imposed.
 
-## 预算与恢复
+## Budgets and recovery
 
-初读名额由 `max_papers` 控制；每个具体问题或讨论轮的定向工作最多选两篇。共享项目模型调用/时间预算，正文片段另受 `source_chars` 和分块/补读次数限制。成功调用缓存，失败任务可恢复；窗口等待输入不累计运行时间。
+`max_papers` controls initial reading slots; targeted work for a specific problem or discussion turn selects at most two papers. All work shares the project's call and runtime budgets. Text windows are additionally bounded by `source_chars` and chunk/follow-up limits. Successful calls are cached and failed tasks can resume. Waiting for user input does not consume runtime.
 
-模型服务错误按类别提示，30 秒后重试，最多重试 10 次；每次先检查剩余预算。结构或引用错误仅进行一次有针对性的输出修复。认证和 API 请求由后端负责，应用不复制 CLI 凭据。
+Model-service errors are categorized and retried after 30 seconds, up to ten retries; each attempt checks the remaining budget. Structure or citation errors receive one targeted output-repair attempt. Backends handle authentication and API requests; the application does not copy CLI credentials.
 
-结果保存到可配置父目录下固定的 `idea-时间戳` 文件夹，Markdown 面向读者，JSON 保留完整推导及来源。原始论文、旧项目记录与用户对话不会因更改报告范围被删除。
+Results go into a stable `idea-TIMESTAMP` folder under a configurable parent directory. Markdown serves readers; JSON retains the complete reasoning and sources. Changing report scope does not delete original papers, historical project records, or user conversations.
 
+## v0.7.0: research intent and problem formulation
 
-## v0.7.0 研究主线与问题表述
+Before a new research project's first search, `research_intent.py` adds one `interpret_research` call and stores `mode/goal/goal_sources/concerns/relationships/interpretation`. Source references are checked against user wording. Relationships are model interpretations, not verified causal facts. Broad exploration may have no specific concerns; existing ideas distinguish goals from hypotheses. Search planning, problem follow-up reading, independent analysis, reconsideration, comparison, and final framing all receive this state. Analysis tasks also receive the other problem seeds from the round.
 
-`research_intent.py` 在新研究的检索前增加一次 `interpret_research`，保存 `mode/goal/goal_sources/concerns/relationships/interpretation`。来源引用核对用户原话，关系是模型解读，不当作已经验证的因果。宽方向允许无具体关切；已有想法区分目标与假设。检索规划、问题补读、逐个深入、重新构思、比较和最终表达都收到这份状态；深入任务还收到同轮其他问题种子。
+`map.formulation` supports select, synthesize, and reframe. Member IDs point to analyzed cases; synthesis or reframing uses a separate ID and does not overwrite the originals. The program validates references, member links, concern coverage, and required fields while allowing revised hypotheses and adjusted scope; it does not assign scientific scores. The current problem and priority selection are published to the CLI only after formulation updates them, together with relationship judgments and the reason for focusing.
 
-`map.formulation` 支持 select、synthesize、reframe；成员 ID 指向已深入的案例，综合或重构使用独立 ID，原案例不覆盖。程序校验引用、成员链接、关切覆盖和必要字段，允许假设被修订、范围被调整，不判科学得分。当前问题与优先选择由 formulation 更新后才向 CLI 发布；关系判断与聚焦理由一并展示。
+`updated_intent` commits atomically with the discussion draft, original messages, and memory. `research_intent_history` retains before/after versions and message provenance. Temporary formatting belongs to turn memory, not research intent. A changed problem or goal clears the old formulation; final framing reconstructs the relationships from the current discussion and full intent. Resuming an existing pause does not rerun intake or automatically change topics. New research and replanning establish intent when it is missing. Task inputs and framing caches include intent; source texts and reading results remain reusable. Report JSON exports intent and revision history; `/memory` shows the current interpretation and original user wording.
 
-`updated_intent` 随讨论稿、原话与记忆原子提交，`research_intent_history` 保存前后版本及消息出处。临时格式要求留在 turn 记忆，不写入研究主线。讨论改了问题或目标就清除旧 formulation，最终整理用当前讨论版本和完整研究主线重新梳理关系。恢复已有暂停不会重跑 intake 或自动改选题；新研究及重新规划在缺少主线状态时建立它。任务输入与最终整理缓存包含研究主线，论文原文与阅读结果继续复用。报告 JSON 导出主线和修订历史，`/memory` 显示当前理解与用户原话。
+## Paper understanding in targeted reading
 
+Full-text reading with `phase=problem` uses `read_problem_source` instead of the former excerpt-only `inspect_source`, within the same model call. `source_understanding.py` converts `reading_points.observation_indices` into validated evidence IDs and records the operating principle, input sources, actual process, and effect on the research question. Author claims, the paper's accounts of prior work, inferences, and conjectures have separate types. Method, theory, and analysis papers are explained according to their actual content; no algorithm template must be filled artificially.
 
-## 定向阅读中的论文理解
+Quotes still undergo source-location validation with one repair attempt. If the second attempt also fails, invalid quotations and every understanding point that depends on them are removed, and remaining indices are remapped. Existing explanations are never silently reattached to different evidence. Duplicate excerpts map to the same evidence by content so deduplication cannot misalign citations. Scientific correctness still requires research judgment; structural validation checks sources and handoffs.
 
-`phase=problem` 的全文阅读使用 `read_problem_source`，替代原先只输出摘录的 `inspect_source`，仍为同一次模型调用。`source_understanding.py` 将本次 `reading_points.observation_indices` 转为校验过的原文证据 ID，记录作用原理、输入来源、实际过程及对研究问题的影响。作者主张、该文对前作的转述、推断和猜想有独立类型。方法、理论或分析论文按实际内容解释，不要求补齐算法栏目。
+`source_understandings` stores complete targeted-reading records. `ideation_context` reserves up to 12,000 characters for this added material, measured as serialized JSON characters rather than presented as a token limit. It selects up to 12 currently valid understandings, prioritizing different papers before additional readings of the same paper. Whole explanation points are selected across sources in turn, prioritizing research implications, core intuition, and information sources, without cutting sentences or conditions. Coverage records show available and included counts. Full records stay local; original evidence and user goals continue through their existing paths. When source versions, reading guidance, or research intent changes, old explanations remain historical but no longer represent current judgments; removing evidence also stops the associated record from being passed forward. Problem-reading caches include the new guidance and intent. Background orientation remains lightweight; no automatic extra reading rounds are added. JSON exports full records; the CLI presents implications, intuition, information sources, and processes with paper links.
 
-引用仍按原文位置核验，沿用一次修复预算。第二次仍失败时，删除无效引文及所有依赖它的理解点，重映射剩余索引；不会将已有解释悄悄改引另一条证据。重复摘录按内容映射到同一证据，不能因去重造成引用错位。模型对解释的科学正确性仍需研究判断，结构校验只负责来源和交接。
+When the user changes the goal and requests reading in the same turn, the new goal becomes temporary reading context and participates in cache keys and explanation ownership. The post-reading reply receives this temporary goal, the unchanged persistent goal, and new explanations. The goal change commits only after the final reply succeeds. Retries reuse completed reading without interpreting new explanations under the old goal. Other payload paths for reading and reconsideration retain only sources and progress; explanations pass once through the common bounded view to avoid duplicate injection outside its size budget.
 
-`source_understandings` 保存完整定向阅读记录；`ideation_context` 为这部分新增内容单独预留最多 12,000 字符（按实际 JSON 字符数计算，不冒充 token 上限），最多选 12 份当前有效理解，先保留不同论文再补同篇的其他阅读。按研究影响、核心直觉和信息来源等优先级，在来源之间轮流选取完整解释点，不截断句子或删掉条件。覆盖记录说明当前与实际带入的数量；完整记录仍在本地，原始证据和用户目标按既有方式传递。正文版本、阅读指导或研究主线变化时，旧解释保留在历史但不作为当前判断；原文证据被移除时也停止传递相应记录。问题补读的缓存包含新阅读指导及研究主线。背景初读沿用轻量入口；不自动增加补读轮次。报告 JSON 导出完整记录，CLI 用论文链接展示研究启发、直觉、信息来源和过程。
-
-
-同一轮用户修改目标并要求补读时，新的目标作为临时阅读上下文传入，参与阅读缓存及解释归属。补读后的答复收到临时目标、尚未修改的持久目标与新阅读解释；只有最终答复成功才统一提交目标修改。失败重试复用已完成阅读，旧目标下不会误读新解释。补读结果及重新构思的另一条载荷路径只保留来源与进度，解释通过统一有界视图传递一次，避免绕过篇幅预算重复注入。
-
-讨论的可选追问保存在 checkpoint.discussion_focus 中，包含助手归属和所回应的消息 ID；同轮答复、问题修订和记忆一起成功后才提交。下一轮模型只接收当前追问，不累积历史问题清单；无追问及 /continue 会清空当前记录，完整会话仍可回查。旧 checkpoint 和已完成但未提交的旧回复缺少该字段时按空处理。参见[多轮讨论行为复测](discussion-evaluation.md)。
+The optional follow-up question is stored in `checkpoint.discussion_focus`, attributed to the assistant and linked to the message it answers. It commits with the successful reply, problem revision, and memory. The next model turn receives only the current question, not an accumulating question list. No follow-up or `/continue` clears it; the complete conversation remains searchable. Older checkpoints and completed but uncommitted replies without the field treat it as empty. See [multi-turn discussion evaluation](discussion-evaluation.md).

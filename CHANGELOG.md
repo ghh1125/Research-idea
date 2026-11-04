@@ -1,120 +1,126 @@
-# 版本更新
+# Changelog
+
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](CHANGELOG.zh-CN.md)
+
+## v1.0.0 documentation update · 2026-11-04
+
+- Public user and developer documentation now has English default pages and complete Simplified Chinese counterparts. Each page offers a language switch, and internal documentation links stay in the selected language. Built-in skill instructions and application behavior are unchanged.
+- Added a documentation index and marked the early Web preview and historical implementation details clearly, with links to the current workflow.
 
 ## v1.0.0 · 2026-11-03
 
-- Web 增加日期与会议设置、模型刷新与登录方式、附件导入、历史对话搜索，以及网页专用使用指南。常用功能直接点击完成；兼容快捷命令时复用 CLI 逻辑，命令不会混入研究对话。修复论文详情刷新后收起、引用缺少位置、报告折叠标记显示错误，以及新建研究未沿用全部设置的问题。
+- Added Web controls for dates and venues, model refresh and sign-in information, attachments, conversation-history search, and a Web-specific user guide. Common operations work through buttons. Optional shortcuts reuse CLI logic and do not enter research conversations. Fixed collapsing paper details after refresh, missing citation locations, incorrect report disclosure markers, and incomplete settings inheritance for new research.
+- Positioned the release as a literature reading, analysis, and ideation tool: multi-source search, batched broad reading, approach synthesis, targeted full-text analysis, source quotations, multi-turn discussion, research propositions, and report export form a complete workflow.
+- Unified new-project defaults at 200 model calls and 300 minutes (18000 seconds) of cumulative runtime across CLI, interactive setup, and Web. Existing explicit budgets remain unchanged and can be adjusted through `/budget` or Web settings.
+- Retained two discussion pauses and explicit Continue. Corrections to research intent update the current problem draft and reuse existing reading first, with targeted reading or search for specific gaps.
+- Placed the version beside the main heading in both READMEs; updated product descriptions, installation/upgrades, budget examples, and command explanations. CLI and Web startup commands remain separate.
 
-- 正式版本定位为文献阅读分析与研究构思工具：多来源检索、分批泛读、主要方法综合、按需正文分析、原文引用、多轮讨论、研究主张与报告导出形成完整工作流。
-- 新项目默认预算统一为 200 次模型调用、300 分钟（18000 秒）累计运行时间，覆盖命令行、交互启动向导和 Web。已有项目的显式预算保持不变，可通过 `/budget` 或 Web 设置调整。
-- 保留两次讨论与主动“继续”的操作。用户纠正研究意图时，更新当前问题稿并优先复用已读材料；按具体信息缺口补读或补搜。
-- 中英文 README 的版本号放在大标题旁；同步产品介绍、安装升级、预算示例和命令说明。CLI 与 Web 启动命令继续分别列出。
+## v0.8.0 follow-up improvements · 2026-11-03
 
-## v0.8.0 后续改进 · 2026-11-03
-
-- 将摘要筛选扩展为可恢复的分批泛读与方法综合：首批最多 40 篇，按覆盖需要补充最多 2 个查询、16 篇候选；保留所有短笔记及原摘要，正文选读不再决定讨论的文献视野。
-- 讨论携带方法概览和论文笔记，按当前问题选取原摘要；可以点名原先未选正文的来源定向补读。CLI、Web 和报告均能查看泛读来源，Web 可展开笔记。
-- 开放方向比较重要问题；具体问题比较已有回应、不同解释与切口，不强制另选题。标题和名称相似不作撞车判定，具体贡献比较需要问题、机制条件与实际解决范围。
-- 文献概览保存当时的目标与查询范围；讨论反馈按实际信息缺口重用记录、点名补读或定向补搜，避免改目标后误用旧覆盖判断。
-- 用户纠正过度扩展时同时修订研究意图和问题稿；同轮补读后的讨论使用新目标对应的推理方式，避免仍沿用旧的开放探索模式。
-- 当前问题流程取消首次正文名额的三分之二分配，默认上限 6 篇；保留两次讨论、按需正文阅读、引用校验、累计预算和旧项目恢复。
-- 同步中英文 README、研究 skill 与回归测试。Web 已由此前贡献者接入真实项目和研究 worker，下列 11 月 1 日预览说明为当时状态。
+- Expanded abstract selection into resumable batched broad reading and approach synthesis: up to 40 papers initially, with up to 2 extra queries and 16 candidates for coverage. All short notes and original abstracts are retained; full-text selection no longer determines the literature available to discussion.
+- Discussion receives approach overviews and paper notes, with original abstracts selected for the current question. It can request targeted reading of sources not initially selected for full text. CLI, Web, and reports expose broad-reading sources; Web can expand notes.
+- Open directions compare important problems; specific questions compare existing responses, explanations, and research angles without forcing a topic change. Similar titles or names do not establish overlap; substantive comparison requires problems, mechanism conditions, and actual scope of resolution.
+- Literature overviews retain their original goals and query scope. Discussion feedback reuses records, requests named passages, or searches specific gaps, avoiding stale coverage judgments after a goal change.
+- Corrections to an overextended direction revise both intent and the problem draft. Discussion after same-turn reading uses the updated goal's reasoning mode rather than the old open-exploration mode.
+- Removed the two-thirds initial full-text allocation in the current problem workflow; the default limit is 6 papers. Preserved two discussions, targeted reading, quotation validation, cumulative budgets, and old-project recovery.
+- Updated both READMEs, research skills, and regression tests. Contributors had connected Web to real projects and the research worker; the November 1 preview notes below describe its earlier state.
 
 ## v0.8.0 · 2026-11-01
 
-- 新增 `research-idea web` 本地服务，模型下拉真正读取本机 Codex 目录，支持缓存、刷新、分页和按模型变化的思考强度；不会发起推理。刷新失败保留目录与选择，显示读取来源。
-- Web 主界面简化为对话区与系统设置入口，配置、文献、历史和步骤详情通过弹窗查看，关闭后保留未发送草稿。
-- 左侧新增对话列表和新增对话，顶部测试阶段控件移除；输入框上方显示当前阶段，明确“发送用于讨论修改，继续推进下一阶段”。
-- 步骤详情展示检索词与来源、论文阅读位置、Skill 使用理由、已有回应比较、修改和调用记录；研究日志仍为示例，内置 Skill 原文通过只读接口读取当前安装版本。
-- 新增可在浏览器本地查看的 Web 交互设计预览：简洁对话首页，文献、研究主张、要点和历史按需展开。
-- 模型采用下拉选择，设计为从后端自动获取并支持刷新；思考深度同样下拉选择，高级配置收进更多设置。
-- 保留新建、讨论、继续、运行、停止恢复和错误重试的预览状态；同步中英文 README 和本地预览启动说明。
-- Web 研究内容仍使用示例数据，尚未连接账户检测、研究引擎或项目存储；Codex 模型发现已真实接入，其他后端暂未接入。真实研究仍使用 CLI，核心研究流程不变。
+- Added the `research-idea web` local service. The model dropdown reads the local Codex catalog with caching, refresh, pagination, and model-specific reasoning options, without inference. Failed refreshes retain the catalog and selection and show the data source.
+- Simplified the main Web interface to conversation and system settings. Configuration, literature, history, and step details open in dialogs; unsent drafts survive closing them.
+- Added a conversation list and New conversation in the sidebar; removed the preview-stage control at the top. The stage appears above the input, explaining that sending discusses/revises while Continue advances.
+- Step details show queries and sources, paper locations, skill rationale, comparisons with existing responses, revisions, and call records. Research logs were still examples; a read-only endpoint loaded built-in skill text from the installed version.
+- Added a locally viewable Web interaction preview with a simple conversation home and expandable literature, research propositions, notes, and history.
+- Used model dropdowns designed for automatic backend discovery and refresh, with reasoning-depth dropdowns and advanced options under additional settings.
+- Retained preview states for creation, discussion, continuation, running, stopping/resuming, and retrying errors. Updated both READMEs and local-preview startup instructions.
+- At this release, Web research content still used sample data and was not connected to account checks, the research engine, or project storage. Codex model discovery was live; other providers were not connected. Real research still used the CLI, with its core workflow unchanged.
 
-## v0.7.0 后续改进 · 2026-11-01
+## v0.7.0 follow-up improvements · 2026-11-01
 
-- 修复定向补读被旧筛选问题覆盖；按论文传递当前问题，保留查询短语，优先定位指定算法、章节、图表及附录编号，兼容长算法标题与换行。
-- 将当前问题的依据及最强已有回应传给论文筛选，明确区分解释相关现象的工作与可能解决困难的工作；延续原有补读名额，不增加固定审查步骤。
-- 后期模型输入以可还原的引用共享完全重复材料，不删改原文证据和有效用户要求，不改存储、报告或输出结构。同步离线演示及恢复、阅读、研究主线测试。
-- 讨论按需追问一个能改变研究判断的关键点；保存上一轮问题以理解短回复，不将助手问题当成用户决定。直接总结、检索和分析无需先回答问题，未答追问不阻挡 `/continue`。
-- 因相关工作缩小或改变问题时，在已有修订记录中解释覆盖范围与保留下来的研究价值，避免反复添加特殊条件制造新颖性。
-- 同步内置 skill、中英文使用说明，增加追问恢复、失败重试、阶段隔离及真实多轮对话复测入口。
+- Fixed old selection questions overriding targeted reading. Current questions are passed per paper, preserving query phrases and prioritizing requested algorithms, sections, figures/tables, and appendix identifiers, including long algorithm titles and wrapped lines.
+- Passed the current problem's rationale and strongest existing response into paper selection, distinguishing work explaining a phenomenon from work that may solve the difficulty. Reused existing follow-up capacity without a mandatory new review step.
+- Later model inputs share exactly duplicated materials through recoverable references, without deleting or rewriting evidence or active user requirements, or changing storage, reports, or output schemas. Updated offline demos and recovery, reading, and research-frame tests.
+- Discussion can ask one consequential follow-up as needed. The previous question is retained to interpret short replies, but assistant questions are not user decisions. Summaries, retrieval, and analysis do not require an answer first; unanswered questions do not block `/continue`.
+- When related work narrows or changes a problem, existing revision records explain covered scope and remaining research value, avoiding novelty manufactured through repeated special conditions.
+- Updated built-in skills and bilingual instructions; added follow-up recovery, failure retry, stage isolation, and an entry point for real multi-turn discussion evaluation.
 
 ## v0.7.0 · 2026-10-31
 
-这一版修复已有连贯想法在选题过程中被拆散、核心关切被悄悄丢掉的问题，最终仍只交付研究问题、动机与研究主张。
+This release addressed coherent initial ideas being fragmented during problem selection and core concerns being silently dropped. Delivery remained research problems, motivation, and a research proposition.
 
-- 加强定向阅读：同次调用保存论文问题、核心直觉、输入与关键信息来源、处理过程、输出以及对当前研究的影响，进入后续构思与讨论；CLI 优先展示研究启发。论文主张、前作转述、推断与猜想分开，失效引文关联的解释同步剔除，不新增固定调用或实验流程。
-- 新增解释单独限制上下文篇幅、按论文兼顾覆盖，并避免通过补读结果重复注入；不截断判断或原文。修复同轮改目标并补读时的解释归属，失败重试保持目标提交原子性并复用阅读。
-- 检索前区分开放探索、深化已有想法与审视已有问题；分别记录目标、待检验假设、原话出处及关切关系。新研究通常增加一次模型调用。
-- 检索规划和定向补读同时考虑不同需要及其关系，沿用现有查询、阅读和总预算；不强制新建一轮查重。
-- 每个问题深入时保留相关问题种子，比较后支持选择、综合或依据证据重构。原有案例不覆盖，最终表述记录来源成员、各项关切的去向与范围调整理由。
-- 用户可以在讨论中修订研究主线，原话、前后版本和修订理由持久保存；论文可以修正假设，不伪造用户决定。临时表达要求不进入长期研究主线。
-- CLI 展示困难之间的关系和聚焦理由，`/memory` 展示当前主线与出处；报告 JSON 增加主线及修订历史。旧暂停继续可恢复，新逻辑不自动覆盖用户已确认的问题。
-- 更新按阶段加载的研究 skill、中英文 README、框架图、调用预估和实现文档。结构校验检查出处、链接与交接完整性，不新增科学打分或发表门槛。
+- Strengthened targeted reading. The same call saves a paper's problem, core intuition, inputs and key information sources, processing, outputs, and implications for the current research. These feed ideation and discussion; CLI prioritizes implications. Paper claims, cited prior findings, inferences, and hypotheses remain separate. Interpretations tied to invalid quotes are removed too, without fixed extra calls or an experiment workflow.
+- Gave new explanations a separate context budget, balancing paper coverage and preventing duplicate injection through follow-up results without truncating judgments or quotations. Fixed explanation ownership when changing goals and reading in one turn; retries preserve atomic goal updates and reuse reading.
+- Before search, distinguishes open exploration, developing an existing idea, and examining a given problem. Records goals, hypotheses, original-message provenance, and relationships among concerns. New research usually adds one model call.
+- Search planning and targeted reading consider different needs and their relationships within existing query, reading, and overall budgets, without a mandatory new novelty-search round.
+- Problem analysis retains related seeds. Comparison supports selection, synthesis, or evidence-based reframing. Original cases are preserved; final framing records source members, the disposition of concerns, and scope-change reasons.
+- Users can revise the research frame during discussion. Original wording, before/after versions, and reasons persist. Papers can revise hypotheses without fabricating user decisions. Temporary presentation requests do not become lasting research requirements.
+- CLI shows relationships among difficulties and reasons for focus. `/memory` shows the current frame and provenance; report JSON adds the frame and revision history. Old paused projects remain resumable, and new logic does not overwrite user-confirmed problems automatically.
+- Updated stage-loaded skills, bilingual READMEs, framework diagrams, call estimates, and implementation docs. Structural validation checks provenance, links, and complete handoffs, without scientific scoring or publication gates.
 
-升级：在仓库执行 `git pull --ff-only`，再执行 `pipx reinstall research-idea`（Windows 使用 `py -3 -m pipx reinstall research-idea`）。`research-idea --version` 应显示 `0.7.0`。用 `/open 项目目录` 继续原讨论；新研究直接输入主题即可。
+Upgrade from the repository with `git pull --ff-only`, then `pipx reinstall research-idea` (Windows: `py -3 -m pipx reinstall research-idea`). For this release, `research-idea --version` should show `0.7.0`. Use `/open PROJECT_DIR` to resume a discussion, or enter a topic for new research.
 
 ## v0.6.0 · 2026-10-30
 
-这一版重点改善同一研究问题的多轮讨论、记忆召回和 CLI 使用体验；交付仍聚焦背景、现有方法、问题、动机与研究主张。
+This release focused on multi-turn discussion of one research question, memory retrieval, and CLI usability. Delivery remained background, existing approaches, problem, motivation, and a research proposition.
 
-- 兼容日常开启 MCP 的 Codex 配置：仅对本次研究推理自动覆盖服务设置并验证，不改全局配置或认证，无需手动切换 profile。
-- 增加仅本轮生效的记忆期限，答复成功后自动结束；局部字数和格式要求不默认记成长期偏好。根据原话兼容旧误分类记录，明确的长期要求继续保留。
-- 多轮讨论后显示 `[update] 本轮修改`，对比真实保存的版本与要点；仅口头答复不算修改，失败不发布半次更新，`/memory` 可查看完整改动。
-- 历史查找结合当前问题和最近回复，保留明确关键词的优先级与原有消息数量上限；模糊追问也可找回相关纠正，不额外调用模型。
-- 默认 README 改为英文，保留完整中文版，两个版本顶部可互相切换。
-- `/help` 按用途列出全部窗口命令；`/help 命令`、`/命令 --help` 和 `-h` 查看用途、参数与示例，`/help all` 展开完整说明。
-- 补全菜单显示命令用途；日期、预算、项目恢复等命令明确说明参数含义、单位和设置影响。
-- 系统终端的全部子命令及 skill 子命令补齐介绍、参数说明和示例，中英文 README 同步列出完整命令。
-- 增加同一问题多轮讨论的操作说明：直接追问与纠正、查看当前版本、按需补读、用 `/continue` 推进，以及交付后继续修订和重开项目。
+- Supports Codex configurations with MCP normally enabled. Overrides and verifies services only for the research inference call without changing global configuration or authentication; no manual profile switch is needed.
+- Added turn-only memory scope, expiring after a successful reply. Local length and formatting requests do not become long-term preferences by default. Original wording helps handle older misclassified records, while explicit lasting requirements remain active.
+- Multi-turn discussion displays `[update] Changes this turn`, comparing actually saved versions and notes. Verbal promises do not count as edits, failed turns do not publish partial updates, and `/memory` shows complete changes.
+- History retrieval combines the current question and recent reply, retaining explicit keyword priority and message-count limits. Vague follow-ups can recover relevant corrections without another model call.
+- Made the default README English, with a complete Chinese version and reciprocal switches at the top.
+- `/help` groups all interactive commands by purpose. `/help COMMAND`, `/COMMAND --help`, and `-h` explain purpose, arguments, and examples; `/help all` expands all instructions.
+- Completion menus explain commands. Date, budget, and recovery commands describe argument meanings, units, and effects.
+- Added descriptions, argument help, and examples to every terminal subcommand and skill subcommand; both READMEs list all commands.
+- Documented repeated discussion of one problem: follow-ups and corrections, current-version inspection, targeted reading, `/continue`, revisions after delivery, and reopening projects.
 
-升级：在仓库执行 `git pull --ff-only`，再执行 `pipx reinstall research-idea`（Windows 使用 `py -3 -m pipx reinstall research-idea`）。`research-idea --version` 应显示 `0.6.0`；用 `/open 项目目录` 继续原来的讨论。完整安装与升级说明见 [中文 README](README.zh-CN.md) 或 [English README](README.md)。
+Upgrade from the repository with `git pull --ff-only`, then `pipx reinstall research-idea` (Windows: `py -3 -m pipx reinstall research-idea`). For this release, `research-idea --version` should show `0.6.0`; `/open PROJECT_DIR` resumes existing discussion. See the [README](README.md) for full installation and upgrade instructions.
 
 ## v0.5.0 · 2026-10-26
 
-- 将跨论文综合、同一困难的不同原因比较接入持久状态与后续问题选择；背景认识不再只依赖逐篇摘要。
-- 定向补读后重新开放一次构思，支持保留、重述、合并和替换方向，保存前后版本及修改理由；不追加搜索循环。
-- 从相关工作和参考文献追踪代表原作，检查已有召回，缺失时按题名补查；与普通补读共用原有名额并支持恢复。
-- 讨论保存带原话出处的具体异议、研究判断及重新考虑的条件，支持替代旧记录，`/memory` 可查看。
-- 内置动机 skill 拆分为按任务加载的参考内容，参考修改进入缓存指纹；背景初读不加载方法对比与主张审计指导。
-- 提前方向讨论：全文先按引言、相关工作、结论做背景初读，讨论后按具体问题补读方法与结果，避免第一次互动前逐篇完成全部分析卡与审计。
-- 长 arXiv 自然语言查询结果稀少时增加一次有范围的关键词扩展；补读兼顾最接近的已有回应和新困难，指定论文不再被初始阅读名额挡住。
-- 构思上下文将大目录换成覆盖摘要，保留完整原文引文、条件和引用位置；修正 PDF 小型大写标题与正文噪声识别。
-- 强化困难如何产生、已有回应为何仍留下困难的推导；精简重复 CLI 输出，问题补读不再误标为方案设计。
-- 聚焦文献中的重要问题与研究动机：交付背景、现有方法、问题、动机及一句研究主张，移除默认方案生成、技术路线与实验设计阶段。
-- 方向梳理后、问题深入比较后分别暂停讨论；`/continue` 按当前版本推进，普通消息可以修改方向、论证与选择。
-- 有明确资料缺口的讨论可定向补搜和阅读，再更新判断；每次最多两篇补读，成功步骤可恢复。
-- 保存完整对话；现行要点带用户原话出处，旧要求可替换或撤回，临时要求绑定当前讨论。早期消息可按内容召回。
-- `/history [关键词]` 查原始对话，`/memory` 看有效要点，`/problems detail` 展开完整问题推导。
-- 重启恢复当前讨论；完成后的追问继续修改问题与动机。模型或思考强度调整保留用户选择。
+- Connected cross-paper synthesis and competing explanations of the same difficulty to persistent state and subsequent problem selection. Background understanding no longer relies solely on individual abstracts.
+- Reopened ideation once after targeted reading, supporting retained, rephrased, merged, or replaced directions with before/after versions and reasons, without another search loop.
+- Traced representative originals through related work and references, checked existing retrieval, and searched missing titles within the shared follow-up budget, with recovery support.
+- Discussion saves specific objections, research judgments, and reconsideration conditions with original-message provenance. Records can supersede older ones and are visible through `/memory`.
+- Split the motivation skill into task-loaded references whose changes affect cache fingerprints. Initial background reading does not load method-comparison or claim-audit guidance.
+- Moved direction discussion earlier: initial full-text reading covers introductions, related work, and conclusions; methods and results are read after discussion for specific questions, rather than completing every card and audit before the first interaction.
+- Added one bounded keyword expansion when long natural-language arXiv queries return few results. Follow-up considers both the closest existing response and new difficulties; named papers are no longer blocked by initial reading quotas.
+- Replaced large contents lists in ideation context with coverage summaries, preserving full quotations, conditions, and citation locations. Improved PDF small-cap heading and body-noise handling.
+- Strengthened explanations of how difficulties arise and why existing responses leave them unresolved. Reduced repeated CLI output and stopped labeling problem-focused reading as design work.
+- Focused delivery on important literature-grounded problems and motivation: background, existing approaches, problem, motivation, and a one-sentence research proposition. Removed default proposal generation, technical routes, and experiment design.
+- Pauses after direction mapping and after deeper problem comparison. `/continue` advances using the current version; ordinary messages can revise directions, arguments, and selection.
+- Discussions with specific information gaps can search/read and then update judgments. Each turn permits up to two follow-up papers; successful steps are resumable.
+- Retained complete conversations. Active notes have original-user provenance; old requirements can be superseded or withdrawn, and temporary requirements belong to the current discussion. Earlier messages are retrievable by content.
+- `/history [KEYWORDS]` searches original dialogue, `/memory` shows active notes, and `/problems detail` expands full problem reasoning.
+- Restarting restores the discussion. Follow-ups after completion still revise problems and motivation. Model/effort changes preserve user selections.
 
-升级：在仓库执行 `git pull --ff-only`，然后 `pipx reinstall research-idea`；`research-idea --version` 应显示 `0.5.0`。
+Upgrade from the repository with `git pull --ff-only`, then `pipx reinstall research-idea`. For this release, `research-idea --version` should show `0.5.0`.
 
 ## v0.4.0 · 2026-10-25
 
-### 先讨论问题，再形成 Idea
+### Discuss the problem before forming the idea
 
-- 第一阶段围绕背景目标梳理主要方法，分别深入几个重要问题，再比较其价值与优先选择的理由。
-- 分析现有方法正常发挥作用时已经解决了什么，再解释仍可能留下或产生的困难，并由此推导动机与核心想法。
-- 交互 CLI 在问题形成后暂停，支持追问、纠正和更换方向；输入 `/continue` 后，使用讨论后的问题继续生成 Idea 与技术参考。
-- 第二阶段从 Idea 推导两个技术角度，可以跨领域寻找可借鉴的方法，说明针对当前问题如何改造。默认不展开实验计划。
+- The first stage maps major approaches around the background goal, analyzes several important problems separately, and compares their value and priority.
+- Explains what existing approaches solve when working normally, then derives possible remaining or newly introduced difficulties, motivation, and a core idea.
+- Interactive CLI pauses after forming problems for questions, corrections, or direction changes. `/continue` uses the revised problem to generate an idea and technical references.
+- The second stage derives two design angles, including methods from other fields, and explains adaptation to the current problem. It does not expand experiment plans by default.
 
-### 对话与进度可以延续
+### Continue conversations and progress
 
-- 保存完整对话，维护带原消息出处的有效要求；用户修订要求时保留旧记录，后续采用更新后的内容。
-- 区分持续研究要求与临时讨论要求；`/continue` 结束临时暂停，保留研究范围等持续要求。
-- 保存问题版本和讨论状态，重启后可以继续；`/problems` 查看当前问题，`/memory` 查看有效要求。
+- Saves complete dialogue and active requirements with original-message provenance. Revised requirements preserve old records while later work uses the updated version.
+- Distinguishes lasting research requirements from temporary discussion requests. `/continue` ends the temporary pause and retains ongoing scope requirements.
+- Saves problem versions and discussion state for restart. `/problems` shows the current problem; `/memory` shows active requirements.
 
-### CLI、检索与阅读
+### CLI, retrieval, and reading
 
-- 直接输入 `research-idea` 启动，支持在对话中调整模型、思考强度、时间范围、预算和输出目录。
-- 显示研究阶段、运行状态、论文链接与原文位置；结果保存为 `idea-时间戳` 文件夹。
-- 区分近期研究与技术来源的检索时间，会议采用最新可用届次；全文获取支持替代来源与按标题查找 arXiv。
-- 改善引用定位、文本编码和 Windows 临时文件清理，提供模型调用错误提示与重试。
+- Launch directly with `research-idea`; adjust model, reasoning effort, date range, budget, and output directory inside the conversation.
+- Displays stages, running status, paper links, and source locations. Results use `idea-TIMESTAMP` folders.
+- Separates recent-work and technical-source date windows; venues use the latest available edition. Full-text retrieval supports alternative sources and title-based arXiv search.
+- Improved quotation location, text decoding, and Windows temporary-directory cleanup; added model-call error messages and retries.
 
-### 升级
+### Upgrade
 
-按照 README 通过 pipx 安装的用户，可在仓库目录执行：
+If installed through pipx as described in the README, run from the repository:
 
 ```bash
 git pull --ff-only
@@ -122,4 +128,4 @@ pipx reinstall research-idea
 research-idea --version
 ```
 
-版本命令应输出 `0.4.0`。未将 pipx 加入 PATH 的 Windows 用户，可将 `pipx` 替换为 `py -3 -m pipx`。
+For this release, the version command should print `0.4.0`. On Windows without pipx on PATH, replace `pipx` with `py -3 -m pipx`.

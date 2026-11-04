@@ -1,74 +1,76 @@
-# 本地研究工作台
+# Local research workbench
 
-在终端启动一次，之后的研究操作都可以在浏览器中点击完成：
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](web-workbench.zh-CN.md)
+
+Start the service once in a terminal, then use the browser for research:
 
 ```sh
 research-idea web
 ```
 
-浏览器打开 `http://127.0.0.1:8769/`。保持启动服务的终端打开。若端口被占用，可用 `research-idea web --port 8770`；`--no-browser` 只启动服务，不自动打开网页。一个项目根目录同时只运行一个 Web 服务。
+The browser opens `http://127.0.0.1:8769/`. Keep the terminal running the service open. If the port is occupied, use `research-idea web --port 8770`. Add `--no-browser` to start without opening a browser. Run only one Web service per project root at a time.
 
-## 第一次使用：按这个顺序操作
+## Getting started
 
-1. 点击左侧 **新建研究**，在输入框写下研究方向、初步想法或一个具体问题。
-2. 在输入框下方选择 **模型、思考强度**，然后发送消息，先讨论研究目标。
-3. 目标清楚后，点击输入框上方 **开始文献调研**。侧栏显示目前在检索、阅读还是讨论。
-4. 调研后会停在 **方向讨论**。可以反复发意见、追问或纠正；满意后点击 **继续深入分析**。
-5. 深入后停在 **问题讨论**。继续讨论，满意后点击 **整理研究主张**。
-6. 上方 **研究主张** 查看结果，点击 **导出 Markdown** 下载。交付后仍可发意见修改，再整理新版。
+1. Click **New research** in the sidebar. Enter a research direction, an initial idea, or a specific question.
+2. Select the **model and reasoning effort** below the input, then send your message to discuss the research goal.
+3. Once the goal is clear, click **Start literature research** above the input. The sidebar shows whether the system is searching, reading, or discussing.
+4. Research pauses for **direction discussion**. Send feedback, questions, or corrections over as many turns as needed. When ready, click **Continue deeper analysis**.
+5. After deeper analysis, research pauses for **problem discussion**. Discuss further, then click **Frame the research proposition** when ready.
+6. Open **Research proposition** at the top to read the result, and click **Export Markdown** to download it. You can continue discussing and produce a revised version after delivery.
 
-**发消息用于讨论和修改当前这一步；点击继续才推进流程。** 如果输入框中还有未发送的意见，先发送并等回复，或清空输入，再继续。研究说明附件也会先进入输入框，不会代你直接发送。
+**Messages discuss and revise the current step; Continue advances the workflow.** If you have an unsent draft, send it and wait for the reply, or clear it before continuing. Research-brief attachments also enter the input first; they are not sent automatically.
 
-右上角 **? 使用指南** 随时可打开，包含这些操作及每个功能的位置。无需记住 CLI 命令。
+Open the top-right **? User guide** at any time for these instructions and the location of each feature. No CLI commands are required. Control names below are English translations of the current Chinese interface labels.
 
-## 功能在哪里
+## Where to find each feature
 
-| 想做什么 | 网页操作 | 说明 |
+| What you want to do | Web control | How it works |
 | --- | --- | --- |
-| 换模型、思考强度 | 输入框下方两个下拉框 | 选择后自动保存，仅影响后续调用。 |
-| 更新模型列表、看登录方式 | 右上角设置 → 刷新模型 / 查看登录方式 | 读取本机 Codex；不显示密钥，也不查询余额。 |
-| 调整调用和时间上限 | 右上角设置，或侧栏“调整” | 时间直接填分钟，提高上限不会清零已有用量。 |
-| 改论文日期和会议 | 设置 → 文献范围与阅读 | 动态月数或固定日期；会议可独立选最新公开一届。 |
-| 调整选文、问题数量 | 设置中的正文选读上限；文献范围与阅读 | 泛读首批最多 40 篇，正文按需要选读；共用模型总预算。 |
-| 填写设备、数据和时间条件 | 设置 → 资源与研究约束 | 未知条件可以留空。 |
-| 添加本地论文 | 输入框旁“＋” → 论文资料 | 支持 PDF、TXT、Markdown 和论文 JSON；先导入，后续研究使用。 |
-| 用长文本表达研究想法 | “＋” → 研究说明 | UTF-8 TXT/Markdown；放入输入框，确认后发送。 |
-| 看检索、skill 和分析过程 | 讨论中的过程记录 → 展开 / 弹窗查看完整内容 | 查看已有记录不重复调用模型。 |
-| 查论文和出处 | 上方文献 → 摘要 / 泛读笔记 / 原文依据 | 展示来源链接、页码及原文；正文已获取时可看节选。 |
-| 重看当前讨论或最近分析 | 右上角记录 → 当前讨论 / 最近一步分析 | 只读取保存的内容。 |
-| 找早期对话 | 记录 → 输入关键词 → 查看对话记录 | 留空查看最近对话；关键词搜索整个项目。 |
-| 查看持续要求与修改理由 | 上方研究要点 | 要纠正它们，回讨论中直接发消息。 |
-| 下载结果 | 研究主张 → 导出 Markdown | 保存到浏览器的下载目录；自动导出位置可在设置中查看。 |
-| 新建、切换研究 | 左侧新建 / 点击研究名称 | 新建沿用当前设置，主题、论文、对话和用量从零开始。 |
-| 置顶、删除、恢复 | 研究名称旁按钮 / 左侧回收站 | 删除可恢复，运行中的研究需先停止。 |
-| 暂停、恢复 | 运行提示旁停止运行 / 完成后恢复研究 | 已完成步骤保留；讨论暂停时使用继续按钮。 |
+| Change model or reasoning effort | Two dropdowns below the input | Saves automatically and affects subsequent calls. |
+| Refresh models or check sign-in method | Top-right Settings → Refresh models / Sign-in method | Reads the local Codex setup; does not show keys or query your balance. |
+| Change call and time limits | Settings, or Adjust in the sidebar | Enter time in minutes. Raising limits preserves usage already recorded. |
+| Change paper dates and venues | Settings → Literature scope and reading | Use rolling months or fixed dates; venues can independently use their latest public edition. |
+| Adjust paper and problem counts | Full-text reading limit in Settings; Literature scope and reading | Broad reading covers up to 40 papers initially; full text is read as needed. All stages share the model-call budget. |
+| Specify hardware, data, or time constraints | Settings → Resources and research constraints | Leave unknown conditions blank. |
+| Add local papers | **＋** beside the input → Paper materials | Supports PDF, TXT, Markdown, and paper JSON. Imported materials become available to subsequent research. |
+| Provide a long research brief | **＋** → Research brief | UTF-8 TXT/Markdown enters the input for review before sending. |
+| Inspect search, skills, and analysis | Process records in the conversation → Expand / Open full details | Viewing saved records does not call the model again. |
+| Check papers and sources | Literature at the top → Abstract / Broad-reading notes / Source evidence | Shows source links, pages, and quotations; excerpts are available when full text has been retrieved. |
+| Revisit the current discussion or latest analysis | Top-right Records → Current discussion / Latest analysis | Reads saved content only. |
+| Find earlier conversations | Records → Enter keywords → View conversation history | Leave keywords blank for recent messages, or search the entire project. |
+| Inspect ongoing requirements and revision reasons | Research notes at the top | To correct them, send a message in the discussion. |
+| Download results | Research proposition → Export Markdown | Saves to the browser's download directory. Settings also shows the automatic export location. |
+| Create or switch research | New research / Research title in the sidebar | New research inherits current settings but starts with a fresh topic, papers, conversation, and usage. |
+| Pin, delete, or restore research | Buttons beside the research title / Trash in the sidebar | Deleted research can be restored. Stop running research before deleting it. |
+| Stop or resume | Stop beside the running indicator / Resume research after stopping | Completed steps are retained. At a discussion pause, use Continue. |
 
-一次最多选择 10 个附件，合计 8 MB。PDF 需要本机安装 `pdftotext`；扫描件需要先转成可提取文字的文件。导入资料不自动调用模型；同名论文不会仅因为标题相似就合并。重复导入由既有来源标识去重。
+You can select up to 10 attachments at once, totaling 8 MB. PDF import requires local `pdftotext`; scanned documents need extractable text first. Importing does not call the model. Papers are not merged merely because their titles are similar; repeated imports are deduplicated by existing source identifiers.
 
-默认预算为 **200 次模型调用、300 分钟累计运行时间**。已有研究保留原设置；等待你阅读或输入不计入运行时间。新建研究沿用当前预算、模型和检索范围。
+The default budget is **200 model calls and 300 minutes of cumulative running time**. Existing research keeps its saved settings. Time spent waiting for you to read or type is not counted. New research inherits the current budget, model, and literature scope.
 
-## 停止、恢复与保存位置
+## Stopping, resuming, and storage
 
-关闭浏览器不会停止后台研究。再次打开网页可恢复查看；需要暂停时点击 **停止运行**。在启动服务的终端按 Ctrl+C 才会关闭本地服务并停止其任务。已完成步骤保留，中断的步骤需要重新执行。
+Closing the browser does not stop background research. Reopen it to view progress; click **Stop** to pause a run. Pressing Ctrl+C in the service terminal shuts down the local service and stops its tasks. Completed steps are retained; an interrupted step must run again.
 
-网页与 CLI 共用项目中的对话、论文和检查点。另一个 CLI 正在运行同一项目时，网页会显示正在命令行中运行；停止它需要回到对应终端。
+Web and CLI share the project's conversations, papers, and checkpoints. If a CLI is already running the same project, the Web interface reports that it is running in the terminal. Stop it from that terminal.
 
-要指定项目和报告根目录，在启动时使用：
+Choose project and report roots at startup:
 
 ```sh
 research-idea web --projects ./research-projects --output ./results
 ```
 
-项目目录保存对话与进度；结果保存在固定命名的 `idea-时间戳` 文件夹。`--output` 是新项目的默认结果位置，已有项目沿用保存的设置。研究主张页的“导出 Markdown”可另外下载一份。
+The project directory stores conversations and progress. Results use a fixed folder name, `idea-TIMESTAMP`. `--output` sets the default result location for new projects; existing projects retain their settings. **Export Markdown** on the research-proposition page downloads an additional copy.
 
-## 可选的快捷命令
+## Optional shortcuts
 
-熟悉 CLI 的用户仍可在输入框使用 `/run`、`/continue`、`/stop`、`/budget`、`/date`、`/venues`、`/model`、`/reasoning` 等。`/help` 打开网页用法，`/help date` 查看单项说明。命令由程序处理，不会作为研究意见发送给模型；无效命令直接提示用法。
+CLI users can also enter `/run`, `/continue`, `/stop`, `/budget`, `/date`, `/venues`, `/model`, `/reasoning`, and related shortcuts in the input. `/help` opens Web instructions; `/help date` explains a single feature. Commands are handled by the program, not sent to the model as research feedback. Invalid commands display usage guidance.
 
-网页不接受任意本机路径。导入使用附件选择器，切换研究使用左侧列表，修改报告根目录使用启动参数；对应命令会指向这些网页入口。网页关闭用浏览器标签页，`/exit` 不会关闭整个后台服务。
+The Web interface does not accept arbitrary local paths. Import through the attachment picker, switch research in the sidebar, and change the report root with startup arguments; corresponding commands point to these controls. Close the browser tab to leave the Web interface. `/exit` does not shut down the background service.
 
-## 实现与验证
+## Implementation and validation
 
-Web 服务复用 CLI 的命令处理、配置校验、论文导入和研究 worker。原有问题发现、文献分析与讨论记忆流程保持不变。服务只监听本机回环地址，校验同源地址和会话令牌；附件写入当前项目，原始模型和论文 HTML 不直接执行。
+The Web service reuses CLI command handling, configuration validation, paper import, and the research worker. Problem discovery, literature analysis, and discussion memory use the same workflow. The service binds only to loopback and validates request origins and session tokens. Attachments are written into the current project; raw model output and paper HTML are not executed.
 
-回归测试覆盖设置、阶段推进、停止、并发、附件、非法输入、保存与恢复。界面验收使用明确的合成资料和模拟任务，检查按钮、弹窗及刷新行为，不消耗研究模型调用。
+Regression tests cover settings, stage transitions, stopping, concurrency, attachments, invalid input, saving, and recovery. Interface checks use explicitly synthetic materials and simulated tasks to inspect buttons, dialogs, and refresh behavior without consuming research model calls.

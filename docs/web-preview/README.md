@@ -1,16 +1,16 @@
-> 本文保留旧版设计预览说明。当前本地实现已接通真实研究，请参阅 [本地研究工作台](../web-workbench.md)。
+# v0.8.0 Web design preview (archived)
 
-# v0.8.0 Web
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md)
 
-## 启动 / Start
+> This page preserves the earlier design preview. The current local implementation runs real research; see the [local Web workbench](../web-workbench.md). “Not connected” statements below describe the preview at that time.
 
-安装或升级后，在终端输入 / After installation or upgrade:
+## Start
+
+After installation or upgrade:
 
 ```bash
 research-idea web
 ```
-
-浏览器自动打开 <http://127.0.0.1:8769/>；Ctrl+C 停止服务。macOS、Linux、Windows 使用相同命令，不需要进入仓库目录。
 
 The browser opens <http://127.0.0.1:8769/> automatically. Press Ctrl+C to stop the server. The same command works on macOS, Linux, and Windows from any directory.
 
@@ -20,29 +20,21 @@ research-idea web --codex-profile research
 research-idea web --help
 ```
 
-`--codex-bin` can select a local Codex executable. The service binds only to loopback. The old `python -m http.server` command cannot discover models; use the command above.
+`--codex-bin` selects a local Codex executable. The service binds only to loopback. The old `python -m http.server` command can display a static page but cannot discover local models; use the entry point above.
 
-`--codex-bin` 可指定 Codex 可执行文件。服务只监听本机。旧的 `python -m http.server` 只能展示静态页面，不能读取本机模型，请使用上述新入口。
+## Interface
 
-## 界面 / Interface
+- The left sidebar selects existing conversations or creates new ones. Drafts stay in the current browser.
+- The center shows the conversation, composer, and stage progress. Completed steps open a detail dialog.
+- System settings open from the top right. Model and effort use dropdowns; literature scope, budgets, output location, and skills expand when needed.
+- During discussion, sending a message discusses, corrects, or requests more reading. Continue advances from direction discussion to deeper problem analysis, or from problem discussion to the final research argument. There is no confirmation after every paper.
+- Unsent drafts survive closing dialogs and switching conversations. The temporary preview-stage control has been removed.
+- Process details cover search, reading, skills, problem comparisons, turn changes, calls, and runtime. Each explains its input, action, and effect on the discussion. Skill text comes from the installed version rather than a copy embedded in the page.
 
-- 左侧：选择已有对话、增加新对话；草稿保存在当前浏览器。
-- 中间：对话内容、输入框及当前阶段进度；已完成步骤用“查看详情”打开弹窗。
-- 右上角：系统设置弹窗。模型和思考深度下拉选择；文献范围、预算、保存目录和 skill 按需展开。
-- 讨论阶段：发送用于讨论、纠正或要求补查文献；“继续”推进到下一阶段。方向讨论后深入问题，问题讨论后整理研究主张；不在每篇论文后停下来确认。
-- 关闭设置或详情弹窗、切换对话后，未发送的草稿保留。顶部测试用的“预览阶段”已移除。
-- 过程详情按检索、阅读、Skill、问题比较、本轮修改、调用与运行展示；每项说明输入、做了什么及对当前讨论的作用。Skill 原文读取当前安装版本，不是复制在页面里的示例文本。
+## Connected and remaining at preview time
 
-The sidebar switches conversations and creates new ones. The central conversation shows progress and step summaries; details and settings open in dialogs. Sending a message discusses or revises the current stage, including requests for more literature. Continue advances from direction discussion to deeper comparison, or from problem discussion to the final research argument. Drafts survive dialog closing and conversation switching.
+**Codex model discovery was already live.** Initial loading reads the local model cache; Refresh reads the paginated `model/list` catalog through `codex app-server`, showing its source. IDs, names, and reasoning options come from returned metadata rather than a single hardcoded choice. Failed refreshes preserve the previous catalog and selection. Profiles are queried separately rather than receiving a default-profile cache. No inference turn is started and no credentials are returned to the browser. A catalog is not proof of inference entitlement; Codex may itself use a cached catalog. See [the official protocol](https://learn.chatgpt.com/docs/app-server#list-models-modellist).
 
-## 已连接与待接入 / Connected and remaining
+**Research interactions were still a demonstration.** Browser drafts were not CLI projects. Research execution, project persistence, account checks, and other providers' catalogs were not connected. At that time, real research used `research-idea`; a sample discussion was available through System settings → Projects and help → Introduction → Demo.
 
-**Codex 模型发现已经真实连接。** 打开页面读取本地模型缓存；“刷新模型”通过 `codex app-server` 的 `model/list` 接口读取完整目录，处理分页并显示来源。模型 ID、显示名称和思考强度来自返回数据；没有固定为一个模型。失败时保留上次列表和当前选择。配置档单独读取，避免把默认配置的缓存当成指定配置结果。
-
-**Codex model discovery is live.** Initial loading reads the local model cache; Refresh reads the paginated `model/list` catalog through the local app-server. IDs, names, and reasoning options come from returned metadata. Failed refreshes preserve the previous catalog and selection. No inference turn is started and no credentials are returned to the browser. A catalog is not proof of inference entitlement, and Codex may itself use a cached catalog. See [the official protocol](https://learn.chatgpt.com/docs/app-server#list-models-modellist).
-
-**研究流程仍是交互演示，尚未连接真实研究任务或项目存储。** 当前网页中的讨论草稿保存在本浏览器，不能替代 CLI 项目；其他后端的模型发现也尚未接入。真实研究继续使用 `research-idea`。可以在“系统设置 → 项目、资料与使用介绍 → 使用介绍 → 看看演示”中体验讨论、详情和继续操作。
-
-**Research interactions remain a demonstration.** Browser drafts are not CLI projects. Research execution, project persistence, account checks, and other providers' catalogs are not connected yet. Run `research-idea` for real research. A sample discussion is available through System settings → Projects and help → Introduction → Demo.
-
-实现入口 / Source: [`web.py`](../../src/research_idea/web.py), [`model_discovery.py`](../../src/research_idea/model_discovery.py), [`web_assets/index.html`](../../src/research_idea/web_assets/index.html). Existing CLI research, evidence, memory, and budget handling are unchanged.
+Source: [`web.py`](../../src/research_idea/web.py), [`model_discovery.py`](../../src/research_idea/model_discovery.py), [`web_assets/index.html`](../../src/research_idea/web_assets/index.html). The preview did not change CLI research, evidence, memory, or budget handling.

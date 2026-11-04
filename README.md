@@ -1,6 +1,6 @@
 # Research-idea · v1.0.0
 
-[![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md)
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md)
 
 ## 1. Purpose
 
@@ -10,7 +10,7 @@ Start with a research direction. You can also provide initial ideas, reference p
 
 The final output focuses on five things: **What does the field need? → What have existing approaches achieved? → Why do important difficulties remain? → Why are they worth studying? → What is the core research proposition?** The proposition states the understanding or capability the research aims to advance. The workflow ends here; it does not proceed to technical designs, implementation proposals, or experiment plans.
 
-**Language:** this README is available in English and [Simplified Chinese](README.zh-CN.md). The current CLI interface and generated research reports primarily use Chinese; an English README does not change the application's language.
+**Language:** all public user and developer guides are available in English and Simplified Chinese. Use the language switch at the top of each page. The CLI, Web interface, and generated research reports primarily use Chinese; documentation language does not change the application language.
 
 **Local Web workbench:** discussion, literature research, and checkpoints share the same project records as the CLI. A warm paper interface includes a stage sidebar, pinned projects, recoverable trash, and Codex model/effort selection. See the [Web guide](docs/web-workbench.md).
 
@@ -94,7 +94,7 @@ Search favors short concepts and synonyms. If a long natural-language arXiv quer
 
 Specific objections, reasons for changed judgments, and conditions for revisiting a question are also recorded. Revisions update the active record while retaining earlier versions; assistant judgments are not treated as user decisions. Use `/memory` to inspect these records. Built-in skills load the guidance needed for the current task—synthesis, causal comparison, reconsideration, discussion, or writing—instead of supplying every stage's instructions at once.
 
-The controller coordinates search, reading, and staged analysis. Research skills guide background synthesis, problem discovery, contribution comparison, and argument development. State is stored in SQLite, with Markdown and JSON outputs. See the [workflow](docs/workflow.md), [architecture](docs/architecture.md), and [open-source inspirations](docs/sources.md) for implementation details; these documents are currently in Chinese.
+The controller coordinates search, reading, and staged analysis. Research skills guide background synthesis, problem discovery, contribution comparison, and argument development. State is stored in SQLite, with Markdown and JSON outputs. See the [workflow](docs/workflow.md), [architecture](docs/architecture.md), and [open-source inspirations](docs/sources.md) for implementation details.
 
 ## 4. Installation and launch: CLI / Web
 
@@ -160,7 +160,7 @@ research-idea doctor
 
 `doctor` checks whether the model CLIs and `pdftotext` are available. If `research-idea` is still not found, run `pipx ensurepath` on macOS/Linux or `py -3 -m pipx ensurepath` on Windows, then reopen the terminal.
 
-This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage (Chinese)](docs/advanced-usage.md#虚拟环境安装).
+This is an editable installation from the local repository, so keep the repository directory. An existing working virtual environment or local launch command can still be used without reinstalling. For a development virtual environment, see [advanced usage](docs/advanced-usage.md#virtual-environment-installation).
 
 ### Upgrade to v1.0.0
 
@@ -516,7 +516,7 @@ research-idea resume --project ./research-projects/my-idea
 research-idea status --project ./research-projects/my-idea
 ```
 
-Use `/output` to inspect the result location at any time. Successful tasks can be cached. Changing only the output location does not trigger new model calls; changes to materials or relevant research settings invalidate the corresponding cached work. See [advanced usage (Chinese)](docs/advanced-usage.md) for import formats, skill selection, citation handling, and recovery details.
+Use `/output` to inspect the result location at any time. Successful tasks can be cached. Changing only the output location does not trigger new model calls; changes to materials or relevant research settings invalidate the corresponding cached work. See [advanced usage](docs/advanced-usage.md) for import formats, skill selection, citation handling, and recovery details.
 
 ## 6. Models and backends
 
@@ -561,6 +561,21 @@ api_max_tokens_field = "max_completion_tokens"
 
 Set `RESEARCH_API_KEY` in your terminal environment, then run `research-idea chat --project PROJECT_DIR` or `research-idea run --project PROJECT_DIR`. The key is read from the environment; the configuration file stores only its variable name.
 
-For the native Anthropic API, change `api_provider` to `anthropic`, `base_url` to `https://api.anthropic.com/v1`, and `api_key_env` to `ANTHROPIC_API_KEY`, then choose the corresponding model ID. See [backend configuration (Chinese)](docs/advanced-usage.md#后端配置) for protocol details, CLI compatibility, and local services.
+For the native Anthropic API, change `api_provider` to `anthropic`, `base_url` to `https://api.anthropic.com/v1`, and `api_key_env` to `ANTHROPIC_API_KEY`, then choose the corresponding model ID. See [backend configuration](docs/advanced-usage.md#backend-configuration) for protocol details, CLI compatibility, and local services.
 
 For development, run `PYTHONPATH=src python -m unittest discover -s tests -v`. The automated test matrix covers Python 3.11, 3.12, and 3.13.
+
+## 7. Documentation
+
+Every guide has an English default and a Simplified Chinese version. The language switch at the top of each page opens its counterpart.
+
+| Guide | Contents |
+| --- | --- |
+| [Web workbench](docs/web-workbench.md) | Browser controls, attachments, discussion, settings, and recovery |
+| [Advanced usage](docs/advanced-usage.md) | Installation, paper imports, skills, backend protocols, and budgets |
+| [Research workflow](docs/workflow.md) | Broad reading, problem discovery, two discussions, and final framing |
+| [Architecture](docs/architecture.md) | Modules, persistent state, conversation memory, and context handling |
+| [Discussion evaluation](docs/discussion-evaluation.md) | Optional multi-turn evaluation and what it checks |
+| [Design influences and sources](docs/sources.md) | Open-source ideas and interface references |
+| [Changelog](CHANGELOG.md) | Release history and upgrade notes |
+| [Archived Web preview](docs/web-preview/README.md) | Historical interface design; use the Web guide for current behavior |

@@ -1,28 +1,30 @@
-# 多轮讨论行为复测
+# Evaluating multi-turn discussion behavior
 
-程序回归测试和真实模型行为分开检查。`tests/test_discussion_focus.py` 验证追问保存、重启、失败重试、补读后的最终提交、旧暂停兼容，以及未回答不阻挡 `/continue`；这些测试不证明模型理解正确。
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](discussion-evaluation.zh-CN.md)
 
-## 运行短对话
+Check software regressions separately from live model behavior. `tests/test_discussion_focus.py` verifies follow-up persistence, restart, failed-attempt recovery, final commit after reading, compatibility with older pauses, and that unanswered questions do not block `/continue`. These tests do not establish that the model understands correctly.
 
-从已安装项目的仓库根目录运行，显式启用本地 Codex 模型调用：
+## Run a short conversation
+
+From the repository root of an installed checkout, explicitly enable local Codex model calls:
 
 ```bash
 python tools/evaluate_discussion.py --live --project ./research-projects/dialogue-eval-new
 ```
 
-可用 `--model` 和 `--reasoning-effort` 更换模型与思考强度。输出目录必须为空，避免独立复测混入旧会话。正常为五轮讨论加一次最终整理，最多八次调用（含输出修复），总运行预算二十分钟，不进行文献检索。使用本地 CLI 认证，可能消耗账户额度；不修改账号设置。脚本不属于默认单元测试。
+Use `--model` and `--reasoning-effort` to change the model and effort. The output directory must be empty so an independent evaluation does not inherit an older conversation. Normally this runs five discussion turns and one final framing step, with at most eight calls including output repair and a twenty-minute runtime budget. It performs no literature search. It uses local CLI authentication and may consume account quota; account settings are not changed. This script is outside the default unit tests.
 
-场景从一个人工编写的“个人助理偏好随情境变化”问题稿开始，初始猜想允许被用户推翻。它不是已完成的文献研究，也没有预设新颖性结论。每轮重开项目，完整输出与当前问题、要点、理由记录保存到 `dialogue.json`；最终执行实际 `/continue` 所用流程。失败时也保存已完成的输出，不把失败当作通过。
+The scenario starts from a manually written problem draft about personal-assistant preferences that vary with context. The initial conjecture can be overturned by the user. It is not a completed literature investigation and assumes no novelty verdict. The project reopens each turn. Full replies, the current problem, notes, and reasoning records go into `dialogue.json`; the final step uses the actual `/continue` workflow. Completed outputs are saved even on failure, which is not reported as a pass.
 
-## 看行为，不匹配固定措辞
+## Judge behavior rather than fixed wording
 
-| 过程 | 需要从实际回答及保存版本中判断什么 |
+| Step | What to assess in actual replies and saved versions |
 | --- | --- |
-| 用户请系统帮忙提问 | 是否只追问一个有判断价值的点；不同答案能否改变问题理解，而非诱导同意 |
-| 用户不知道 | 是否解释当前分歧、降低理解负担，而不是换成术语或继续追问一组问题 |
-| 用户纠正“过时”为“不同条件下都有效” | 问题、原因和动机是否实际改变；是否在下一轮及最终整理中保留，而不只口头说理解 |
-| 用户建议任意限制来避开相关工作 | 是否区分论文相关性与覆盖；是否指出限制缺少独立价值，同时保留重要原目标；不能未经检索断言新颖 |
-| 用户要求直接整理 | 是否停止追问、回到背景与动机，不生成技术或实验计划；先前问句是否未被当成用户决定 |
-| `/continue` | 最终内容是否接续纠正后的问题，未回答的追问是否不构成额外门槛 |
+| The user asks for help asking questions | Does the system ask one consequential question whose different answers could change the interpretation, without steering the user toward agreement? |
+| The user does not know | Does it explain the disagreement and reduce the burden of understanding, rather than substitute jargon or ask another series of questions? |
+| The user corrects “outdated” to “valid under different conditions” | Do the problem, cause, and motivation actually change, and persist in the next turn and final framing, beyond verbal acknowledgment? |
+| The user suggests arbitrary restrictions to avoid prior work | Does it distinguish relevance from substantive coverage, explain why the restriction lacks independent value, and preserve the important original goal? It must not declare novelty without searching. |
+| The user requests a direct write-up | Does it stop asking and return to background and motivation without technical or experiment plans? Are earlier assistant questions kept separate from user decisions? |
+| `/continue` | Does the final text follow the corrected problem, without treating an unanswered follow-up as an extra gate? |
 
-另换主题复测时，分别替换问题稿与用户纠正；保留“后者”等真正依赖上一问的短回复场景。不要用关键词命中代替阅读实际含义，不用模型自评分代替行为判断。记录模型、日期、调用次数、实际通过及未满足项，少数案例的结果不代表所有主题的研究质量。
+For other topics, replace both the problem draft and user corrections. Retain short replies such as “the latter” that genuinely depend on the previous question. Read the actual meaning instead of counting keyword matches; do not replace behavioral judgment with model self-scores. Record the model, date, call count, observed successes, and unmet criteria. A few cases do not establish research quality across all topics.

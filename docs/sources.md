@@ -1,33 +1,35 @@
-# 工作流借鉴与接口资料
+# Workflow influences and interface references
 
-## K-Dense scientific-agent-skills：综合、构思与讨论
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](sources.zh-CN.md)
 
-参考其工作方法，在现有控制器中实现状态传递与恢复，没有引入该框架依赖：
+## K-Dense scientific-agent-skills: synthesis, ideation, and discussion
 
-- [scientific-brainstorming](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/SKILL.md) 和 [facilitation_workflows](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/references/facilitation_workflows.md)：借鉴生成与选择分开、新材料后重新构思、保留合并和修订理由。对应独立问题深入、一次 `reconsider_problems`、前后版本记录。
-- [hypothesis-generation](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/SKILL.md)：借鉴区分现象与解释、比较不同原因。对应 `explanation_comparison`，与已有回应和研究意义一起进入问题选择。
-- [literature_search_strategies](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/references/literature_search_strategies.md)：借鉴沿引用追溯代表原作。对应题名出处、召回检查、必要时按题名补查，共用现有补读预算。
-- [literature-review core_workflow](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/literature-review/references/core_workflow.md)：借鉴围绕主题综合研究。对应跨论文前提、进展、条件变化和可能后果，避免逐篇摘要直接变成局部改进。
+These working methods informed state handoffs and recovery in the existing controller, without adding a framework dependency:
 
-动机 skill 按综合、原因比较、重新构思、讨论和表达拆分加载。讨论理由与用户决定分别持久保存。产品仍只交付问题和动机，不采用评分淘汰、实验注册或额外审批流程。
+- [scientific-brainstorming](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/SKILL.md) and [facilitation_workflows](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/scientific-brainstorming/references/facilitation_workflows.md): separate generation from selection, reconsider after new material, and retain merge/revision reasons. Implemented as independent problem analysis, one `reconsider_problems` step, and before/after versions.
+- [hypothesis-generation](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/SKILL.md): distinguish observations from explanations and compare possible causes. Implemented as `explanation_comparison`, passed to selection together with existing responses and research significance.
+- [literature_search_strategies](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/hypothesis-generation/references/literature_search_strategies.md): trace citations to representative originals. Implemented through title provenance, retrieval checks, and title search when needed, sharing the existing follow-up budget.
+- [literature-review core_workflow](https://github.com/K-Dense-AI/scientific-agent-skills/blob/main/skills/literature-review/references/core_workflow.md): synthesize research around themes. Implemented through cross-paper premises, progress, changing conditions, and possible consequences, rather than turning each abstract directly into a local improvement.
 
-> 当前流程以文献阅读分析支持研究问题与动机提炼。本文保留历次设计来源记录；早期技术方案相关条目属于历史实现，当前主流程不再执行。讨论与记忆的设计来源见文末 v0.5.0 一节；本轮交互与记忆改进见[版本更新](../CHANGELOG.md)。
+The motivation skill loads separate guidance for synthesis, cause comparison, reconsideration, discussion, and framing. Discussion reasoning and user decisions persist separately. Delivery remains problems and motivation, without score-based elimination, experiment registration, or extra approval stages.
+
+> The current workflow uses literature reading and analysis to develop research questions and motivations. This page retains historical design references; early technical-design entries describe historical implementations no longer executed by the main workflow. Discussion and memory sources appear in the v0.5.0 section below; interaction and memory updates are in the [Changelog](../CHANGELOG.md).
 
 
-本项目的控制器、存储、适配器、八个内置 skill 和测试为本次自主实现；未复制或打包下列项目的源代码。它们是工作流设计的参考，不构成本项目已获得研究效果的证据。
+The controller, storage, adapters, eight built-in skills, and tests were independently implemented for this project. No source code from the projects below was copied or bundled. They inform workflow design and do not establish this project's research effectiveness.
 
-- [ARIS / Auto-Research-In-Sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep)：研究任务分解、迭代和状态保存。
-- [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md)：生成后再验证、候选 pilot、正负与不明确结果的解释。
-- [ARIS research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md)：问题锚定、实现规格、避免增加无用模块。
-- [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/experiment-bridge/SKILL.md)：实现与计划核对、sanity check、结果收集。
-- [Karpathy autoresearch program.md](https://github.com/karpathy/autoresearch/blob/master/program.md)：固定评测、运行预算、实验与代码版本记录。
-- [CCFA Skills](https://github.com/mikubaka88/CCFA-Skills)：问题—机制—证据关系、最近工作比较、实验到主张的证据边界。
+- [ARIS / Auto-Research-In-Sleep](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep): research decomposition, iteration, and state persistence.
+- [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md): generation followed by verification, candidate pilots, and interpretation of positive, negative, and ambiguous outcomes.
+- [ARIS research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md): problem anchoring, implementation specifications, and avoiding unnecessary modules.
+- [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/experiment-bridge/SKILL.md): checking implementation against plans, sanity checks, and result collection.
+- [Karpathy autoresearch program.md](https://github.com/karpathy/autoresearch/blob/master/program.md): fixed evaluation, runtime budgets, and experiment/code version records.
+- [CCFA Skills](https://github.com/mikubaka88/CCFA-Skills): problem–mechanism–evidence relationships, closest-work comparison, and boundaries between experiments and claims.
 
-在 Research-idea 中只采用支持构思的部分：原始问题和假设随候选保留；每轮修改、审阅和未解决前提写入版本记录；围绕关键假设说明信息来源与作用理由，技术路线服务于核心 idea；负面意见和资料缺失不自动淘汰研究方向。没有接入上述框架的训练、实验执行或论文写作循环。
+Research-idea adopted the parts supporting ideation: preserve the original question and hypotheses with candidates; record each revision, review, and unresolved premise; explain information sources and causal rationale around key assumptions; and keep technical choices in service of the core idea. Negative comments or missing material do not automatically eliminate a direction. Training, experiment execution, and paper-writing loops from these frameworks were not integrated.
 
-已加入原始问题锚点、上轮修订要求、逐字段变化、新证据与未解决质疑记录；关键内容与证据完全重复时停止修订。`max_rounds` 和调用预算继续约束迭代；程序尚不能自动判断两版方案是否取得语义上的研究进展。
+Records include the original problem anchor, prior revision requests, field-level changes, new evidence, and unresolved objections. Revision stops when the key content and evidence repeat exactly. `max_rounds` and call budgets still bound iteration; the program cannot automatically determine whether two versions represent semantic research progress.
 
-接口参考：
+Interface references:
 
 - [Codex non-interactive mode](https://developers.openai.com/codex/non-interactive-mode)
 - [Codex configuration reference](https://developers.openai.com/codex/config-reference)
@@ -37,187 +39,187 @@
 - [Anthropic structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
 - [arXiv API manual](https://info.arxiv.org/help/api/user-manual.html)
 - [OpenAlex API](https://developers.openalex.org/)
-- [OpenAlex authentication](https://help.openalex.org/api/authentication/)：支持环境变量中的 key 作为 Bearer header，避免进入查询 URL。
-- [OpenAlex filtering](https://help.openalex.org/api/filtering/) / [publication sources](https://help.openalex.org/data/sources/)：按出版来源 ID 过滤，不用论文标题推测会议。
-- [OpenReview accepted-note retrieval](https://docs.openreview.net/how-to-guides/data-retrieval-and-modification/how-to-get-all-notes-for-submissions-reviews-rebuttals-etc) / [API v2](https://docs.openreview.net/reference/api-v2/openapi-definition)：COLM 使用录用的 `content.venueid`，保留年份与有限分页范围。
-- [COLM 2026](https://colm.cc/Conferences/2026/CallForPapers)：官方会议与 OpenReview 入口。
-- [ACL Anthology metadata example](https://aclanthology.org/2025.naacl-long.1/)：出版来源、NAACL 全称、DOI 与 PDF 的对应方式。
-- [CCF 人工智能目录](https://www.ccf.org.cn/Academic_Evaluation/AI/)：默认使用 CCF 2026 第七版。ICLR 为 A、IJCAI 为 B；2022 预设仅保留兼容。
+- [OpenAlex authentication](https://help.openalex.org/api/authentication/): an environment-variable key can be sent in a Bearer header rather than a query URL.
+- [OpenAlex filtering](https://help.openalex.org/api/filtering/) / [publication sources](https://help.openalex.org/data/sources/): filter by publication-source IDs instead of inferring venues from paper titles.
+- [OpenReview accepted-note retrieval](https://docs.openreview.net/how-to-guides/data-retrieval-and-modification/how-to-get-all-notes-for-submissions-reviews-rebuttals-etc) / [API v2](https://docs.openreview.net/reference/api-v2/openapi-definition): COLM uses accepted `content.venueid`, retaining years and bounded pagination coverage.
+- [COLM 2026](https://colm.cc/Conferences/2026/CallForPapers): official conference and OpenReview entry points.
+- [ACL Anthology metadata example](https://aclanthology.org/2025.naacl-long.1/): relationships among publication sources, the full NAACL name, DOI, and PDF.
+- [CCF AI directory](https://www.ccf.org.cn/Academic_Evaluation/AI/): defaults use the seventh edition, CCF 2026. ICLR is A and IJCAI is B; the 2022 preset remains for compatibility only.
 
-后端采用已核对文档的接口；2026-10-23 已用真实 Codex CLI 与 `gpt-6.1-sol` 核对结构化输出和重连恢复。Claude/API 真实账户兼容性仍待验证。以后复制第三方代码时，应单独核实许可证、固定版本并保留必要声明。
+Backends use interfaces checked against their documentation. On 2026-10-23, live Codex CLI calls with `gpt-6.1-sol` checked structured output and reconnection recovery. Live Claude/API account compatibility still requires verification. Any future copying of third-party code requires a separate license check, pinned version, and required notices.
 
-- [Codex local skills](https://developers.openai.com/codex/skills)：本地 SKILL.md 形式与路径约定。本 CLI 采用显式加载和阶段分配，未声称复制全部原生插件机制。
+- [Codex local skills](https://developers.openai.com/codex/skills): local SKILL.md format and path conventions. This CLI explicitly loads and assigns guidance by stage; it does not claim to reproduce every native plugin mechanism.
 
-## OpenResearch 的本地 Codex 与技能接入
+## OpenResearch: local Codex and skill integration
 
-核对 [alphaXiv/OpenResearch，commit fe36f7424855d7218e64812c5fec6f7db955586f](https://github.com/alphaXiv/OpenResearch/tree/fe36f7424855d7218e64812c5fec6f7db955586f)（2026-10-23）中的以下实现：
+The following implementations in [alphaXiv/OpenResearch，commit fe36f7424855d7218e64812c5fec6f7db955586f](https://github.com/alphaXiv/OpenResearch/tree/fe36f7424855d7218e64812c5fec6f7db955586f) were examined on 2026-10-23:
 
-- [`src/local/harness/codex.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/harness/codex.rs)：新版本主要使用本地 `codex app-server`，保留旧版 `codex exec` 路径；检测已配置的 provider 与现有认证类型，不代表强制使用 ChatGPT 登录。原生 skill 目标是用户 `.agents/skills/orx/SKILL.md`，会话技能目录也是 `.agents/skills`。
-- [`src/local/native_store.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/native_store.rs)：识别现有 `CODEX_HOME`，为隔离会话准备与现有认证、配置、plugins、skills 等文件的链接。这里讨论的是源码行为，本项目没有读取用户凭据。
-- [`src/commands/install_skills.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/commands/install_skills.rs) 与 [`src/local/user_skills.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/user_skills.rs)：提供模块技能安装，以及从本地 coding agent 和插件目录发现/镜像技能的机制。
+- [`src/local/harness/codex.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/harness/codex.rs): newer versions primarily use local `codex app-server`, retaining a legacy `codex exec` path. Detection of the configured provider and authentication type does not require ChatGPT login. Native skills target the user's `.agents/skills/orx/SKILL.md`; session skills also use `.agents/skills`.
+- [`src/local/native_store.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/native_store.rs): recognizes an existing `CODEX_HOME` and prepares links to existing authentication, configuration, plugins, and skills for isolated sessions. This describes source-code behavior; this project did not read user credentials.
+- [`src/commands/install_skills.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/commands/install_skills.rs) and [`src/local/user_skills.rs`](https://github.com/alphaXiv/OpenResearch/blob/fe36f7424855d7218e64812c5fec6f7db955586f/src/local/user_skills.rs): install module skills and discover/mirror skills from local coding-agent and plugin directories.
 
-本项目借用“本地模型客户端负责认证、控制器负责研究流程、内置模块与用户技能可组合”的分工。当前使用每任务 `codex exec`，直接继承现有登录环境；不建立或复制认证文件。技能采用显式选择、按阶段冻结 Markdown 内容的方式，尚未复刻 OpenResearch 的完整原生技能、插件镜像或交互式 app-server 会话。两者的执行边界不同，不能把文本加载说成执行了技能脚本。
+This project adopts the division of responsibility: the local model client handles authentication, the controller handles research, and built-in modules can combine with user skills. It currently invokes `codex exec` per task and inherits the existing login environment without creating or copying authentication files. Skills are explicitly selected and their Markdown contents frozen per stage. It does not reproduce OpenResearch's complete native skills, plugin mirroring, or interactive app-server sessions. Loading guidance text is not execution of skill scripts.
 
-账号额度依据 [Codex authentication](https://developers.openai.com/codex/auth) 与 [non-interactive mode](https://developers.openai.com/codex/non-interactive-mode)：`codex exec` 默认复用保存的 CLI 登录；ChatGPT 登录和 API key 登录具有不同计费路径。用户应在本机确认实际登录和环境配置，本程序不查询剩余额度。
+Account usage follows [Codex authentication](https://developers.openai.com/codex/auth) and [non-interactive mode](https://developers.openai.com/codex/non-interactive-mode): `codex exec` normally reuses saved CLI authentication; ChatGPT and API-key logins have different billing paths. Users should verify their actual local login and environment. This program does not query remaining quota.
 
 
-## 论文分析框架
+## Paper-analysis framework
 
-参考已安装 `nature-paper-card` 的来源范围、阅读覆盖、模块必要性和实验—主张证据链原则。Research-idea 自主实现有界九维分析卡和定向补读，不打包该技能正文，不要求生成完整长篇 Paper Card；分析只服务 idea 的意义、差异和最小验证路径。
+The installed `nature-paper-card` informed source scope, reading coverage, module necessity, and experiment-to-claim evidence chains. Research-idea independently implements bounded nine-dimension cards and targeted follow-up reading. It does not bundle that skill's text or require a full-length Paper Card. Analysis supports the idea's value, differences, and initial validation path.
 
-## 自动研究系统的文献检索对照
+## Literature retrieval in automated research systems
 
-2026-10-23 按固定源码版本检查，采用思路并自主实现，没有复制第三方代码：
+Pinned source versions were examined on 2026-10-23. The ideas were independently implemented without copying third-party code:
 
-| 系统与源码 | 本次核对的行为 | 本项目采用的部分 |
+| System and source | Observed behavior | Adopted here |
 | --- | --- | --- |
-| [AutoResearchClaw，be4ba47](https://github.com/aiming-lab/AutoResearchClaw/blob/be4ba4755bf1b52220f25e13b2293b5956590070/researchclaw/literature/search.py) | 合并 OpenAlex、Semantic Scholar、arXiv；传递年份下限；去重后按引用数、年份排序。主入口没有统一强制 CS/会议范围 | 多源合并和去重；本项目继续按查询相关性与日期窗口筛选，不采用引用数优先 |
-| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | 指导优先最近两年，经典工作例外；示例 arXiv helper 调用未直接传入日期参数 | 近期工作优先与显式经典资料；本项目把日期落实为程序参数 |
-| [AI-Scientist，1de1dbc](https://github.com/SakanaAI/AI-Scientist/blob/1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb/ai_scientist/generate_ideas.py) | 检索函数请求标题、年份、会议、摘要等元数据；该入口的 S2 请求未添加时间或学科过滤 | 结构化元数据；本项目增加服务端过滤及返回后的核验 |
-| [Karpathy autoresearch，228791f](https://github.com/karpathy/autoresearch/blob/228791fb499afffb54b46200aca536f79142f117/program.md) | 指定固定训练、评测和实验循环；该文件没有文献检索流程 | 实验预算思路；不将它当作文献检索实现 |
+| [AutoResearchClaw，be4ba47](https://github.com/aiming-lab/AutoResearchClaw/blob/be4ba4755bf1b52220f25e13b2293b5956590070/researchclaw/literature/search.py) | Combines OpenAlex, Semantic Scholar, and arXiv; passes a minimum year; deduplicates and sorts by citations and year. The main entry point does not uniformly enforce CS/venue scope. | Multi-source merging and deduplication; this project keeps query relevance and date filters rather than citation-count priority. |
+| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | Guidance prioritizes the last two years with classic-work exceptions; the example arXiv helper call does not directly pass dates. | Recent-work priority and explicit classics, with dates implemented as program parameters. |
+| [AI-Scientist，1de1dbc](https://github.com/SakanaAI/AI-Scientist/blob/1de1dbc1f4ee2c5f61e9c94348d55eb51d7fa2eb/ai_scientist/generate_ideas.py) | Requests title, year, venue, abstract, and other metadata; that entry point's S2 request has no date or subject filter. | Structured metadata, plus server-side filters and checks on returned records. |
+| [Karpathy autoresearch，228791f](https://github.com/karpathy/autoresearch/blob/228791fb499afffb54b46200aca536f79142f117/program.md) | Specifies fixed training, evaluation, and experiment loops; that file has no literature-search workflow. | The experiment-budget concept, not a literature-search implementation. |
 
-核对源码不能证明这些系统的总体研究质量。当前实现仍需评估检索召回、会议索引覆盖、全文读取和实际 idea 的质量。
+Reading source code does not establish these systems' overall research quality. Retrieval recall, conference coverage, full-text reading, and actual idea quality still need evaluation here.
 
 
-## 本轮构思机制与选文改进（2026-10-23）
+## Ideation and paper-selection improvements (2026-10-23)
 
-以下固定版本作为设计资料阅读，未执行其技能或复制代码。重点是问题与动机，而不是增加角色数量或输出篇幅。
+The following pinned versions were read as design references; their skills were not executed and their code was not copied. The focus was problems and motivation rather than more roles or longer output.
 
-| 参考 | 核对的机制 | 本轮落地 |
+| Reference | Examined mechanism | Implementation in this iteration |
 | --- | --- | --- |
-| [IdeaScientist roles，82a98a0](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py) 与 [gap rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py) | 同问题近邻用于找具体缺口，其他问题中的方法用于迁移；阅读摘要是角色间的接口；逐项检查缺口的价值和依据 | 将问题诊断先于方法组合，要求具体失败条件、最强已有替代方案和影响；证据卡跨阶段复用。未移植其 RL 训练或结果屏蔽语料 |
-| [ResearchStudio IdeaSpark，063f100](https://github.com/microsoft/ResearchStudio/blob/063f10088af49909e1a4a7ea8d29efe19633f34e/ResearchStudio-Idea/skills/idea_spark/SKILL.md) | 先构思，再检查已有工作与实施连贯性，修订后核对；独立简单基线；资源上限不因评审改变 | motivation-first 候选复查与必要性测试；报告先显示问题和方法，审计细节折叠。未把文字审阅说成已经执行其公式/实现检查 |
-| [Supervisor-Skills idea-evaluator，a20d76e](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 与 [search strategy](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/deep-research/references/search-strategy.md) | 按研究范式与阶段判断价值、资源和方法；多种关键词视角与未选资料中的盲区线索 | 保留元数据候选池和选文原因，不把未入选资料当作不存在；审查问题价值与原因，而非只检查表格完整 |
-| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | 多源检索，近期与经典工作结合，针对缺口重新查询 | 12/6 个月动态窗口，候选阶段单独检索，保留已知旧近邻；继续使用 gpt-6.1-sol，不暗中引入其他模型 |
+| [IdeaScientist roles，82a98a0](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py) and [gap rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py) | Same-problem neighbors identify specific gaps; methods from other problems support transfer. Reading summaries form role interfaces; gap value and evidence are examined individually. | Problem diagnosis precedes method combination, with concrete failure conditions, the strongest existing alternative, and consequences; evidence cards are reused across stages. No RL training or outcome-masked corpus was ported. |
+| [ResearchStudio IdeaSpark，063f100](https://github.com/microsoft/ResearchStudio/blob/063f10088af49909e1a4a7ea8d29efe19633f34e/ResearchStudio-Idea/skills/idea_spark/SKILL.md) | Ideate, check prior work and implementation coherence, revise, and recheck; independent simple baselines; review does not change resource limits. | Motivation-first candidate reconsideration and necessity checks; reports show problem and method first with audit details folded. Text review is not described as execution of its formula/implementation checks. |
+| [Supervisor-Skills idea-evaluator，a20d76e](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) and [search strategy](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/deep-research/references/search-strategy.md) | Assess value, resources, and methods by research paradigm and stage; use different keyword perspectives and clues in unselected material. | Retain the metadata pool and selection reasons; unselected material is not treated as nonexistent. Examine problem value and causes rather than merely table completeness. |
+| [ARIS research-lit，23745b6](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-lit/SKILL.md) | Multiple sources, recent and classic work, and new queries for specific gaps. | Dynamic 12/6-month windows, candidate-specific searches, and retained older neighbors; continued use of gpt-6.1-sol without silently introducing other models. |
 
-## 两轮构思与技术探索（2026-10-24）
+## Two-round ideation and technical exploration (2026-10-24)
 
-在上述固定版本源码和技能文本上进一步核对了以下机制，并按本项目的两轮目标实现。参考材料用于设计，不作为论文证据，也不直接执行第三方技能。
+Further mechanisms were checked in the pinned code and skill texts above and implemented for this project's then-current two-round goals. References informed design, not paper evidence or direct third-party skill execution.
 
-| 参考机制 | 本项目的实现 |
+| Reference mechanism | Implementation here |
 | --- | --- |
-| IdeaScientist 的 gap_finder 区分问题缺口，innovator 寻找其他子领域中可迁移的机制；reader 带着目标阅读并复用已答问题 | 第一轮 `positioning` 随构思给出动机与贡献对照；第二轮技术查询可以脱离原应用领域，`design_transfer` 记录共同结构、原条件和改造。已有证据复用，有具体缺口才定向补读 |
-| ResearchStudio IdeaSpark 将概念与技术细化分开，并要求可独立解释的简单基线 | 第一轮先说明问题价值、基本干预和可行路径；第二轮再给参考路线、必要性理由与简单替代。没有照搬其额外评审关卡 |
-| Supervisor-Skills 按研究阶段与价值类型理解贡献，允许有理由的未检验机制进入实验 | 问题价值与方法必要性成为一条连贯论证；效率改善要解释解除的约束，跨域迁移要解释新增能力或理解。没有引入固定分数淘汰机制 |
-| ARIS research-lit 复用已有知识、组织方法线索、指出论文对当前问题的关系 | 技术阅读产出直接面向设计决定，最终 `design_decisions` 留下采用或改造的原因，未选技术不自动成为方法模块 |
+| IdeaScientist's gap_finder distinguishes problem gaps, innovator seeks transferable mechanisms in other subfields, and reader follows explicit questions and reuses answered ones. | First-round `positioning` compares motivation and contributions during ideation. Second-round technical queries can leave the original application field; `design_transfer` records shared structure, original conditions, and adaptation. Evidence is reused and reading follows specific gaps. |
+| ResearchStudio IdeaSpark separates concepts from technical elaboration and requires independently explainable simple baselines. | The first round states value, basic intervention, and a feasible path; the second offers reference routes, necessity, and simple alternatives, without copying additional review gates. |
+| Supervisor-Skills assesses contribution by stage and value type, allowing reasoned but untested mechanisms to proceed to experiments. | Problem value and method necessity form one argument. Efficiency gains explain the constraint removed; cross-field transfer explains added capability or understanding. No fixed-score elimination was introduced. |
+| ARIS research-lit reuses knowledge, organizes method clues, and explains a paper's relation to the current question. | Technical reading informs design decisions; final `design_decisions` records why a technique is adopted or adapted. Unselected techniques do not automatically become modules. |
 
-上述行为由本项目的阶段路由、结构化输出、缓存和回归测试实现；没有移植外部框架的训练或实验执行流程。
+These behaviors use this project's stage routing, structured outputs, caching, and regression tests; external training or experiment-execution workflows were not ported.
 
-### 构思与技术设计的具体代码对应
+### Mapping ideation and technical-design references to code
 
-| 固定版本的参考文件 | 借鉴后的实现位置与行为 | 验证 |
+| Pinned reference | Implementation and behavior | Verification |
 | --- | --- | --- |
-| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md)，构思角度与核心机制 | [idea_instructions.py](../src/research_idea/idea_instructions.py) 的 `map/propose` 将这些视角作为文献线索，再按本项目要求归到“已有重要问题未解决”或“现有方法暴露新问题”，从根本原因推导动机与 idea。按用户要求，已知动机与贡献对照在提出 idea 时完成 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：第一轮必须给最近工作对照和基本实现路径，资料少仍能提出可检验假设 |
-| [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py)，`reader/gap_finder/innovator` | [controller.py](../src/research_idea/controller.py) 的 `plan_search/prepare_design/focus_sources` 与 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md)：问题驱动阅读、已读证据复用、来源对象到目标对象的对应、成立条件与最简单替代，形成 `design_transfers` 后选择适合 idea 的参考路线 | [test_technical_design.py](../tests/test_technical_design.py)：阶段顺序、定向补读、来源归属、时间窗口和下载恢复 |
-| [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/experiment-bridge/SKILL.md)，sanity → baseline → main 的次序 | 借鉴先看关键前提和简单替代的思路；当前 [design-falsification skill](../src/research_idea/builtin_skills/research-idea-design-falsification/SKILL.md) 仅在审阅时比较核心解释。按用户要求，默认不再规划实验，未接入该框架的执行流程 | 内置 skill 路由与结构测试；[test_idea_workflow.py](../tests/test_idea_workflow.py) 验证不提供实验计划仍可完整交付 |
-| CORAL [reflect](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/reflect.md) / [consolidate](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/consolidate.md) | [controller.py](../src/research_idea/controller.py) 的设计讨论传递上一轮意见、实际版本变化和设计者回应；[prompts.py](../src/research_idea/prompts.py) 要求重复批评先说明原回应为什么仍不足，保留已经有理由的选择。采用共享记录与反思思路，材料仍是文献和设计意见，不当成实验评分 | [test_idea_workflow.py](../tests/test_idea_workflow.py)：下一轮审阅收到正确的上一轮意见、修改记录与对应回应 |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md): ideation perspectives and core mechanisms | `map/propose` in [idea_instructions.py](../src/research_idea/idea_instructions.py) uses these perspectives as literature clues, organizing them as an unresolved important problem or a new problem exposed by existing methods. Motivation and ideas follow root causes; known motivation/contribution comparisons occur when the idea is proposed, as requested. | [test_idea_workflow.py](../tests/test_idea_workflow.py): first-round closest-work comparisons and a basic implementation path, while allowing testable hypotheses with sparse material. |
+| [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py): `reader/gap_finder/innovator` | `plan_search/prepare_design/focus_sources` in [controller.py](../src/research_idea/controller.py) and [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) support question-driven reading, reused evidence, source-to-target mappings, conditions, and simple alternatives, then choose reference routes from `design_transfers`. | [test_technical_design.py](../tests/test_technical_design.py): stage order, targeted reading, source ownership, date windows, and download recovery. |
+| [ARIS experiment-bridge](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/experiment-bridge/SKILL.md): sanity → baseline → main | Examine key premises and simple alternatives first. Currently [design-falsification skill](../src/research_idea/builtin_skills/research-idea-design-falsification/SKILL.md) compares core explanations during review only. Experiment planning is no longer the default, as requested; execution was not integrated. | Built-in skill routing and schema tests; [test_idea_workflow.py](../tests/test_idea_workflow.py) verifies complete delivery without an experiment plan. |
+| CORAL [reflect](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/reflect.md) / [consolidate](https://github.com/Human-Agent-Society/CORAL/blob/0123dfb939b35228cf2c1fde224cd0561e727408/coral/hub/prompts/consolidate.md) | Design discussion in [controller.py](../src/research_idea/controller.py) carries previous comments, actual version changes, and the designer's response. [prompts.py](../src/research_idea/prompts.py) requires repeated criticism to explain why the earlier response remains insufficient and preserves justified choices. Shared records and reflection are adopted; literature and design feedback are not experimental scores. | [test_idea_workflow.py](../tests/test_idea_workflow.py): subsequent review receives the correct prior comments, change records, and corresponding responses. |
 
-默认仍使用用户配置的同一个后端、模型和总预算，不因参考框架而启动额外模型、自动实验或长期循环。
+The default remains the user's configured backend, model, and total budget. References do not start extra models, automatic experiments, or long-running loops.
 
-### 从文献提炼问题与判断贡献重叠
+### Deriving problems from literature and assessing contribution overlap
 
-2026-10-24 进一步对照以下原始实现，保留有用的思考方法，在本项目的问题探索、逐个深入、比较选择与构思中完成：
+On 2026-10-24, the following original implementations further informed exploration, independent analysis, comparison, and ideation:
 
-| 参考 | 本项目的采用方式 |
+| Reference | Use in this project |
 | --- | --- |
-| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 的结构性缺口与不同构思视角 | 由 `explore_problems` 打开不同问题，`deepen_problem` 逐个从已有回应推导困难成因、问题与意义，`map` 比较后选择，再交给 `propose` 构思想法；不照搬固定数量候选、多模型调用或实验执行 |
-| [ARIS novelty-check](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/novelty-check/SKILL.md) 区分相邻研究与具体结果已被覆盖 | 对照需要指出论文实际覆盖的主张；已知组件可以揭示新的相互作用或发现，逐个组件存在不等于整个贡献重复 |
-| [Supervisor-Skills paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 的隐藏假设与问题重要性追问 | 用核心洞见、重要能力或认识的变化解释意义；不照搬固定分数、裁决标签或履历限制 |
-| [research-idea-explorer 的构思结构](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/skills/research-idea-explorer/references/schema.md) 与[生成流程](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/research_idea_explorer/engine.py) | 借鉴从未解释的问题、主张、区分关系和研究意义组织构思，保存来源与选择关系；其词项相似度、检索相近程度和拥挤度启发式不用于本项目的科学查重判断 |
+| [ARIS idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md): structural gaps and varied ideation perspectives | `explore_problems` opens distinct questions; `deepen_problem` derives causes, problems, and value from existing responses; `map` selects before `propose` develops ideas. Fixed candidate counts, multiple-model calls, and experiment execution were not copied. |
+| [ARIS novelty-check](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/novelty-check/SKILL.md): adjacent research versus coverage of a specific result | Comparisons identify the claim actually covered. Known components may reveal new interactions or findings; the existence of each component does not establish duplication of the overall contribution. |
+| [Supervisor-Skills paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md): hidden assumptions and problem significance | Explain value through insight and changes in important capabilities or understanding, without fixed scores, verdict labels, or career restrictions. |
+| [research-idea-explorer ideation schema](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/skills/research-idea-explorer/references/schema.md) and [generation flow](https://github.com/jameslemon2002/research-idea-explorer/blob/14232d97213b4c21127342ee1f429a4d2a77e158/research_idea_explorer/engine.py) | Organize ideation around unexplained problems, claims, distinguishing relationships, and significance; preserve sources and selection links. Their term-similarity, retrieval-proximity, and crowdedness heuristics are not scientific overlap criteria here. |
 
-这些参考帮助设计思考流程，不能证明生成的 idea 已经具有科学创新。回归测试检查切口传递、选择关联、来源有效性、恢复和报告；真实产出另行查看问题意义、洞见与贡献论证。
+These references help design reasoning, not prove scientific novelty. Regression tests check handoffs, selection links, valid sources, recovery, and reports. Actual outputs require separate examination of significance, insight, and contribution arguments.
 
-### 背景、问题与动机怎样推导
+### Deriving background, problems, and motivation
 
-2026-10-25 进一步核对以下固定版本的具体做法。这里只借鉴推理方式，没有执行第三方 skill 或复制其正文。
+The following specific mechanisms in pinned versions were examined on 2026-10-25. Only reasoning approaches were adopted; third-party skills were not executed or copied.
 
-| 参考及源码行为 | 本项目采用的思路 |
+| Reference and source behavior | Adopted reasoning |
 | --- | --- |
-| ARIS [idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) 从共同假设、矛盾结果和扩展条件寻找结构性问题；[research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-refine/SKILL.md) 保留原问题，分析原流程卡点、简单修补为何不足，再找最小干预，并允许反驳造成问题漂移或堆模块的意见 | 从已有机制推演有意义的使用条件与可能困难，先形成研究需要，再选操作；修订围绕同一目标推进，必要时有理由地调整问题 |
-| IdeaScientist [gap_finder](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py#L139) 按机制组织已有进展，解释最接近的方法为何仍留下困难，随后才交给 innovator；[rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py#L180) 追问谁受到阻碍、解决后能获得什么能力或认识 | 在同一条件下考虑已有方法的正常回应，避免用“没采用我们的操作”替代剩余问题；动机说明跨过障碍为什么推进背景目标 |
-| Supervisor-Skills [paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) 追问隐藏前提、发展变化与问题意义；[idea-evaluator](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) 接受尚无实测结果但有机制论证的 idea | 允许基于文献线索提出合理猜想，用成立条件和推导说明问题为何可能出现；研究意义由它对原目标的影响解释，不要求先完成实验 |
+| ARIS [idea-creator](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/idea-creator/SKILL.md) seeks structural problems in shared assumptions, conflicting results, and extended conditions. [research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/23745b69a14880b5716d1773e5d20f5f1e6ab1d6/skills/research-refine/SKILL.md) preserves the original problem, examines bottlenecks and why simple patches fail, then seeks minimal intervention; it permits rejecting feedback that causes drift or unnecessary modules. | Infer meaningful conditions and possible difficulties from existing mechanisms, establish the research need before choosing operations, and keep revisions directed at the same goal while allowing justified reframing. |
+| IdeaScientist [gap_finder](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/harness/roles.py#L139) organizes progress by mechanism and explains why the closest approach leaves difficulty before handing off to innovator. [rubric](https://github.com/jiarui-liu/IdeaScientist/blob/82a98a08772eab08d11fd097445afa4a8eaaa5b3/ideascientist/rewards/gap_finder/rubric.py#L180) asks who is impeded and what capability or understanding a solution would provide. | Consider normal responses under the same conditions. “It does not use our operation” is not a remaining problem. Motivation explains why crossing the obstacle advances the background goal. |
+| Supervisor-Skills [paradigm-shift probe](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/references/paradigm-shift-probe.md) examines hidden premises, development changes, and significance; [idea-evaluator](https://github.com/HKUSTDial/Supervisor-Skills/blob/a20d76ef3979b804d7dbf599d577826957e0a8a9/skills/idea-evaluator/SKILL.md) accepts ideas with a mechanism argument before measured results. | Allow reasonable literature-based conjectures, explaining conditions and derivations. Significance follows the effect on the original goal, without requiring completed experiments. |
 
-综合后的流程由 [idea_instructions.py](../src/research_idea/idea_instructions.py) 与 [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md) 实现：`deepen_problem` 先解释最强已有方法在同样条件下怎样正常工作、实际缓解了什么，再推导为什么仍会留下或产生困难、怎样妨碍原目标，由此形成问题和动机。`bottleneck_hypothesis` 要提出有解释力的因果洞见，说明不显然的依赖、假设或相互作用，以及常规改进为何不能自然消除障碍，而非给困难换个术语。`map` 比较各问题的价值与洞见后选择，`propose` 才构思 idea 与基本可行路径。问题来自现有办法解决原问题时产生的新困难，或背景中提出、现有主要思路难以解决的新问题。允许大胆猜想与单篇启发，不要求共同缺陷、唯一起因或先证明全领域无解。
+The resulting workflow uses [idea_instructions.py](../src/research_idea/idea_instructions.py) and [motivation skill](../src/research_idea/builtin_skills/research-idea-motivation/SKILL.md). `deepen_problem` first explains how the strongest existing approach works normally under the same conditions and what it alleviates, then derives remaining or newly arising difficulties and their effect on the goal. `bottleneck_hypothesis` needs causal insight into non-obvious dependencies, assumptions, or interactions and why ordinary improvements do not naturally remove the obstacle, rather than renaming it. `map` compares value and insight before `propose` develops the idea and a basic feasible path. Problems arise as new difficulties caused by solving the original problem, or as new questions from the broader background that major approaches struggle to solve. Bold conjectures and inspiration from one paper are allowed; no common flaw, unique cause, or proof of field-wide impossibility is required.
 
-为落实分工，初期检索先围绕原目标的不同原因与已有思路建立 `research_routes`，查询、实际召回、互补选文和正文阅读沿同一路线关联，优先把约三分之二阅读额度用于第一阶段。[research_context.py](../src/research_idea/research_context.py) 为构思建立材料副本，控制器限定初期来源，暂不带入旧候选解释、论文卡里的预制改法与实验建议；源论文的方法、实验、结果、条件和原文引用仍保留，对原贡献的审计疑点留在完整记录中。构思承接已有进展，不靠否定原贡献制造新动机；完整记录供第二阶段参考。路线不是预设技术角度，也不要求各路线凑足论文。
+Initial search builds `research_routes` around different causes and existing approaches to the original goal. Queries, actual retrieval, complementary selection, and reading share route links; about two-thirds of the then-current reading budget prioritized stage one. [research_context.py](../src/research_idea/research_context.py) creates an ideation copy limited to initial sources, excluding old candidate interpretations, ready-made improvements, and experiment suggestions while retaining methods, experiments, results, conditions, and quotations. Claim-audit doubts remain in full records. Ideation builds on existing progress instead of rejecting contributions to manufacture motivation; full records support stage two. Routes are not predetermined technical axes and need not fill paper quotas.
 
-控制器保留用户原始目标，系统在 `research_question` 中聚焦，并用 `scope_connection` 解释为什么这个聚焦值得研究。`map` 结合检索计划、实际路线覆盖与各问题的独立论证进行比较，保留全部问题池、路线关联及 `selected_problems` 的理由。控制器从已选字段构造 `argument_handoff`，按已有回应、因果洞见、问题推导、目标影响和研究需要交给 `propose`，补读后的完成版同样接收；后续通过 `selected_opportunity` 保留问题与选择依据。新来源可以修订原认识，同时区分原科学问题与方案实现时才出现的困难。相比直接把单篇论文建议当成候选，这一分工让问题推导先于方案构思。它是本项目的综合设计，不增加模型调用、评分或审查轮次，也不是上述框架统一规定的流程。
+The controller preserves the original goal. `research_question` focuses it, and `scope_connection` explains why that focus matters. `map` compares search plans, actual route coverage, and independent arguments while retaining the full pool, route links, and `selected_problems` reasons. The controller constructs `argument_handoff` from selected fields: existing responses, causal insight, problem derivation, goal impact, and research need. Both initial and post-reading `propose` receive it; `selected_opportunity` preserves the problem and rationale later. New sources may revise understanding while distinguishing the scientific problem from implementation difficulties. This makes problem derivation precede solution ideation instead of taking one paper's suggestion directly as a candidate. It is this project's synthesis, adding no calls, scores, or review rounds, rather than a workflow uniformly prescribed by those frameworks.
 
-这是面向本项目的综合设计，不固定示例中的领域、困难数量或方法模块，也不引入上述框架的评分、额外审查或实验执行。第二阶段继续由 [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md) 从 idea 推导两个技术问题，借助 `design_axes` 连接检索、迁移与方法选择；一种技术可以服务两个问题。测试检查阶段衔接和材料传递，实际论证是否更好仍应通过产出判断。
+This design does not fix the example's field, number of difficulties, or modules, and does not introduce those frameworks' scoring, extra reviews, or experiment execution. Stage two continued through [build-mechanism skill](../src/research_idea/builtin_skills/research-idea-build-mechanism/SKILL.md), deriving two technical questions and linking retrieval, transfer, and selection with `design_axes`; one technique could serve both. Tests check stage continuity and material handoffs; argumentative improvement must be assessed from outputs.
 
-## 目录与会议来源核对
+## Rating lists and conference-source checks
 
-- [CCF 2026 目录原文副本](https://dengpingfan.github.io/papers/CCF-Recommend-2026.pdf)：第 57–58 页；[CCF 官方目录入口](https://www.ccf.org.cn/Academic_Evaluation/By_category/)。官方页面当前有浏览器验证，本轮以目录原文核对分级。
-- [清华 TH-CPL 校内原文](https://numbda.cs.tsinghua.edu.cn/~yuwj/TH-CPL.pdf)：2019-08-13 通过，第 11 页人工智能与模式识别 A 类会议。没有把 2019 文件称为 2026 版本。
-- [ICORE2026 官方数据库](https://portal.core.edu.au/conf-ranks/?search=&by=all&source=ICORE2026&sort=arank&page=1)：按等级排序前两页共 62 个 A*。默认仅启用用户指定的 LLM/NLP/Agent 子集。
-- [CCFDDL](https://github.com/ccfddl/ccf-deadlines)：提供 CCF/CORE/THCPL 三套筛选和会议主页、时间，作为人工查阅入口；评级采用上述明确版本的原文。
-- [OpenAlex 错误说明](https://help.openalex.org/api/errors/)：429 可能是速率或每日额度；403 不应无限重试。本轮实测 429 的剩余额度为 0，Retry-After 超过十小时。
-- [COLM 2026 官方录用列表](https://colm.cc/Conferences/2026/AcceptedPapers)、[ICLR 2026 论文列表](https://iclr.cc/virtual/2026/papers.html)、[ACL 2026 长文集](https://aclanthology.org/2026.acl-long/)、[PMLR 目录](https://proceedings.mlr.press/)、[NeurIPS 2025 主会](https://papers.nips.cc/paper_files/paper/2025/vol38-main-conference)：索引 API 受限时的公开替代来源。只记录目录实际提供的信息。
+- [CCF 2026 directory copy](https://dengpingfan.github.io/papers/CCF-Recommend-2026.pdf): pages 57–58; [CCF official directory](https://www.ccf.org.cn/Academic_Evaluation/By_category/). The official page had browser verification, so ratings were checked against the directory text in this iteration.
+- [Tsinghua-hosted TH-CPL document](https://numbda.cs.tsinghua.edu.cn/~yuwj/TH-CPL.pdf): adopted 2019-08-13; page 11 lists AI/pattern-recognition A venues. The 2019 document is not described as a 2026 edition.
+- [ICORE2026 official database](https://portal.core.edu.au/conf-ranks/?search=&by=all&source=ICORE2026&sort=arank&page=1): the first two grade-sorted pages list 62 A* venues. Only the user-specified LLM/NLP/Agent subset is enabled by default.
+- [CCFDDL](https://github.com/ccfddl/ccf-deadlines): CCF/CORE/THCPL filters, conference homepages, and dates provide a manual lookup entry point. Ratings follow the explicitly versioned original documents above.
+- [OpenAlex error documentation](https://help.openalex.org/api/errors/): 429 may indicate rate or daily-quota limits; 403 must not be retried indefinitely. The observed 429 in this iteration had zero remaining quota and Retry-After over ten hours.
+- [COLM 2026 official acceptance list](https://colm.cc/Conferences/2026/AcceptedPapers), [ICLR 2026 paper list](https://iclr.cc/virtual/2026/papers.html), [ACL 2026 long papers](https://aclanthology.org/2026.acl-long/), [PMLR directory](https://proceedings.mlr.press/), [NeurIPS 2025 main track](https://papers.nips.cc/paper_files/paper/2025/vol38-main-conference): public alternatives when index APIs are restricted. Only metadata actually supplied by the directories is recorded.
 
-### 扩展会议的出版名称（2026-10-24 核对）
+### Publication names for expanded venues (checked 2026-10-24)
 
-- [ACM Multimedia 官方页面](https://2026.acmmm.org/)：ACM MM 的完整名称为 ACM International Conference on Multimedia。
-- [The Web Conference 官方页面](https://www2026.thewebconf.org/)：WWW 同时使用 The Web Conference / ACM Web Conference 名称。
-- [VLDB Endowment](https://www.vldb.org/)：VLDB 的研究论文评审通过 PVLDB 进行；检索包含 Proceedings of the VLDB Endowment，与 The VLDB Journal 分开。
-- [SIGMOD 2026 研究论文说明](https://2026.sigmod.org/calls_papers_sigmod_research.shtml)：研究论文发表在对应 PACMMOD 期次。[DBLP 的 PACMMOD 目录](https://dblp.org/db/journals/pacmmod/index.html)同时列出 SIGMOD 和 PODS 的出版关联，因此检索纳入该系列时保留真实系列名称。
+- [ACM Multimedia official site](https://2026.acmmm.org/): ACM MM's full name is ACM International Conference on Multimedia.
+- [The Web Conference official site](https://www2026.thewebconf.org/): WWW uses both The Web Conference and ACM Web Conference names.
+- [VLDB Endowment](https://www.vldb.org/): VLDB research papers are reviewed through PVLDB; retrieval includes Proceedings of the VLDB Endowment, separately from The VLDB Journal.
+- [SIGMOD 2026 research-paper information](https://2026.sigmod.org/calls_papers_sigmod_research.shtml): research papers appear in corresponding PACMMOD issues. [DBLP PACMMOD directory](https://dblp.org/db/journals/pacmmod/index.html) lists publication associations for both SIGMOD and PODS, so retrieval retains the actual series name.
 
-这次扩展更新研究范围、名称匹配与公开正文来源。新增会议使用已匹配的 OpenAlex 出版源检索，不代表为每个会议都增加了独立官方目录适配器。
-## 上下文组织参考
+This expansion updates scope, name matching, and public text sources. Added conferences use matched OpenAlex publication sources; it does not imply a separate official-directory adapter for every venue.
+## Context organization references
 
-- [IdeaScientist：独立论文读取上下文](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/runner.py)：读取全文使用独立上下文和输入预算，返回聚焦摘要供后续角色使用。借鉴阶段材料分离；本项目保留原文证据及实验结果，继续用已有分块读取。
-- [ARIS：会话恢复与 Research Contract](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/docs/SESSION_RECOVERY_GUIDE_CN.md)：保存精简项目状态与当前 idea 的聚焦文档，用于恢复工作。借鉴明确研究主线与持久化交接，本项目通过 SQLite 和 `research_frame` 实现，不引入额外审批或角色。
+- [IdeaScientist: separate paper-reading context](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/runner.py): full-text reading uses a separate context and input budget, returning focused summaries for later roles. Stage-specific materials informed this design; this project retains quotations and experimental results and uses its existing chunked reading.
+- [ARIS: session recovery and Research Contract](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/docs/SESSION_RECOVERY_GUIDE_CN.md): compact project state and a focused current-idea document support resumption. Explicit research intent and persistent handoffs informed this project's SQLite and `research_frame`, without extra approvals or roles.
 
 
-## 问题讨论与记忆（2026-10-25）
+## Problem discussion and memory (2026-10-25)
 
-阅读以下实际实现后，本项目在现有 SQLite 控制器中实现暂停、增量要点和版本衔接，没有增加框架依赖或复制其代码：
+After examining these implementations, this project added pauses, incremental notes, and version handoffs to its existing SQLite controller, without framework dependencies or copied code:
 
-- [ARIS run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) 与 [resumable-runs](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/shared-references/resumable-runs.md)：持久记录阶段与产物，从明确的位置恢复。我们借鉴阶段恢复，暂停的确认来自用户 `/continue`，没有引入它的跨模型验收规则。
-- [ARIS idea-creator 的研究 Wiki 写入](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md)：通过程序写入 idea 与论文/缺口的联系，保留已有结果。对应本项目由程序保存问题版本、选择理由与消息出处，而不只提示模型记住。
-- [OpenHands condenser](https://github.com/OpenHands/software-agent-sdk/blob/main/openhands-sdk/openhands/sdk/context/condenser/README.md)：追加事件日志与供模型使用的压缩视图分离。对应完整对话保留，模型使用现行要点、近期对话和待整理原话。
-- [Mem0 prompts.py](https://github.com/mem0ai/mem0/blob/main/mem0/configs/prompts.py)：用户消息提取与 ADD/UPDATE/DELETE/NONE 更新操作。对应带来源消息 ID 的 add/replace/remove；无更新保留原要点，替换项保留历史，不将助手建议当用户决定。
-- [LangGraph interrupts](https://github.com/langchain-ai/docs/blob/main/src/oss/langgraph/interrupts.mdx)：持久暂停并以同一会话恢复。对应问题讨论前后的明确阶段边界；恢复不会重复已完成的研究阶段。
+- [ARIS run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) and [resumable-runs](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/shared-references/resumable-runs.md): persist stages and artifacts and resume from an explicit location. Stage recovery was adopted; pause confirmation comes from user `/continue`, without cross-model acceptance rules.
+- [ARIS idea-creator research Wiki persistence](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-creator/SKILL.md): programmatically writes idea-to-paper/gap relationships and preserves existing results. Here the program saves problem versions, selection reasons, and message provenance instead of merely prompting the model to remember.
+- [OpenHands condenser](https://github.com/OpenHands/software-agent-sdk/blob/main/openhands-sdk/openhands/sdk/context/condenser/README.md): separates append-only event logs from compact model-facing views. Here complete conversations remain stored while models receive active notes, recent dialogue, and original messages awaiting processing.
+- [Mem0 prompts.py](https://github.com/mem0ai/mem0/blob/main/mem0/configs/prompts.py): user-message extraction and ADD/UPDATE/DELETE/NONE operations. Here source-message IDs support add/replace/remove; no update preserves notes, replacements retain history, and assistant suggestions are not user decisions.
+- [LangGraph interrupts](https://github.com/langchain-ai/docs/blob/main/src/oss/langgraph/interrupts.mdx): durable pauses resumed within the same conversation. Here discussion boundaries are explicit, and resumption does not repeat completed research stages.
 
-这些工程机制用于避免对话遗忘和重复运行，不是研究结论正确或 idea 有创新性的证明。
+These engineering mechanisms reduce forgetting and repeated execution; they do not prove correct conclusions or novel ideas.
 
-### v0.5.0：更频繁的讨论与跨阶段会话
+### v0.5.0: more frequent discussion and cross-stage conversations
 
-进一步核对 ARIS 与 CORAL 的讨论、恢复和知识保存实现后，本项目采用下列分工：完整对话保留原文，当前研究要点可替换或撤回，讨论阶段单独恢复；模型每轮使用与当前问题相关的材料。
+Further examination of ARIS and CORAL informed this division: preserve the complete original conversation, allow current research notes to be replaced or withdrawn, resume discussion stages independently, and select material relevant to each turn's question.
 
-| 已核对的源码行为 | 本项目采用的思路 |
+| Examined source behavior | Adopted design |
 | --- | --- |
-| ARIS [idea-discovery 文献范围讨论](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L237) 在 `AUTO_PROCEED=false` 时请用户确认文献地图与范围，收到纠正后调整查询；[候选讨论](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L275) 允许重新构思或返回文献阶段 | 把讨论放到方向与问题尚可修改的时候，用户纠正实际影响后续材料、问题与选择，而不只产生一段聊天回复 |
-| ARIS [run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) 保存阶段、产物与恢复信息；[research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md#L58) 保存阶段、轮次与会话标识，并从阶段文档恢复 | 已完成的研究材料与当前讨论分别持久化，恢复后从暂停处继续；研究主线可被用户明确修订 |
-| ARIS [research_wiki.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/research_wiki.py#L225) 从 brief、论文与 idea 关系组织有长度限制的查询材料；该材料不等同于完整聊天记录 | 按本轮问题选择相关上下文，保留可回查的出处；历史内容无需每次全量塞进模型 |
-| CORAL [Codex 适配器](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/builtin/codex.py) 从运行记录获取会话 ID，通过 `codex exec resume` 延续原生会话；其默认执行方式不等待用户对话 | 借鉴恢复连续性。Research-idea 继续自行保存研究会话，由显式讨论与 `/continue` 驱动；没有把 CORAL 的原生会话恢复描述成用户讨论流程 |
-| CORAL [steering.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/steering.py) 持久记录引导内容及创建、应用时间，[manager.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/manager.py#L860) 在恢复时应用引导 | 用户纠正必须有保存、应用与阶段归属，不能只依赖模型记住最近几条消息 |
-| CORAL [create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) 区分原始来源、研究记录与综合认识，并保存替代关系及依据；[checkpoint.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/checkpoint.py) 追踪共享知识版本 | 区分用户原话、当前要求和研究者的推测；修改当前要求时保留旧版本与来源 |
+| ARIS [idea-discovery literature-scope discussion](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L237) requests confirmation of the literature map and scope when `AUTO_PROCEED=false`, adjusting queries after corrections; [candidate discussion](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md#L275) permits renewed ideation or a return to literature. | Discuss while directions and problems remain changeable. Corrections affect later material, problems, and selection rather than only producing a chat reply. |
+| ARIS [run_state.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/run_state.py) saves stage, artifacts, and recovery data; [research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md#L58) saves stage, round, and session identifiers and resumes from stage documents. | Persist completed research material and current discussion separately; resume at the pause and allow explicit intent revision. |
+| ARIS [research_wiki.py](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/tools/research_wiki.py#L225) builds bounded query material from brief, paper, and idea relationships; it is not a complete chat transcript. | Select context for this turn while retaining retrievable provenance, without sending all history each time. |
+| CORAL [Codex adapter](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/builtin/codex.py) retrieves session IDs from run records and resumes native conversations with `codex exec resume`; its default execution does not wait for user dialogue. | Adopt continuity while keeping Research-idea's own persistent research conversations, explicit discussion, and `/continue`. Native session resumption is not described as user discussion. |
+| CORAL [steering.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/steering.py) persists guidance and creation/application timestamps; [manager.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/agent/manager.py#L860) applies guidance on recovery. | Corrections need persistence, application, and stage ownership rather than reliance on recent-message memory. |
+| CORAL [create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) distinguishes original sources, research notes, and synthesized understanding, retaining replacement links and evidence; [checkpoint.py](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/hub/checkpoint.py) tracks shared-knowledge versions. | Separate original user wording, active requirements, and researcher inference; retain prior versions and sources when requirements change. |
 
-[conversation.py](../src/research_idea/conversation.py) 中的用户决定账本是本项目自行实现的组合设计：只有用户消息可以作为要点来源；`add/replace/remove` 保留替代关系；临时要求绑定产生时的讨论阶段和实例，`/continue` 只结束当前讨论的临时要求。长期要求持续使用，完整原话不改写。模型同时接收当前要点的原话出处、近期对话和按当前问题召回的较早用户消息；已撤回要求附带失效记录，避免旧选择被重新当成当前决定。已处理但没有提炼为要点的早期消息也可以再次检索，`/history [关键词]` 则面向用户查阅全部历史中的相关原话。
+The user-decision ledger in [conversation.py](../src/research_idea/conversation.py) is this project's own combined design. Only user messages can source notes; `add/replace/remove` retain replacement links. Temporary requirements belong to their originating stage and instance; `/continue` ends only the current discussion's temporary requirements. Lasting requirements stay active and originals remain unchanged. Model context includes source wording, recent discussion, and relevant earlier user messages; withdrawn requirements carry inactive records so old selections cannot become current decisions again. Earlier processed messages not distilled into notes remain retrievable. `/history [keyword]` lets users search original wording across the full history.
 
-以上源码启发了讨论与上下文的组织方式；没有发现 ARIS 或 CORAL 在这些入口中直接提供与本项目相同的、仅接受用户原话来源且可替代或撤回的决定账本。Research-idea 没有复制它们的代码，也不依赖后端原生会话记住研究要求。
-
-
-### v0.7.0：保留研究主线，同时允许问题被改进
-
-本轮核对了以下公开说明/skill，借鉴其组织方法；没有引入其依赖、后台服务或额外 agent 流程：
-
-- [ARIS research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md) 用 Problem Anchor 防止修订偏题，和 [idea-discovery](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md) 区分探索与已有 idea 的深化。这里改为有原话出处、可通过讨论修订的研究主线；不固定用户假设，也不采用分数达标循环。
-- [CORAL create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) 区分焦点、综合与证据笔记，并保留替代/反驳关系。这里把用户目标、关切关系和文献引起的判断变化分别保存，保留前后版本；没有移植完整团队调度。
-- [Supervisor-Skills tech-paper-template](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/tech-paper-template/SKILL.md) 与 [intro-drafter](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/intro-drafter/SKILL.md) 强调研究论证各环节对应。这里用于背景目标、已有回应、困难关系、动机与主张的交接，不恢复技术方案和实验章节。
-- [IdeaScientist README](https://github.com/jiarui-liu/IdeaScientist) 的阶段与角色分工作为对照；本轮没有声称检查其内部实现，也不把单篇论文的 gap 直接当作用户研究目标。
-
-对应实现：`research_intent.py` 保存带出处的目标与关切、版本和问题表述；`question_workflow.py` 在检索前理解输入，交付时携带完整主线；`problem_discovery.py` 保留相关问题进入深入；`controller.py` 将综合/重构结果设为当前问题且保留原分析；`problem_dialogue.py` 原子提交用户纠正；motivation skill 各阶段参考分别说明如何使用这些状态。新增流程测试涵盖相连困难、独立方向、开放主题、被修订的假设和讨论后的恢复。程序校验只能确认结构和来源完整，科学判断仍由模型和研究者讨论完成。
-
-### 讨论引导与行为测试（2026-11-01）
-
-参考 [Intuit to Idea 的核心 skill](https://github.com/ShawnL1N/intuit-to-idea/blob/main/SKILL.md)、[机制比较指南](https://github.com/ShawnL1N/intuit-to-idea/blob/main/references/novelty-check.md)和[行为场景](https://github.com/ShawnL1N/intuit-to-idea/blob/main/evals/scenarios.md)：借鉴一次一个有判断价值的追问、纠正后实际改变理解，以及收窄范围仍需保留研究价值的做法。该仓库提供 skill 与测试说明，没有提供独立检索/记忆运行时或已完成的模型效果评测。
-
-本项目继续主动从文献发现问题，仅在已有讨论阶段按需追问；不要求用户提供创新，不恢复技术方案和实验设计。`discussion_focus.py` 将上一轮追问与用户决定分开保存并限制篇幅，`/continue` 不受未答问题阻挡。范围变化沿用既有版本和理由记录，真实多轮行为测试与程序状态测试分开报告。
+These sources informed discussion and context organization. At the inspected entry points, neither ARIS nor CORAL directly supplied the same replaceable/withdrawable decision ledger accepting only original user-message provenance. Research-idea copied neither codebase and does not depend on native backend sessions to remember research requirements.
 
 
-## 2026-11-03：广泛泛读与持续文献上下文
+### v0.7.0: preserve intent while improving the problem
 
-参考 [ARIS research-lit](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-lit/SKILL.md) 的先概览再按需读章节、按主题综合；参考 [Supervisor-Skills deep-research](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/SKILL.md) 的多视角覆盖，以及 [synthesis-framework](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/references/synthesis-framework.md) 的按问题和方法类别组织；参考 [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/roles.py) 的具体阅读问题和累积笔记。
+The following public descriptions/skills informed organization without adding their dependencies, background services, or extra agent workflows:
 
-采用这些设计原则，自行实现批次缓存、原摘要存储、方法概览、讨论参考与来源提升；未复制上述源码、训练流程或评分门槛。40/8/16/6 是本项目的初始工程配置，不是外部工作的最优数量结论。正文阅读仍服务于具体判断，不用标题相似淘汰问题。
+- [ARIS research-refine](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-refine/SKILL.md) uses a Problem Anchor against drift; [idea-discovery](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/idea-discovery/SKILL.md) distinguishes exploration from refinement. Here intent has original-message provenance and can be revised through discussion. User hypotheses are not fixed, and score-threshold loops are not adopted.
+- [CORAL create-notes](https://github.com/Human-Agent-Society/CORAL/blob/main/coral/template/skills/create-notes/SKILL.md) separates focus, synthesis, and evidence notes and retains replacement/refutation links. Here user goals, concern relationships, and literature-driven judgment changes are stored separately with before/after versions, without the full team scheduler.
+- [Supervisor-Skills tech-paper-template](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/tech-paper-template/SKILL.md) and [intro-drafter](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/intro-drafter/SKILL.md) emphasize correspondence across research arguments. Here they inform handoffs among background goals, existing responses, difficulty relationships, motivation, and propositions, without restoring technical or experimental sections.
+- [IdeaScientist README](https://github.com/jiarui-liu/IdeaScientist) provides a stage/role comparison. This iteration did not claim to inspect its internal implementation or equate one paper's gap with the user's research goal.
+
+Implementation: `research_intent.py` stores goals, concerns, provenance, versions, and formulations; `question_workflow.py` interprets input before search and carries full intent into delivery; `problem_discovery.py` retains related problems during analysis; `controller.py` makes synthesis/reframing the current problem while keeping originals; `problem_dialogue.py` atomically commits corrections; task-specific motivation references explain state use. New workflow tests cover connected difficulties, independent directions, open topics, revised hypotheses, and recovery after discussion. Program checks establish structural and provenance completeness; scientific judgment remains with the model and researcher in discussion.
+
+### Discussion guidance and behavioral evaluation (2026-11-01)
+
+References: [Intuit to Idea core skill](https://github.com/ShawnL1N/intuit-to-idea/blob/main/SKILL.md), [mechanism-comparison guide](https://github.com/ShawnL1N/intuit-to-idea/blob/main/references/novelty-check.md), and [behavioral scenarios](https://github.com/ShawnL1N/intuit-to-idea/blob/main/evals/scenarios.md). Adopt one consequential follow-up at a time, actual changes in interpretation after corrections, and preservation of value when narrowing scope. That repository supplies skills and testing guidance, not an independent retrieval/memory runtime or completed model-effectiveness evaluation.
+
+This project continues actively discovering problems from literature and asks follow-ups only when useful during existing discussion stages. Users need not supply the innovation; technical and experiment stages are not restored. `discussion_focus.py` stores the previous follow-up separately from user decisions with a size limit; unanswered questions do not block `/continue`. Scope changes reuse existing version/reason records. Live multi-turn behavior and program-state tests are reported separately.
+
+
+## 2026-11-03: broad reading and persistent literature context
+
+References include [ARIS research-lit](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/blob/main/skills/research-lit/SKILL.md) for overview-first reading, on-demand sections, and thematic synthesis; [Supervisor-Skills deep-research](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/SKILL.md) for multiple perspectives; [synthesis-framework](https://github.com/HKUSTDial/Supervisor-Skills/blob/main/skills/deep-research/references/synthesis-framework.md) for organizing by problem and method family; and [IdeaScientist roles](https://github.com/jiarui-liu/IdeaScientist/blob/main/ideascientist/harness/roles.py) for explicit reading questions and cumulative notes.
+
+These principles informed independently implemented batch caches, original abstract storage, approach overviews, discussion references, and promotion of sources into body reading. No source code, training process, or scoring gate was copied. The 40/8/16/6 limits are initial engineering choices here, not externally established optimal counts. Body reading serves specific judgments; similar titles do not eliminate problems.

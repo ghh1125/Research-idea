@@ -1,6 +1,6 @@
 # Research-idea · v1.0.0
 
-[![English](https://img.shields.io/badge/Language-English-blue)](README.md)
+[![English](https://img.shields.io/badge/Language-English-blue)](README.md) | **简体中文**
 
 ## 1. 我们的目的
 
@@ -10,7 +10,7 @@
 
 最终内容聚焦五件事：**背景中的需要是什么 → 现有方法已经做到了什么 → 为什么还会遇到重要问题 → 为什么值得研究它 → 一句核心研究主张。** 研究主张说明想推进什么认识或能力。当前流程到这里结束，不继续展开技术路线、实现方案或实验计划。
 
-**本地 Web 工作台：** 对话、文献调研与检查点共用同一套研究记录。暖纸色界面提供研究阶段侧栏、置顶、回收站、Codex 模型与思考档位选择。网页与 CLI 共用研究记录，见 [Web 使用说明](docs/web-workbench.md)。
+**本地 Web 工作台：** 对话、文献调研与检查点共用同一套研究记录。暖纸色界面提供研究阶段侧栏、置顶、回收站、Codex 模型与思考档位选择。网页与 CLI 共用研究记录，见 [Web 使用说明](docs/web-workbench.zh-CN.md)。
 
 ## 2. 找 idea 的核心要求
 
@@ -93,7 +93,7 @@ flowchart TD
 
 具体异议、判断为什么改变、什么新信息值得再次讨论，也会单独保存。修订时旧记录保留、当前记录更新；助手判断不会被写成用户决定。`/memory` 可以查看这些理由。内置 skill 按当前任务加载综合、原因比较、重新构思、讨论或表达所需的内容，避免把各阶段的长说明一次全部交给模型。
 
-控制器组织检索、阅读和分步骤分析，内置研究 skill 提供背景综合、问题发现、贡献对照和论证指导。状态保存在 SQLite，结果输出 Markdown 和 JSON。实现细节见[工作流](docs/workflow.md)、[架构](docs/architecture.md)与[开源思路借鉴](docs/sources.md)。
+控制器组织检索、阅读和分步骤分析，内置研究 skill 提供背景综合、问题发现、贡献对照和论证指导。状态保存在 SQLite，结果输出 Markdown 和 JSON。实现细节见[工作流](docs/workflow.zh-CN.md)、[架构](docs/architecture.zh-CN.md)与[开源思路借鉴](docs/sources.zh-CN.md)。
 
 ## 4. 安装与启动：CLI / Web
 
@@ -159,7 +159,7 @@ research-idea doctor
 
 `doctor` 会检查模型 CLI 与 `pdftotext` 是否可找到。如果仍提示找不到 `research-idea`，macOS/Linux 再运行 `pipx ensurepath`，Windows 再运行 `py -3 -m pipx ensurepath`，然后重新打开终端。
 
-安装使用本地仓库的可编辑模式，请保留仓库目录。已有可用的虚拟环境或本地启动命令可以继续使用，无需重复安装。开发用的虚拟环境安装方式见 [进阶使用](docs/advanced-usage.md#虚拟环境安装)。
+安装使用本地仓库的可编辑模式，请保留仓库目录。已有可用的虚拟环境或本地启动命令可以继续使用，无需重复安装。开发用的虚拟环境安装方式见 [进阶使用](docs/advanced-usage.zh-CN.md#虚拟环境安装)。
 
 ### 升级到 v1.0.0
 
@@ -221,9 +221,9 @@ research-idea web
 
 浏览器会自动打开 **http://127.0.0.1:8769/**。保持终端打开，按 **Ctrl+C** 关闭服务。`research-idea web --no-browser` 只启动服务，`--port 8770` 更换端口；`--codex-bin` 与 `--codex-profile` 指定本机 Codex。
 
-使用 `research-idea web --projects ./research-projects --output ./results` 指定研究和新报告的目录。网页自动发现其中的 CLI 项目，共用 SQLite 记录与检查点。新建项目默认 `gpt-6-astra`；思考档位使用 Codex 原始名称并跟随本机模型目录。关闭网页不停止后台任务，重新打开即可继续查看；“停止运行”保留已完成的步骤。模型目录不等于调用权限验证，其他后端仍通过 CLI 配置。服务仅监听本机地址，写入校验同源地址与会话令牌。更多说明见 [Web 使用说明](docs/web-workbench.md)。
+使用 `research-idea web --projects ./research-projects --output ./results` 指定研究和新报告的目录。网页自动发现其中的 CLI 项目，共用 SQLite 记录与检查点。新建项目默认 `gpt-6-astra`；思考档位使用 Codex 原始名称并跟随本机模型目录。关闭网页不停止后台任务，重新打开即可继续查看；“停止运行”保留已完成的步骤。模型目录不等于调用权限验证，其他后端仍通过 CLI 配置。服务仅监听本机地址，写入校验同源地址与会话令牌。更多说明见 [Web 使用说明](docs/web-workbench.zh-CN.md)。
 
-**网页无需记命令：** 模型与思考强度用下拉框，日期、会议和预算在设置弹窗中修改；输入框旁“＋”添加论文或研究说明，“记录”查历史对话和当前讨论。普通消息只讨论当前阶段，点击“继续”才推进。右上角 **? 使用指南** 提供网页专用操作说明，详见 [功能位置与逐步用法](docs/web-workbench.md#功能在哪里)。
+**网页无需记命令：** 模型与思考强度用下拉框，日期、会议和预算在设置弹窗中修改；输入框旁“＋”添加论文或研究说明，“记录”查历史对话和当前讨论。普通消息只讨论当前阶段，点击“继续”才推进。右上角 **? 使用指南** 提供网页专用操作说明，详见 [功能位置与逐步用法](docs/web-workbench.zh-CN.md#功能在哪里)。
 
 ### CLI：一条命令直接开始研究
 
@@ -517,7 +517,7 @@ research-idea resume --project ./research-projects/my-idea
 research-idea status --project ./research-projects/my-idea
 ```
 
-结果位置可随时用 `/output` 查看。成功任务可以缓存；只修改保存位置不会重新调用模型，材料或相关研究设置变化时才重新计算。文献导入格式、skill 选择、引文处理和恢复细节见 [进阶使用](docs/advanced-usage.md)。
+结果位置可随时用 `/output` 查看。成功任务可以缓存；只修改保存位置不会重新调用模型，材料或相关研究设置变化时才重新计算。文献导入格式、skill 选择、引文处理和恢复细节见 [进阶使用](docs/advanced-usage.zh-CN.md)。
 
 ## 6. 可以绑定的模型与后端
 
@@ -562,6 +562,21 @@ api_max_tokens_field = "max_completion_tokens"
 
 在终端环境中设置 `RESEARCH_API_KEY` 后，运行 `research-idea chat --project 项目目录` 或 `research-idea run --project 项目目录`。密钥通过环境变量读取，配置文件只保存变量名。
 
-使用原生 Anthropic 时，将 `api_provider` 改为 `anthropic`，`base_url` 改为 `https://api.anthropic.com/v1`，`api_key_env` 改为 `ANTHROPIC_API_KEY`，并填写对应模型 ID。详细协议、CLI 兼容要求与本地服务配置见 [后端配置](docs/advanced-usage.md#后端配置)。
+使用原生 Anthropic 时，将 `api_provider` 改为 `anthropic`，`base_url` 改为 `https://api.anthropic.com/v1`，`api_key_env` 改为 `ANTHROPIC_API_KEY`，并填写对应模型 ID。详细协议、CLI 兼容要求与本地服务配置见 [后端配置](docs/advanced-usage.zh-CN.md#后端配置)。
 
 开发者可运行 `PYTHONPATH=src python -m unittest discover -s tests -v`；自动化测试覆盖 Python 3.11、3.12、3.13。
+
+## 7. 文档导航
+
+全部对外使用与开发文档提供默认英文版和简体中文版。每页顶部可切换到对应语言，中文文档中的站内链接继续进入中文页面。程序界面和研究报告的语言不随文档切换。
+
+| 文档 | 内容 |
+| --- | --- |
+| [Web 工作台](docs/web-workbench.zh-CN.md) | 网页操作、附件、讨论、设置与恢复 |
+| [进阶使用](docs/advanced-usage.zh-CN.md) | 安装、论文导入、skill、后端协议与预算 |
+| [研究工作流](docs/workflow.zh-CN.md) | 泛读、问题发现、两次讨论与最终表述 |
+| [系统架构](docs/architecture.zh-CN.md) | 模块、状态保存、对话记忆与上下文处理 |
+| [讨论行为复测](docs/discussion-evaluation.zh-CN.md) | 可选的多轮讨论评估及检查内容 |
+| [设计借鉴与来源](docs/sources.zh-CN.md) | 开源框架思路与接口参考 |
+| [版本更新](CHANGELOG.zh-CN.md) | 版本历史与升级说明 |
+| [旧版 Web 预览](docs/web-preview/README.zh-CN.md) | 历史界面设计；当前功能请看 Web 工作台说明 |

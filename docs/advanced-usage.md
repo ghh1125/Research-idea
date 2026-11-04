@@ -1,12 +1,16 @@
-# 进阶使用与实现说明
+# Advanced usage and implementation notes
 
-[返回中文 README](../README.zh-CN.md) · [English README](../README.md)。首次使用请先看安装启动与 CLI 操作；本页保留文献来源、skill、后端协议、预算与报告的详细说明。
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](advanced-usage.zh-CN.md)
 
-## 虚拟环境安装
+[Back to README](../README.md). Start with installation, startup, and CLI usage there. This page covers literature sources, skills, backend protocols, budgets, and reports in more detail.
 
-如果需要开发源码或自行管理 Python 环境，可以在克隆后的仓库目录安装。
+> For the current v1.0.0 research flow, see [Workflow](workflow.md). This page also preserves early implementation details: references to a second technical-design stage, the two-thirds initial reading allocation, and report schema 14 describe historical compatibility. The current workflow uses broad reading and two discussions, ends with problems and motivation, and uses report schema 18. It no longer reserves initial reading capacity for technical design.
 
-macOS / Linux：
+## Virtual environment installation
+
+For source development or a manually managed Python environment, install from the cloned repository.
+
+macOS / Linux:
 
 ```bash
 python3 -m venv .venv
@@ -15,7 +19,7 @@ python -m pip install -e .
 research-idea
 ```
 
-Windows PowerShell 可以直接调用虚拟环境中的可执行文件，无需修改脚本执行策略：
+On Windows PowerShell, call the virtual environment's executables directly without changing script execution policy:
 
 ```powershell
 py -3 -m venv .venv
@@ -23,14 +27,14 @@ py -3 -m venv .venv
 .\.venv\Scripts\research-idea.exe
 ```
 
-此方式的简短命令依赖已激活的虚拟环境；需要从任意终端直接启动时，使用 README 中对应平台的 pipx 安装步骤。PDF 阅读仍需安装 Poppler，模型后端仍需本机认证。
+The short command in this setup depends on an activated virtual environment. To launch directly from any terminal, follow the platform-specific pipx steps in the README. PDF reading still requires Poppler, and model backends still need local authentication.
 
-## 使用自己的主题和论文
+## Using your own topic and papers
 
-先建立独立项目，选择后端。CLI 后端需要用户已在本机完成安装和认证。
+Create a separate project and choose a backend. CLI backends must already be installed and authenticated locally.
 
 ```bash
-research-idea init "长上下文中的证据冲突" \
+research-idea init "Conflicting evidence in long contexts" \
   --project ./research-projects/evidence-conflict --backend codex
 
 research-idea add --project ./research-projects/evidence-conflict ./papers/paper.pdf
@@ -39,35 +43,37 @@ research-idea add --project ./research-projects/evidence-conflict ./notes/readin
 research-idea run --project ./research-projects/evidence-conflict --no-search
 ```
 
-可以提供已有的核心论文全文；默认全流程最多精读 6 篇。没有本地文献时可以从主题自动发现摘要：
+You can provide full text for papers you already consider central. The default full-text paper limit is 6 across the workflow. Without local papers, discover abstracts automatically from the topic:
 
 ```bash
-research-idea run "长上下文中的证据冲突" \
+research-idea run "Conflicting evidence in long contexts" \
   --project ./research-projects/conflict --backend claude
 
 research-idea search "conflicting evidence language models" \
   --project ./research-projects/conflict --source arxiv --limit 10
 ```
 
-`search` 支持 arXiv 和 OpenAlex；按会议检索时，COLM 另外使用 OpenReview 的录用记录。网络、索引覆盖和 API 配额取决于运行环境；OpenAlex 可用 `search_api_key_env` 指定密钥环境变量。第一阶段从研究意图的不同可能原因与已有思路形成 `research_routes`，通常三条、最多四条，再以最多六条英文查询探索，查询通过 `route_ids` 关联路线。第二阶段围绕 idea 的两个技术角度，用最多三条查询寻找可迁移机制与技术路线，不要求都带上原应用领域。计划与实际搜索分别记录；初轮优先使用 `ceil(2 × max_papers / 3)` 篇的阅读额度，剩余容量留给技术探索。同样的研究要求恢复时复用检索检查点；补充要求、检索范围或阅读额度变化后重新发现，并在项目剩余额度内补读。已有文献不删除，累计预算不重置。`--no-search` 跳过联网检索，第二阶段仍会梳理两个技术角度并使用已有材料。
+`search` supports arXiv and OpenAlex; venue searches also use OpenReview acceptance records for COLM. Network access, index coverage, and API quotas depend on the environment. For OpenAlex, `search_api_key_env` names the environment variable holding a key. The first stage forms `research_routes` from possible explanations and existing approaches: usually three routes, at most four, explored through up to six English queries linked by `route_ids`.
 
-### 会议论文与全文
+In the historical two-stage workflow, the second stage searched for transferable mechanisms and technical approaches through up to three queries tied to the idea's two design angles. Queries did not all need to name the original application domain. Planned and executed searches were recorded separately. The initial reading allocation was `ceil(2 × max_papers / 3)`, reserving the rest for technical exploration. Resuming with identical requirements reused search checkpoints; changed requirements, scope, or reading limits triggered rediscovery and further reading within the remaining project budget. Existing papers were retained and cumulative usage was not reset. `--no-search` skipped online retrieval while the historical second stage still organized two design angles using existing materials. See the current workflow linked above for the replacement flow.
 
-推荐先用近期 AI/CS 范围启动：
+### Conference papers and full text
+
+Start with the recent AI/CS scope:
 
 ```bash
-research-idea start "如何设计持续演化的 LLM agent 交互环境" \
+research-idea start "Designing evolving environments for LLM agents" \
   --project ./research-projects/agent-environment \
   --backend codex --model gpt-6.1-sol \
   --literature-preset ai-recent
 ```
 
-`ai-recent` 先检索下方列出的 20 个会议及对应出版系列，再以 arXiv CS 预印本补充。范围覆盖 AI/NLP/Agent、数据挖掘与数据库、检索与 Web、视觉与多模态；选文仍依据当前研究主题。每次混合检索先为会议来源分配约三分之二的名额，其余留给预印本；会议索引失败或结果不足时可以补充更多 CS 预印本。结果名额有限时，按相关性和时间确定优先顺序，并兼顾不同会议，避免名单后面的会议固定被截掉。
+`ai-recent` searches the 20 venues and corresponding publication series listed below, then supplements them with arXiv CS preprints. Coverage includes AI/NLP/agents, data mining and databases, retrieval and the Web, and vision and multimodal research. Selection still follows the research topic. Hybrid retrieval initially allocates about two-thirds of result slots to conference sources and the remainder to preprints. More CS preprints can fill gaps when conference indexes fail or return too few results. Limited slots are prioritized by relevance and date while balancing venues, so venues at the end of the list are not always excluded.
 
-新项目默认限制 CS，采用动态日期：背景与技术探索看近 12 个月，第一阶段动机与贡献对照看近 6 个月，每次运行按当天重新计算。已有固定日期项目保持原设置；可用 `/date` 切换，也可以精确覆盖：
+New projects default to CS-only retrieval with rolling dates: 12 months for background and strategy exploration, and 6 months for motivation and contribution comparison. Dates are recalculated on each run. Projects with fixed dates retain those settings. Use `/date` to switch modes, or specify exact limits:
 
 ```bash
-research-idea start "你的研究方向" \
+research-idea start "Your research direction" \
   --project ./research-projects/scoped --backend codex \
   --literature-preset ai-recent \
   --since 2025-01-01 --until 2026-10-23 \
@@ -75,20 +81,20 @@ research-idea start "你的研究方向" \
   --arxiv-categories cs.AI cs.CL cs.LG cs.MA
 ```
 
-对应配置为 `search_source = "hybrid"`、`search_since`、`search_until`、`search_cs_only = true`、`arxiv_categories` 和 `search_venues`。arXiv 请求同时携带分类和首次提交日期范围；OpenAlex 使用发表日期、出版来源 ID，未指定会议时使用 Computer Science 字段。返回记录还要再次通过日期和领域检查，缺少必要元数据的记录被排除并保留原因。旧论文的新版本不会仅因更新时间较新就通过日期筛选。普通关键词以 AND 组合，带引号短语和原生布尔查询保留。
+The corresponding settings are `search_source = "hybrid"`, `search_since`, `search_until`, `search_cs_only = true`, `arxiv_categories`, and `search_venues`. arXiv requests include categories and initial submission dates. OpenAlex uses publication dates and source IDs, or its Computer Science field when no venues are specified. Returned records are checked again for dates and fields; records missing required metadata are excluded with a reason. A new revision of an old paper does not pass the date filter merely because it was updated recently. Ordinary keywords use AND; quoted phrases and native Boolean queries are preserved.
 
-这些限制作用于新执行的联网检索。已有资料和显式导入的经典论文保留为项目上下文；要建立完全受新范围约束的语料，请使用新项目目录。范围和会议变化进入检索缓存身份，不能拿旧范围的缓存当成新检索结果。`--no-cs-only` 可取消 CS 字段检查；arXiv 分类仍由 `--arxiv-categories` 单独控制。传入不带值的 `--venues` 可以清空已保存的会议范围。
+These limits apply to newly executed online searches. Existing materials and explicitly imported classic papers remain project context. Use a new project directory for a corpus governed entirely by the new scope. Scope and venue changes are part of search cache identity, so old results cannot stand in for a new search. `--no-cs-only` disables the CS field check; `--arxiv-categories` still controls arXiv categories separately. Passing `--venues` without values clears the saved venue scope.
 
 ```bash
 research-idea venues
-research-idea init "长上下文中的证据冲突" --project ./research-projects/venues
+research-idea init "Conflicting evidence in long contexts" --project ./research-projects/venues
 research-idea search "conflicting evidence language models" \
   --project ./research-projects/venues \
   --venues ACL EMNLP NAACL COLM --full-text --limit 12
 research-idea run --project ./research-projects/venues --no-search
 ```
 
-也可以一次启动：
+Or start in one command:
 
 ```bash
 research-idea start "conflicting evidence in language models" \
@@ -96,82 +102,82 @@ research-idea start "conflicting evidence in language models" \
   --venues ACL EMNLP NAACL COLM
 ```
 
-- `--venues` 自动选择 OpenAlex 路由；会议身份来自出版来源元数据，不从论文标题推测。COLM 按 OpenReview 的已录用 `venueid` 读取，最近最多三届、每届有限分页，再用标题和摘要的英文关键词匹配排序。这不是完整语义检索。
-- `ai-recent` / `ai-recommended` 默认包含 NeurIPS、ICML、ICLR、ACL、EMNLP、NAACL、COLM、AAAI、IJCAI、AAMAS、KDD、ICDM、ICDE、SIGMOD、VLDB、ACM MM、CVPR、ICCV、SIGIR、WWW。ICAPS、KR、UAI 不在默认范围。会议增加后仍按主题、相关度和时间筛选，全文阅读上限由 `/budget max_papers` 控制。
-- `ACM MM`、`ACMMM`、`MM` 为同一会议；WWW 同时识别 The Web Conference 与 ACM Web Conference，VLDB 检索覆盖 PVLDB。SIGMOD 检索纳入 PACMMOD 系列，结果保留 PACMMOD 的真实出版名称，因为该系列也承载 PODS。评级目录的分级字段与此研究范围分开保存。
-- 已有项目保留保存的会议设置；输入 `/scope ai-recent` 或 `/venues ai-recommended` 即可启用扩展范围。
-- 分别记录 CCF 2026、ICORE2026、TH-CPL 2019 评级来源。CCF 2026 的 ICLR 为 A、IJCAI 为 B；COLM 为单独关注会议。清华版本对应已核实的校内公开文件，不声称是 2026 修订。`ccf-a-ai-2026`、`tsinghua-a-ai-2019`、`core-astar-ai-2026` 是有版本的范围预设；`core-astar-2026` 提供完整 62 个 A* 会议供显式选择。`ccf-a-ai-2022` 只为旧配置兼容保留。
-- 显式会议筛选针对主会议；Findings、workshop、demo、industry 等不被冒认为主会。解析不到会议来源、分页截断或服务失败会记录在 `coverage.gaps`，不会退回无过滤搜索并冒称命中指定会议。
-- `search --full-text` 下载公开学术来源 PDF 并提取正文；未加此参数的手动搜索只导入元数据和摘要。需要 Poppler `pdftotext`。下载失败后，系统按完整标题搜索 arXiv，核对标题与已知作者，读取匹配的预印本，并保留会议身份及实际正文版本。PMLR 使用论文页提供的 PDF 链接，包括官方 `mlresearch` 仓库。仍无法取得公开正文时，可用 `add` 导入本地 PDF。
-- `start/run` 默认尝试获取摘要记录对应的全文；`--no-fetch-full-text` 关闭下载，`--no-search` 只使用已导入材料，也关闭自动全文下载。
-- 只有下载并提取到非空正文才标为 `full_text`；下载失败、扫描 PDF 或未支持的网站保留摘要与具体缺口。已下载全文仍会受阅读预算限制，报告区分完整提供文本与部分片段。
+- `--venues` selects the OpenAlex route automatically. Venue identity comes from publication-source metadata, not paper titles. COLM uses accepted OpenReview `venueid` records from at most the three latest editions, with bounded pagination per edition, then ranks English keyword matches in titles and abstracts. This is not full semantic retrieval.
+- `ai-recent` / `ai-recommended` includes NeurIPS, ICML, ICLR, ACL, EMNLP, NAACL, COLM, AAAI, IJCAI, AAMAS, KDD, ICDM, ICDE, SIGMOD, VLDB, ACM MM, CVPR, ICCV, SIGIR, and WWW by default. ICAPS, KR, and UAI are excluded. Papers are still selected by topic, relevance, and date; `/budget max_papers` controls the full-text reading limit.
+- `ACM MM`, `ACMMM`, and `MM` identify the same venue. WWW recognizes both The Web Conference and ACM Web Conference; VLDB retrieval includes PVLDB. SIGMOD retrieval includes PACMMOD, retaining the actual series name because it also publishes PODS papers. Ranking categories are stored separately from the research scope.
+- Existing projects keep their saved venues. Use `/scope ai-recent` or `/venues ai-recommended` to enable the expanded scope.
+- Ratings retain separate CCF 2026, ICORE2026, and TH-CPL 2019 sources. CCF 2026 lists ICLR as A and IJCAI as B; COLM is an independently selected venue. The Tsinghua version refers to the verified university-hosted document, not a claimed 2026 revision. Versioned presets are `ccf-a-ai-2026`, `tsinghua-a-ai-2019`, and `core-astar-ai-2026`; `core-astar-2026` offers all 62 A* venues for explicit selection. `ccf-a-ai-2022` remains only for old configurations.
+- Explicit venue filters target the main conference. Findings, workshops, demos, and industry tracks are not mislabeled as the main track. Unresolved sources, truncated pagination, and service failures appear in `coverage.gaps`; an unfiltered fallback is not presented as matching the requested venue.
+- `search --full-text` downloads PDFs from public academic sources and extracts text. Without it, manual search imports only metadata and abstracts. Poppler's `pdftotext` is required. After a download failure, the system searches arXiv by full title, checks the title and known authors, and reads a matching preprint while preserving the venue identity and actual full-text version. PMLR uses PDF links from paper pages, including the official `mlresearch` repository. If public full text is still unavailable, import a local PDF with `add`.
+- `start/run` attempts full-text retrieval for abstract records by default. `--no-fetch-full-text` disables downloading; `--no-search` uses imported materials only and also disables automatic full-text downloads.
+- A source becomes `full_text` only after nonempty text is downloaded and extracted. Failed downloads, scanned PDFs, and unsupported sites retain their abstracts and specific gaps. Downloaded papers still follow reading budgets; reports distinguish full supplied text from partial excerpts.
 
-`report.json` 保留自动/手动检索记录、会议范围、索引覆盖缺口和全文获取记录。模型提出的检索建议不等于实际执行过的检索。
+`report.json` retains automatic/manual search records, venue scope, index coverage gaps, and full-text retrieval records. Model search suggestions are not treated as executed searches.
 
-TXT/Markdown 默认作为 `notes`，PDF 提取文本作为 `full_text`。如果 TXT/Markdown 确实是论文全文，可显式 `--kind full_text`。这是来源声明，不是内容真实性认证。
+TXT/Markdown defaults to `notes`; text extracted from PDF becomes `full_text`. If a TXT/Markdown file contains an entire paper, specify `--kind full_text`. This declares the source type; it does not certify authenticity.
 
-JSON 可以包含一个论文对象、对象数组或 `{"papers": [...]}`。例如：
+JSON accepts one paper object, an array, or `{"papers": [...]}`. For example:
 
 ```json
 {
   "id": "local-paper-001",
-  "title": "实际论文标题",
-  "authors": ["作者"],
+  "title": "Actual paper title",
+  "authors": ["Author"],
   "year": 2026,
   "url": "https://example.org/paper",
   "content_kind": "full_text",
-  "text": "实际论文正文……"
+  "text": "Actual paper text..."
 }
 ```
 
-这里的 `example.org` 只是格式示例，不是论文来源。
+`example.org` illustrates the format and is not a paper source.
 
-## 先筛选，再围绕问题阅读
+## Selection and question-focused reading
 
-默认每个检索式召回最多 20 篇元数据；第一阶段最多六个检索式按路线记录真实召回出处，合并去重后按路线交错组织最多 40 篇候选，再用一次模型调用选择相关且互补的论文。路线内考虑词项相关度和发表时间，语义选文关注用户的问题、动机和机制，同等相关时优先近期工作，不为每条路线凑入只共享 agent、adaptation 等词汇的偏题资料。每篇显示选读原因和正文要回答的问题；`reading_question` 与路线信息继续进入正文阅读和分析卡任务。只有题名的记录也可以入选核查，缺少的方法细节仍由正文确认。筛选计入调用预算并可缓存，不作创新性判决。
+The original selection flow retrieved up to 20 metadata records per query. Up to six first-stage queries recorded provenance by route, then deduplicated and interleaved results into at most 40 candidates. One model call selected relevant, complementary papers. Within routes, term relevance and publication date informed ranking; semantic selection focused on the user's problem, motivation, and mechanism, preferring newer work when relevance was equal. Sharing a word such as “agent” or “adaptation” was not enough to fill a route. Each selected paper received a reading reason and a question for its full text. `reading_question` and route information continued into reading and analysis-card tasks. Title-only records could be selected for checking; missing methodological details still required full text. Selection counted toward the call budget, could be cached, and did not judge novelty. In v1.0.0, all initial candidate abstracts participate in broad reading and synthesis before full-text selection; see [Workflow](workflow.md).
 
-只给入选的 top-k 获取全文；默认总量 6 篇，初轮最多 4 篇用于形成问题、动机与基本思路，剩余名额用于技术设计的定向检索。修改 `max_papers` 后，初轮额度为总量的三分之二向上取整。不为凑满数量而选入偏题资料。已知较老近邻不会因滚动时间窗口而删除。读取仍有每篇分块与补读预算；没有实际补读新文本时，保留原分析卡并记录补读请求的处理结果，不重复生成整张卡。
+Only selected top-k papers receive full-text retrieval. The historical default was 6 papers overall: up to 4 initially for the problem, motivation, and basic idea, with the rest reserved for technical design. The initial quota rounded two-thirds of `max_papers` upward. Papers were not added simply to fill slots, and known older neighbors were not deleted because of rolling dates. Reading retained per-paper chunk and follow-up limits. Without new text, the original analysis card was kept and the handling of the follow-up request recorded, rather than regenerating the card. The current problem-focused flow no longer uses the two-thirds reservation.
 
-第一阶段阅读同时比较问题现象、动机、限制条件、原因解释与研究主张；第二阶段复用这些证据，并寻找能回答具体设计问题的可迁移策略。方法相似不淘汰候选；新的故事必须形成不同的研究问题或可检验预测。输出优先说明问题、动机、现有方法不足、核心洞见和贡献，再附技术参考；内部审阅状态保留在详细记录中。
+Historical first-stage reading compared phenomena, motivation, conditions, explanations, and research claims. The second stage reused evidence and looked for transferable strategies for specific design questions. Similar methods did not eliminate candidates; a new framing still needed a different research question or testable prediction. Output prioritized the problem, motivation, existing limitations, core insight, and contribution before technical references. Internal review states remained in detailed records.
 
-HTTP 429 遵守 `Retry-After`；较长配额等待不阻塞本轮，而是暂停该服务并使用替代来源。403 不反复重试。成功元数据缓存 24 小时，相同项目多次查询复用会议目录。OpenAlex/OpenReview 索引不可用时，可回退 ACL Anthology、PMLR、NeurIPS 主会目录、ICLR 论文列表及 COLM 官方录用列表。仅入选的 ICLR/COLM 论文再解析全文链接；COLM 的预印本匹配要求标题精确规范化相等。会议目录有时只给月份或年份，保留原始精度，不编造日级日期。
+HTTP 429 follows `Retry-After`. Long quota waits suspend that service for the run and use alternatives rather than blocking the whole run. HTTP 403 is not repeatedly retried. Successful metadata is cached for 24 hours, and repeated project queries reuse venue catalogs. If OpenAlex/OpenReview indexes are unavailable, alternatives include ACL Anthology, PMLR, the NeurIPS main-track directory, ICLR paper lists, and COLM's official acceptance list. Only selected ICLR/COLM papers have full-text links resolved; COLM preprints require equal normalized titles. Catalog dates retain their original month/year precision rather than inventing a day.
 
-入选会议目录论文的 PDF 下载失败时，在同一次获取的时间预算内查询同标题 arXiv 预印本。匹配要求规范化标题相同；双方有作者信息时还需作者重合。报告分别保留会议元数据、实际阅读的预印本地址与版本。同一轮不会因为补全 PDF 地址而重复下载同一篇失败论文。
+If a selected conference paper's PDF fails to download, the same retrieval time budget includes a title search for an arXiv preprint. Normalized titles must match; when both sources list authors, they must overlap too. Reports retain venue metadata separately from the preprint URL and version actually read. Completing a PDF URL does not trigger repeated downloads of the same failed paper within a round.
 
-## 论文怎么分析
+## How papers are analyzed
 
-全文阅读默认启用。先定位章节及图表/公式标记，分块读取方法、实验和可用附录，再形成九维分析卡：**问题、动机、洞见、方法、已有工作差异、实验设计、结果、结论边界、研究启发**。每个维度区分原文支持、模型分析、证据不足和不适用；不会要求理论论文提供不存在的实验。
+Full-text reading is enabled by default. The detailed reading path locates sections and figure/table/equation markers, reads methods, experiments, and available appendices in chunks, and forms a nine-part card: **problem, motivation, insight, method, differences from prior work, experimental design, results, conclusion boundaries, and research implications**. Each part distinguishes source support, model analysis, missing evidence, and non-applicability; theoretical papers need not supply nonexistent experiments. The current workflow first reads background material and uses detailed reading when the research question needs it.
 
-核心方法说明输入、输出、必要性和隔离模块贡献的检验；实验对照作者主张、实际设置、结果与可支持结论。作者明确承认的局限、模型疑点、待检验机会分开保存。有具体缺口时，按章节或图表 ID 定向读取尚未提供的文本，再更新分析卡。只进行一次有预算的补读循环，不为补齐表格无限循环。
+Method analysis explains inputs, outputs, necessity, and tests that isolate a module's contribution. Experiment analysis connects author claims, actual settings, results, and supported conclusions. Author-acknowledged limitations, model concerns, and opportunities to investigate are stored separately. Specific gaps can trigger reading of previously unseen sections or figure/table IDs and an updated card. Follow-up is one budgeted cycle, not an unbounded effort to fill every field.
 
-默认每篇最多先读 3 个连续片段，每片最多 `source_chars` 字符，再按必要性最多补读 2 片。每片最多抽取 6 条原文证据。正文读取、分析卡生成和补读都计入统一调用预算。摘要和笔记保留来源受限标记，不能升级成全文分析。
+By default, initial detailed reading uses at most 3 consecutive chunks per paper, each limited to `source_chars`, followed by up to 2 additional chunks as needed. Each chunk yields at most 6 source quotations. Reading, card creation, and follow-up all share the call budget. Abstracts and notes retain their limited source status and cannot be promoted to full-text analysis.
 
-章节和图表识别是启发式的；覆盖率表示交给成功阅读任务的文本范围，不证明模型理解完整。当前只分析提取文本，未视觉核对图片、表格布局和公式。未读内容、获取失败和缺少对照是待核查项，不是不存在或不可行的证明。
+Section and figure detection is heuristic. Coverage measures text supplied to successful reading tasks, not completeness of model understanding. Analysis currently uses extracted text without visual verification of images, table layout, or equations. Unread material, retrieval failures, and missing controls are questions to investigate, not proof that something is absent or infeasible.
 
-第一阶段使用初期选文的材料副本进行构思和动机、贡献对照，恢复旧项目时也可读取旧批次的初期来源。副本保留源论文的方法、实验、结果、条件、疑点和原文引用，暂不带入阅读者生成的研究机会、对 idea 的建议、疑点中的实验建议及旧候选定向阅读的解释。完整分析卡与证据仍保留在项目中，第二阶段继续使用，并对最多三篇与设计相关的论文提取技术借鉴：原方法、共同结构、适用条件、改造方式与简单替代。已有证据优先复用；有具体阅读问题才补读，不默认重新生成九维分析卡。最终方案记录实际采用的设计选择及其理由。
+In the historical two-stage flow, first-stage ideation and contribution comparison used a snapshot of initial reading materials; old projects could recover their initial batch sources. The snapshot preserved source methods, experiments, results, conditions, concerns, and quotations, while excluding reader-generated opportunities, idea suggestions, proposed experiments from concerns, and interpretations targeted at old candidates. Full cards and evidence remained in the project. The second stage reused them and extracted design references from up to three papers: the original method, shared structure, conditions, adaptation, and simple alternatives. Existing evidence was reused first; specific questions triggered follow-up without automatically regenerating full cards. The final proposal recorded design choices and reasons. Current delivery stops at problems and motivation.
 
-引文定位容忍 PDF 连字、排版引号、软连字符和行末断词，并保存未改写的原文及精确字符位置。词语、数字、否定和非连续拼接不会通过。定位失败时，控制器向模型提供失败引文和附近原文进行一次定向修复；仍失败的观察单独排除并记入 quote_gaps，保留其他有效证据继续研究。被排除的引文不会进入证据库，也不能用来否决候选。引文匹配只验证原文存在，语义解释与创新判断仍需核查。
+Quotation matching handles PDF ligatures, typographic quotes, soft hyphens, and line-end hyphenation while preserving the unchanged source and exact character offsets. Changed words, numbers, negation, or noncontiguous splicing do not pass. If a quote cannot be located, the controller supplies it and nearby source text for one targeted repair. Remaining failed observations are excluded individually and recorded in `quote_gaps`; other valid evidence remains usable. Excluded quotes do not enter the evidence store and cannot reject a candidate. Matching verifies that text exists, not that its interpretation or a novelty judgment is correct.
 
-PDF 使用 Poppler 的默认阅读顺序抽取，保留分页；不使用会把双栏文字按行交错的物理版式模式。表格和公式仍需按阅读缺口处理。已有项目不会自动重写旧正文，可重新导入更正的全文；显式导入的非空全文即使更短也会更新来源，并使旧证据及候选批次失效，普通摘要补充不会覆盖全文。
+PDF extraction uses Poppler's default reading order and retains page boundaries. It avoids physical-layout extraction that can interleave two-column lines. Tables and equations still require attention to reading gaps. Old projects do not automatically rewrite stored text; reimport corrected full text if needed. Explicitly imported nonempty full text updates the source even when shorter, invalidating old evidence and candidate batches. An ordinary abstract update does not overwrite full text.
 
-研究审阅默认使用同一个配置后端的独立任务，不能称为跨模型独立验证。审阅指出的阻塞、待修订和轮数用尽会单独记录。模型“继续”意见不提升实验证据状态，所有未执行方案保持 `untested`。
+Research review uses a separate task on the same configured backend by default, not independent cross-model validation. Blockers, revisions, and exhausted rounds are recorded separately. A model's recommendation to continue does not establish experimental evidence; unexecuted proposals remain `untested`.
 
-## 内置与本地 skill
+## Built-in and local skills
 
-**CLI 自带 skill 默认启用**，安装 wheel 后也可读取；按阶段加载，不会每次把全部技能都放进提示词：
+**Built-in CLI skills are enabled by default**, including in installed wheels. They load by stage rather than all entering every prompt:
 
-| Skill | 研究职责 |
+| Skill | Research responsibility |
 | --- | --- |
-| `research-idea-analyze-paper` | 按九维框架分析问题、方法与实验，针对影响判断的缺口补读 |
-| `research-idea-read-evidence` | 提取方法、条件、限制和原文证据 |
-| `research-idea-audit-claims` | 对照作者主张与实验实际支持，保留测试范围、混杂和未读附录 |
-| `research-idea-motivation` | 建立 背景 → 现有方法 → 还可能的问题 → 动机 → Idea 的论证，推敲问题价值与核心想法 |
-| `research-idea-compare-methods` | 六维比较最近工作，定位核心主张的实际差异 |
-| `research-idea-build-mechanism` | 明确干预、信息流、机制和可检验预测 |
-| `research-idea-check-feasibility` | 检查信号、接口、数据、学习路径与资源前提 |
-| `research-idea-design-falsification` | 检视核心解释与最脆弱的假设，默认不展开实验计划 |
+| `research-idea-analyze-paper` | Analyze problems, methods, and experiments with the nine-part framework; follow up on consequential gaps |
+| `research-idea-read-evidence` | Extract methods, conditions, limitations, and source quotations |
+| `research-idea-audit-claims` | Compare author claims with experimental support, retaining tested scope, confounds, and unread appendices |
+| `research-idea-motivation` | Build Background → Existing approaches → Possible remaining problems → Motivation → Idea; examine significance and the core idea |
+| `research-idea-compare-methods` | Compare nearby work along six dimensions to locate substantive differences in core claims |
+| `research-idea-build-mechanism` | Clarify interventions, information flow, mechanisms, and testable predictions |
+| `research-idea-check-feasibility` | Check signals, interfaces, data, learning paths, and resource assumptions |
+| `research-idea-design-falsification` | Examine the core explanation and weakest assumptions without expanding an experiment plan by default |
 
-**本地已安装 skill 可额外选择**。常见项目/用户目录中的 `.agents/skills`、`.codex/skills`、`.claude/skills` 可被发现；`CODEX_HOME/skills` 受支持。自定义安装位置用 `--root` 或 `--skill-root` 指定。这里只扫描受限目录，不是完整复刻 Codex 的全局插件发现逻辑。
+**Locally installed skills can be selected additionally.** Discovery covers `.agents/skills`, `.codex/skills`, and `.claude/skills` in common project/user locations, plus `CODEX_HOME/skills`. Use `--root` or `--skill-root` for custom locations. This is bounded directory discovery, not a full reproduction of Codex's global plugin discovery.
 
 ```bash
 research-idea skills list
@@ -183,20 +189,20 @@ research-idea skills use ccf-idea-optimizer ccf-idea-reviewer \
 research-idea resume --project ./research-projects/conflict --no-search
 ```
 
-`skills use` 保存外部 skill 的明确路径；`skills clear --project PATH` 只清外部选择。也可在 `start/run/resume/init` 用重复的 `--skill NAME_OR_PATH` 和 `--skill-root DIRECTORY` 传入。路径歧义明确报错，不会悄悄选中同名 skill。链接安装的 skill 目录可读取其直接 `SKILL.md`。
+`skills use` saves explicit external skill paths; `skills clear --project PATH` clears only external selections. Repeatable `--skill NAME_OR_PATH` and `--skill-root DIRECTORY` also work with `start/run/resume/init`. Ambiguous paths produce an error instead of silently selecting a same-named skill. A symlinked skill directory can supply its direct `SKILL.md`.
 
 ```bash
-research-idea start "你的研究主题" --project ./research-projects/my-idea \
+research-idea start "Your research topic" --project ./research-projects/my-idea \
   --papers ./papers --no-search \
   --codex-bin /absolute/path/to/codex --codex-profile research \
   --skill ~/code/CCFA-Skills/ccf-idea-optimizer/SKILL.md
 ```
 
-`--codex-profile` 指向你已在 Codex 中配置的 profile；不指定则沿用默认设置。`--codex-bin` 是可执行文件路径或 PATH 中的名称，不是 shell 命令。全局认证文件不由本程序读取或改写。
+`--codex-profile` names a profile already configured in Codex; omission uses its defaults. `--codex-bin` is an executable path or a name on PATH, not a shell command. This program does not read or rewrite global authentication files.
 
-本机启动脚本可设置 `RESEARCH_IDEA_CODEX_BIN` 提供默认 Codex 可执行文件。它只替代项目中的默认名称 `codex`，保留已保存的自定义路径；显式 `--codex-bin` 优先。
+A local launch script can set `RESEARCH_IDEA_CODEX_BIN` as the default executable. It replaces only the default project name `codex`, preserving saved custom paths. An explicit `--codex-bin` takes precedence.
 
-对应项目配置：
+Corresponding project configuration:
 
 ```toml
 codex_bin = "codex"
@@ -207,15 +213,15 @@ skill_roots = []
 skill_max_chars = 48000
 ```
 
-设置 `builtin_skills = false` 或运行时指定 `--no-builtin-skills` 可关闭内置技能，用于自定义或对照评估。外部 skill 默认不会因为“安装了”就自动启用。单个文件最多 32 KiB，总加载文本受 `skill_max_chars` 限制；超出则报错，不静默截断。
+Set `builtin_skills = false` or pass `--no-builtin-skills` for customization or comparison. External skills are not automatically enabled merely because they are installed. Each file is limited to 32 KiB and combined text to `skill_max_chars`; exceeding a limit raises an error instead of silently truncating.
 
-加载的是指定 Markdown 文本。引用文件需额外显式选择；技能内的脚本、网络访问与工具不会自动执行，也不会改变研究任务的输出格式、证据规则和预算。原文证据与 skill 指导严格分开。每次记录名称、来源、阶段、路径与 SHA-256；修改 skill 后相关任务和候选批次会失效重算，旧历史保留。
+The loader reads selected Markdown text. External reference files must be selected explicitly. Skill scripts, network access, and tools do not execute automatically or change task output formats, evidence rules, or budgets. Source evidence stays separate from skill guidance. Each load records name, source, stage, path, and SHA-256. Changed skills invalidate relevant tasks and candidate batches while preserving history.
 
-推荐把 CCFA idea optimizer/reviewer、experiment designer 作为补充，按需要显式附加它们的具体参考文件。系统内置八个 skill 为项目自主编写，未打包第三方代码或文档；ARIS、Supervisor-Skills、IdeaScientist 和 research-idea-explorer 等的设计借鉴见 [来源](sources.md)。
+CCFA idea optimizer/reviewer and experiment designer can be explicit supplements, including their relevant reference files as needed. The eight built-in skills were written for this project; third-party code and documents are not bundled. Design influences from ARIS, Supervisor-Skills, IdeaScientist, research-idea-explorer, and others are listed in [Sources](sources.md).
 
-## 后端配置
+## Backend configuration
 
-每个项目有自己的 `research.toml`。密钥只通过环境变量读取；不要把密钥写进配置、论文或 Git。
+Each project has its own `research.toml`. Keys are read only from environment variables; keep them out of configuration, papers, and Git.
 
 ### Codex CLI
 
@@ -224,7 +230,7 @@ backend = "codex"
 model = ""
 ```
 
-模型为空时沿用 CLI 的模型选择，也可 `research-idea run --project PATH --model MODEL_ID`。适配器使用非交互执行、只读沙箱和结构化输出；禁用研究任务不需要的内置执行/搜索能力。日常配置可以开启 MCP：适配器读取服务清单，为本次调用添加 `enabled=false` 的覆盖，再检查一次有效清单后发送研究材料。桌面注入的服务也会获得有效但不启动的传输配置，不复制服务地址、环境变量或凭据。无需修改全局配置或另建 profile。相关配置字段见 [Codex 配置说明](https://learn.chatgpt.com/docs/config-file/config-reference)。不兼容的 CLI 会提示更新，不会退化为假结果。
+An empty model inherits the CLI's selection. You can also use `research-idea run --project PATH --model MODEL_ID`. The adapter uses non-interactive execution, a read-only sandbox, and structured output, disabling built-in execution/search capabilities unnecessary for research inference. Your normal configuration can enable MCP: the adapter reads the service list, overrides each with `enabled=false` for this call, and checks the effective list before sending materials. Desktop-injected services receive valid but inactive transport configuration without copying service addresses, environment variables, or credentials. No global configuration change or separate profile is needed. See the [Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference). Incompatible CLI versions prompt an update rather than returning fabricated results.
 
 ### Claude Code CLI
 
@@ -233,42 +239,44 @@ backend = "claude"
 model = ""
 ```
 
-使用 `claude --safe-mode -p`、JSON Schema、禁用内置工具与 MCP 的设置。需要支持这些参数的版本；保留现有认证。文献检索与正文读取由 Research-idea 控制器执行，Claude CLI 接收当前任务的材料进行分析。
+The adapter uses `claude --safe-mode -p`, JSON Schema, and settings disabling built-in tools and MCP. A version supporting these arguments is required; existing authentication is retained. The Research-idea controller handles literature retrieval and text reading; Claude receives the materials needed for each analysis task.
 
 ### OpenAI-compatible API
 
-下面可以作为项目配置的完整最小内容；未列出的参数使用默认值。
+This is a complete minimal project configuration; unspecified options use defaults:
 
 ```toml
 backend = "api"
 api_provider = "openai-compatible"
 base_url = "https://api.openai.com/v1"
 api_key_env = "RESEARCH_API_KEY"
-model = "填写账户可用的模型ID"
+model = "YOUR_SUPPORTED_MODEL_ID"
 max_output_tokens = 8192
 api_max_tokens_field = "max_completion_tokens"
 ```
 
-在终端中设置 `RESEARCH_API_KEY`，然后运行 `research-idea run --project PATH`。使用 `/chat/completions` 与严格 `json_schema` 输出；自定义服务必须支持该协议。旧服务如果使用 `max_tokens`，可调整 `api_max_tokens_field`。不支持严格 schema 时明确报错，不会静默改成自由文本。
+Set `RESEARCH_API_KEY` in the terminal, then run `research-idea run --project PATH`. The adapter uses `/chat/completions` and strict `json_schema` output; custom services must support them. Change `api_max_tokens_field` for older services using `max_tokens`. Unsupported strict schemas produce an explicit error rather than silently falling back to free text.
 
-本机兼容服务可配置 `base_url = "http://127.0.0.1:8000/v1"`、`api_key_env = ""`；远程服务要求 HTTPS。凭据不放在 URL 中。
+For a local compatible service, use `base_url = "http://127.0.0.1:8000/v1"` and `api_key_env = ""`. Remote services require HTTPS. Credentials do not belong in URLs.
 
-### 原生 Anthropic API
+### Native Anthropic API
 
 ```toml
 backend = "api"
 api_provider = "anthropic"
 base_url = "https://api.anthropic.com/v1"
 api_key_env = "ANTHROPIC_API_KEY"
-model = "填写支持结构化输出的模型ID"
+model = "YOUR_STRUCTURED_OUTPUT_MODEL_ID"
 max_output_tokens = 8192
 ```
 
-使用原生 `/messages` 和结构化输出协议。更换 provider 时应同步修改已写入配置的 endpoint/key；用户显式配置值会被保留。
+This uses native `/messages` and structured output. When changing providers, also update an explicitly configured endpoint and key variable; explicit values are preserved.
 
-## 预算与恢复
+## Budgets and recovery
 
-Windows 如果曾报 `[WinError 32] ... research-codex-...`，通常是模型 CLI 或其他程序还占用临时目录，导致调用结束后的清理失败。更新版本会短暂重试清理；持续占用时显示 `[cleanup]` 并保留该目录，不覆盖已返回的模型结果或原本的调用错误。超时或中断时也会尝试结束 Windows CLI 子进程树。旧版本因此中断的项目，更新并重启 CLI 后可用 `/run` 继续，已有检查点会复用。残留目录位于系统 Temp 中，确认相关进程退出后可删除。
+On Windows, `[WinError 32] ... research-codex-...` usually means the model CLI or another program still holds the temporary directory, preventing cleanup after the call. Updated versions briefly retry cleanup; persistent locks display `[cleanup]` and retain the directory without replacing a successful model result or the original call error. Timeout/interruption handling also attempts to terminate the Windows CLI process tree. For a project interrupted by this in an older version, update, restart the CLI, and use `/run` to reuse checkpoints. Leftover directories are in the system Temp folder and can be removed after the related processes exit.
+
+Example configuration, including fields retained for older workflows:
 
 ```toml
 max_candidates = 3
@@ -286,16 +294,16 @@ deep_reading = true
 max_paper_read_chunks = 3
 max_followup_reads = 2
 auto_search = true
-constraints = "单张24GB GPU；两周；允许小规模微调；禁止调用推理时真实答案"
+constraints = "One 24 GB GPU; two weeks; small-scale fine-tuning allowed; no ground-truth answers at inference"
 ```
 
-- 新建项目默认上限为 200 次调用、300 分钟累计运行时间；旧项目显式设置的上限不变。上限不是必须用满的目标。`max_followup_reads = 0` 关闭额外补读，`deep_reading = false` 恢复简要证据抽取。
-- `max_calls` 是持久化的后端 `generate` 调用次数，结构化输出修复也计入。API 每次最多三次 HTTP 尝试，并记录已知尝试数；CLI 内部请求次数未知。
-- `max_seconds` 是项目累计控制器运行时间，在任务边界检查并保存。强制杀死进程可能丢失最后一个检查点之后的时间；它不是操作系统级全局计费限额。
-- 每次后端调用有本地超时，API 请求在可终止子进程中执行。断开连接不能保证远端服务立刻停止推理或计费。
-- 成功任务按输入、提示词和后端配置缓存。已有候选批次会保留；内部补充文献不重新生成整批候选。
-- 显式 `add/search` 更改语料，或 `run --replan`，会重新建立候选批次；旧批次留在事件记录。
-- 预算不足返回退出码 `3` 并导出当前报告；提高配置上限后 `resume`。普通错误返回 `1`。
+- New projects default to 200 calls and 300 minutes of cumulative runtime. Existing explicit limits are preserved. Limits are ceilings, not targets. `max_followup_reads = 0` disables extra reading; `deep_reading = false` uses brief evidence extraction.
+- `max_calls` persistently counts backend `generate` calls, including structured-output repairs. API requests use at most three HTTP attempts and record known attempts; request counts internal to CLI backends are unknown.
+- `max_seconds` counts cumulative controller runtime, checked and saved at task boundaries. Force-killing a process may lose time since the last checkpoint. It is not an operating-system-wide billing limit.
+- Each backend call has a local timeout. API requests run in a terminable subprocess. Disconnecting cannot guarantee immediate termination of remote inference or billing.
+- Successful tasks are cached by inputs, prompts, and backend settings. Existing candidate batches are retained; internal supplementary literature does not regenerate the entire batch.
+- Explicit corpus changes through `add/search`, or `run --replan`, establish a new candidate batch; old batches remain in event history.
+- Budget exhaustion returns exit code `3` and exports the current report. Raise the configured limit and `resume`. Ordinary errors return `1`.
 
 ```bash
 research-idea status --project ./research-projects/conflict
@@ -307,16 +315,18 @@ research-idea inspect --project ./research-projects/conflict --events
 research-idea export --project ./research-projects/conflict
 ```
 
-`status` 和 `inspect` 使用 SQLite 只读快照，可在研究流程运行期间查看进度；修改项目的命令仍受单写入进程锁保护。
+`status` and `inspect` use read-only SQLite snapshots and can show progress during research. Mutating commands remain protected by a single-writer process lock.
 
-结果默认保存到源码仓库下自动生成的 `idea-时间戳/`，包含 `report.md`、`report.json`、各候选 Markdown 和 `papers/` 论文分析卡。`/output 路径` 或 `--output PATH` 只修改父目录，文件夹名保持不变；恢复运行沿用同一个文件夹。`research.toml` 中的 `output_dir` 保存父目录；手动填写相对路径时以项目目录为基准，CLI 输入的路径则在输入时解析为绝对路径。JSON 报告的 `schema_version` 为 `14`，包含背景到问题和动机的论证、研究路线与查询关联、问题探索、每项独立深入的 `problem_cases`、完整问题池及逐项比较和选择理由、第一阶段 `positioning`、`idea_core.information_path`、`idea_neighborhoods` 与 `feasibility_sketch`、两个 `design_axes` 及查询和方法的 `axis_ids` 关联、第二阶段 `design_transfers` 与最终 `design_decisions`、贡献主张、逐篇六维对照、七维可行性检查、所需信号及其阶段，以及兼容旧项目的 `validation` 字段（默认不生成实验计划）、`feasibility_status`、`comparison_gaps` 和 `feasibility_assessment`。还包含 `paper_cards`（含实际阅读范围与补读记录）、`search_plans`、`paper_claim_audits` 和每版本的 `revision_record`；主张审计的结论是基于原文的模型判断，不是独立复现。运行数据库为 `research.sqlite3`；研究材料与运行目录不要提交到源码仓库。
+By default, results are saved under the source repository in an automatically named `idea-TIMESTAMP/` folder, containing `report.md`, `report.json`, candidate Markdown, and `papers/` analysis cards. `/output PATH` or `--output PATH` changes only the parent directory; the folder name stays fixed and resumption reuses it. `output_dir` in `research.toml` stores the parent. Manually entered relative paths resolve against the project directory; CLI paths become absolute when entered.
 
-## 开发与测试
+Historical JSON report `schema_version` `14` included background/problem/motivation arguments, research-route/query associations, problem exploration, independently analyzed `problem_cases`, the full problem pool and comparative selection reasons, first-stage `positioning`, `idea_core.information_path`, `idea_neighborhoods`, `feasibility_sketch`, two `design_axes`, query/method `axis_ids`, second-stage `design_transfers` and `design_decisions`, contribution claims, per-paper six-dimensional comparisons, seven-dimensional feasibility checks, required signals and stages, and compatibility fields `validation` (no experiment plan by default), `feasibility_status`, `comparison_gaps`, and `feasibility_assessment`. It also retained `paper_cards` with reading coverage and follow-up records, `search_plans`, `paper_claim_audits`, and each version's `revision_record`. Claim audits are source-grounded model judgments, not independent replications. Current schema and fields are documented in [Architecture](architecture.md). The runtime database is `research.sqlite3`; research materials and run directories should stay out of the source repository.
+
+## Development and testing
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-测试覆盖证据定位、引用一致性、断点恢复、预算、CLI 协议、API 本机 HTTP、超时、文献解析、本地 skill、范围筛选和缓存失效。已在 macOS 使用真实 Codex CLI 与 `gpt-6.1-sol` 验证结构化输出、重连恢复，并检索下载真实 arXiv CS 论文。会议检索在本次环境遇到 OpenAlex HTTP 429、OpenReview HTTP 403，报告保留这些覆盖缺口；Claude/API 真实账户、GPU 和系统性的 idea 质量评估仍待完成。离线测试通过不能证明研究质量。
+Tests cover quotation location, citation consistency, recovery, budgets, CLI protocols, local HTTP APIs, timeouts, literature parsing, local skills, scope filtering, and cache invalidation. Earlier integration checks on macOS used Codex CLI with `gpt-6.1-sol` for structured output and recovery, and retrieved real arXiv CS papers. Those checks encountered OpenAlex HTTP 429 and OpenReview HTTP 403, recorded as coverage gaps. They did not establish Claude/API account coverage, GPU execution, or systematic idea quality. Offline tests alone do not establish research effectiveness.
 
-下一步重点是用真实主题评估能否产出值得做、可开始验证的 idea，而不是继续增加流程。参见 [架构](architecture.md) 和 [借鉴来源](sources.md)。
+Further evaluation should focus on whether real topics produce worthwhile research ideas. See [Architecture](architecture.md) and [Sources](sources.md).

@@ -1,132 +1,132 @@
-# 研究问题与动机工作流 · v1.0.0
+# Research problem and motivation workflow · v1.0.0
 
-产品只做一件事：从文献中提炼有意义、有洞见的研究问题，讲清背景、现有方法、问题和动机，最后用一句话概括研究 idea。流程在这里结束，不生成解决方案、技术路线、实验计划或论文。
+**English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](workflow.zh-CN.md)
 
-## 先理解用户在推进什么
+The product has one focus: derive meaningful, insightful research problems from literature; explain the background, existing approaches, problem, and motivation; and summarize the research idea in one sentence. The workflow ends there, without generating solutions, technical routes, experiment plans, or papers.
 
-检索前用一次模型调用区分开放探索、深化已有想法、审视已有问题。保存用户目标、待检验假设、核心关切与原话来源，并解释关切之间是备选、共同要求、依赖条件还是可能的共同原因。用户可以直接在讨论中纠正，无额外确认环节。
+## Understand what the user is trying to advance
 
-初始检索与后续定向补读兼顾各方面及其关系：最接近的工作是否同时处理这些需要，一方面的成功是否依赖另一条件？沿用原查询、选文和调用预算。深入时保留相关问题，不因为分别阅读就预设最终只能留一个。
+Before searching, one model call distinguishes open exploration, refinement of an existing idea, and assessment of a specific problem. It saves the user's goal, hypotheses to examine, core concerns, and original-message provenance, and explains whether the concerns are alternatives, joint requirements, dependencies, or possible consequences of a shared cause. The user can correct this directly in discussion without an extra confirmation step.
 
-## 从大背景理解已有进展
+Initial searches and later targeted reading consider both the individual concerns and their relationships: does the closest work address these needs together, and does success on one depend on another condition? They share the existing query, selection, and call budgets. Related problems remain available during deeper analysis; reading them separately does not predetermine that only one can survive.
 
-输入研究方向、已有想法或论文；资源和范围以用户提供的信息为准。先围绕不同的主要思路和可能原因检索，再从标题与摘要筛选互补的正文阅读对象。综述、系统比较以及论文的引言/相关工作用于认识领域；具体方法与结果用于理解它实际已经做到了什么。
+## Understand existing progress in the broader context
 
-检索继续支持 CS arXiv、相关会议以及本地资料。滚动窗口分别用于背景与已有方法、近期问题和贡献对照；会议采用最新可获取届次，相关性相当时优先更近的届次。标题相近不代表具体问题被解决；来源缺失也不是创新性的证明。
+Input may be a research direction, an existing idea, or papers; resources and scope follow what the user provides. Search across different major approaches and possible causes, then use titles and abstracts to select complementary full-text readings. Surveys, systematic comparisons, introductions, and related-work sections establish the field; methods and results explain what an approach actually achieves.
 
-初始全文名额由 `max_papers` 控制。第一次讨论前，通过 `orientation` 对每篇全文做一次背景初读：优先提取引言、相关工作与结论的原文片段，总长度不超过 `min(source_chars, 12000)`。未识别到标题时读取开头片段，并保留选段说明。引用按原文位置验证，不允许跨选段拼接引文。这个阶段不自动生成完整论文卡、审计或循环补读；论文自己的未来工作只是参考，不能替代从用户大目标出发的问题发现。
+Search supports CS arXiv, relevant conferences, and local materials. Rolling windows distinguish background/existing approaches from recent problem and contribution comparisons. Conferences use the latest available edition, preferring newer editions when relevance is comparable. Similar titles do not establish that a specific problem is solved; missing sources do not prove novelty.
 
-检索规划将阅读问题拆为短概念与同义词，不将整段猜想拼成所有词同时命中的查询。长自然语言 arXiv 查询结果不足时，可在同一检索时限内扩展一次关键词，保留 CS 和日期范围；扩展结果还需关键词关联与模型相关性筛选。原始查询、扩展查询和覆盖情况都保存，明确的布尔语法及完整标题不扩展。
+`max_papers` controls initial full-text slots. Before the first discussion, `orientation` gives each selected paper one background reading, prioritizing introduction, related work, and conclusion excerpts with a total length of at most `min(source_chars, 12000)`. If headings are unrecognized, it reads the opening passage and records that selection. Citations are validated against source locations; quotations cannot splice separate windows. This stage does not automatically produce complete paper cards, audits, or repeated follow-up reading. A paper's future-work section is a reference, not a substitute for discovering problems from the user's broader goal.
 
-## 第一处讨论：哪些方向值得深入
+Search planning decomposes reading questions into short concepts and synonyms rather than requiring every word of a long conjecture to match. If a long natural-language arXiv query returns too little, it may expand keywords once within the same search timeout while preserving CS and date restrictions. Expanded results still undergo keyword association and model relevance screening. Original and expanded queries and coverage are saved; explicit Boolean expressions and complete titles are not expanded.
 
-`explore_problems` 先归纳主要方法的有效进展。宽方向通常探索三个、最多四个原因不同的问题；已有连贯想法也可以从不同解释和相互作用分别深入。用户已明确聚焦时不强凑数量。此时只解释为什么这些问题值得理解，不预选技术。
+## First discussion: which directions deserve deeper analysis?
 
-`cross_paper_synthesis` 保存跨论文联系：主要思路、共同前提、已取得的进展、变化条件、可能后果和原文出处。它进入每个方向的深入分析、比较与最终表达；没有实际联系可留空，不要求人为归纳一个共同弱点。
+`explore_problems` first summarizes effective progress by the main approaches. A broad direction normally explores three, at most four, problems with different causes. A coherent existing idea can instead be examined through different explanations and interactions. A clearly focused user request does not require filling a quota. At this point the system explains why the problems matter without preselecting techniques.
 
-交互 CLI 保存 `kind=direction` 的讨论版本并暂停。用户可以纠正背景、补充关心的问题、调整范围或合并方向。普通消息只讨论，`/continue` 才进入下一步；`/run` 不会绕过已保存的暂停。
+`cross_paper_synthesis` saves connections across papers: major approaches, shared premises, progress, changing conditions, possible consequences, and source references. This enters each direction's analysis, comparison, and final framing. It can remain empty when no real connection exists; there is no requirement to invent a common weakness.
 
-## 深入不同问题，再比较研究价值
+The interactive CLI saves a discussion version with `kind=direction` and pauses. Users can correct the background, add concerns, adjust scope, or merge directions. Ordinary messages discuss; `/continue` advances. `/run` cannot bypass a saved pause.
 
-对每个方向，先判断当前资料是否已经足够。缺口影响问题判断时，`plan_problem_reading` 提出具体阅读问题；控制器搜索、筛选并定向阅读最多两篇补充来源。初始阅读名额用完不会阻止这类有目的的补读，所有操作仍受同一调用与时间预算限制。不是每个方向都必须重新检索。
+## Analyze different problems before comparing their research value
 
-定向阅读不仅摘录证据，还在同一次调用中形成可交接的论文理解：论文在解决什么，核心原因解释是什么，输入和关键反馈从哪里来，实际经过什么处理、输出能支持什么判断。阅读结束时说明这篇论文怎样改变、支持或重新定义当前困难，进入后续深入和综合。作者主张、前作转述与我们的推断、猜想分开；不要求每篇论文必须有一个缺点。有用时采用原文例子说明过程，不把示意当成真实结果，也不把一个小场景自动变成研究范围。
+For each direction, first decide whether the current material is sufficient. When an information gap affects the judgment, `plan_problem_reading` proposes a specific reading question. The controller searches, selects, and reads at most two supplementary sources. Exhausting initial reading slots does not block this purposeful follow-up, but all operations share the same call and runtime budgets. Not every direction must search again.
 
-初读尚未覆盖的方法与结果在这里按需阅读。多个阅读问题一起交给选文任务，兼顾最接近的已有回应和可能的新困难；每篇按自己的阅读问题提取原文，避免两个名额都只寻找支持猜想的材料。
+Targeted reading extracts evidence and, in the same call, creates a transferable understanding of the paper: its problem, core causal explanation, sources of inputs and key feedback, actual processing, and judgments its outputs support. It explains how the paper changes, supports, or redefines the current difficulty, feeding later analysis and synthesis. Author claims, accounts of prior work, our inferences, and conjectures stay distinct. Papers need not each have a defect. When helpful, source examples explain the process; illustrations are not treated as real results, nor does a small example automatically define the research scope.
 
-规划时还提供当前研究论文的相关工作、参考文献片段（合计最多 12,000 字符）。`citation_targets` 只选择其中有完整题名和原文位置的代表原作，程序核对题名出处并检查论文库及召回记录，已有记录复用，缺失则按题名搜索。追溯使用 `lineage` 时间范围，尊重用户显式日期设置；与普通请求共用两个阅读名额。解析出的请求在执行前保存，下载或阅读中断后不会因为新入库论文而改变请求或重新挑选。
+Methods and results absent from orientation are read here as needed. Selection receives all reading questions together, considering both the closest existing response and possible new difficulties. Each paper is read for its own question so both slots are not spent only seeking support for the conjecture.
 
-获得定向阅读后，`reconsider_problems` 执行一次可缓存的重新构思：保留、改写、合并、拆分或替换方向，记录前后 ID、依据和理由。没有实际阅读则跳过。不增加自动搜索循环或验收步骤；新方向以已有材料继续深入，也可在后续讨论中补充。
+Planning also receives related-work and bibliography excerpts from the current research papers, totaling at most 12,000 characters. `citation_targets` selects representative originals only when a complete title and source location are available. The program checks title provenance, the paper library, and retrieved records; existing records are reused, otherwise titles are searched. Tracing uses the `lineage` time scope and respects explicit user dates. It shares the two reading slots with ordinary requests. Resolved requests are saved before execution, so an interrupted download or read does not change the request or repeat selection because new papers have entered storage.
 
-各方向需要的来源获得后，再独立执行 `deepen_problem`，避免后分析的方向因为材料更多而占优势。分析回答：主要方法正常发挥作用后已经解决什么，剩余困难怎样产生，原因是什么，它为什么仍会妨碍原目标。新问题可以是合理猜想；讲清推断过程，不把猜想伪装成已有实验结果。
+After targeted reading, `reconsider_problems` performs one cacheable reconsideration: retain, reword, merge, split, or replace directions, recording old/new IDs, evidence, and reasons. It is skipped when there was no actual reading. No automatic search loop or acceptance stage is added. New directions continue with available material and can be supplemented in later discussion.
 
-`explanation_comparison` 比较同一困难不同的可能原因、最强已有回应、剩余障碍和对研究必要性的含义，不强凑解释数量。问题来源分类可以随认识改变，`revision_reason` 保存原因，原方向与深入结果同时保留。`map` 接收所有方向的论证和原因比较；最终表达接收所选方向的论证与跨论文综合。
+Acquire the sources needed by all directions before independently running `deepen_problem`, avoiding an advantage for later directions merely because more material has accumulated. The analysis asks what the major methods solve when functioning normally, how a remaining difficulty arises, what causes it, and why it still obstructs the original goal. A new problem can be a reasonable conjecture; explain the inference without presenting it as an existing experimental result.
 
-讨论中的 `reasoning_notes` 与用户要求分开存储：用户异议引用当轮原话，助手的判断修改和开放问题明确归属分析。替换项保留旧版本、消息出处与重新考虑的条件，成功讨论与当前版本一起提交；中断不留下半次记忆更新。有效记录随研究主题进入后续构思，不随最近消息数量被挤掉。`/memory` 展示现行记录，完整历史与报告 JSON 保留版本。
+`explanation_comparison` compares possible causes of the same difficulty, the strongest existing responses, remaining obstacles, and implications for the research's necessity. It does not require a fixed number of explanations. The problem-origin category can change with understanding; `revision_reason` records why. Original directions and deeper analyses are both retained. `map` receives every direction's argument and cause comparison; final framing receives the selected argument and cross-paper synthesis.
 
-内置动机 skill 使用共享短说明与按任务选择的参考文件。文件内容进入任务缓存指纹，修改相关指导会重新计算相应任务。背景初读只加载证据读取指导，不提前加载主张审计和方法对比；用户显式选择的外部指导仍按原有阶段配置使用。
+Discussion `reasoning_notes` are stored separately from user requirements. User objections cite that turn's wording; assistant revisions and open questions are attributed to analysis. Replaced records preserve earlier versions, message provenance, and conditions for reconsideration. Successful discussion commits these records with the current version; interruptions leave no partial memory update. Active records follow the topic into later ideation instead of being displaced by recent-message limits. `/memory` shows active records; complete history and report JSON preserve versions.
 
-问题只从两个角度引出：
+The built-in motivation skill has a short shared description and task-selected reference files. Their contents enter cache fingerprints, so changes to relevant guidance recompute the corresponding task. Background orientation loads evidence-reading guidance without prematurely loading claim auditing or method comparison. Explicitly selected external guidance retains its existing phase configuration.
 
-1. 重要需要仍未被现有主要思路充分满足，解释最接近的回应为什么仍跨不过关键障碍。
-2. 已有方法有效解决原问题后，在使用或发展中暴露新困难，解释如何产生、影响什么，以及原有思路为何不能自然处理。
+Problems arise through only two routes:
 
-承认已有贡献，不能靠怀疑论文贡献、缺少消融或更换名词制造动机。原方法正常适应后的状态也要考虑，不能把它已经消除的困难继续当成问题。
+1. An important need remains inadequately met by the main approaches. Explain why the closest responses still cannot cross the key obstacle.
+2. Existing methods effectively solve their original problem but expose a new difficulty in use or development. Explain how it arises, what it affects, and why the original approach does not naturally handle it.
 
-“缺少关键能力就会失败”只是重复困难。需要解释正常使用怎样产生障碍，已有的信息获取、反馈和更新为什么仍可能留下它，再推导研究必要性。这是论证方式，不是新增实验要求或通过门槛。
+Acknowledge existing contributions. Do not manufacture motivation by doubting a paper's contribution, pointing to a missing ablation, or renaming concepts. Consider the state after the original method has adapted normally; do not keep treating an already eliminated difficulty as unsolved.
 
-`map` 接收各问题的完整论证，比较其价值与洞见，给出优先研究的理由。未选方向仍保留原分析，不被改写成较弱的替代品。选择不依赖评分门槛，也不以技术容易实现为理由。
+“Failure occurs without the key capability” merely repeats the difficulty. Explain how ordinary use produces the obstacle and why existing information acquisition, feedback, and updates may leave it in place, then derive the need for research. This is an argumentative requirement, not an extra experiment or pass/fail gate.
 
-讨论回复中的 `discussion_focus` 是零或一个关键追问，保存于当前 checkpoint，附助手归属和本轮消息出处。问题追加到 CLI 答复及完整会话中，下一轮通过 `previous_discussion_focus` 接续；新问题替换旧问题，无追问时清空。它不进入用户要求，不参与 `/continue` 门槛，确认后清空，不带到下一阶段。答复失败时不提交追问；补读后的最终回复统一提交。仅保存一个问题（400 字符）及其用途（300 字符），不累计增加上下文。
+`map` receives each problem's full argument, compares its value and insight, and explains priority. Unselected directions retain their original analyses rather than being rewritten as weaker alternatives. Selection uses neither a score threshold nor ease of technical implementation as its rationale.
 
-收窄或转向的价值解释复用 `reasoning_updates`、`changes.reason`、`revision_reason` 和选择理由。要求指出最接近工作的实际覆盖以及保留下来的重要困难，不用不断添加特殊条件制造差异，也不引入固定审查步骤。
+`discussion_focus` contains zero or one consequential follow-up question, saved in the current checkpoint with assistant attribution and this turn's message provenance. The question appears in the CLI reply and full transcript; `previous_discussion_focus` carries it into the next turn. A new question replaces the old one; no question clears it. It is not a user requirement, does not gate `/continue`, and is cleared on confirmation rather than carried into the next stage. Failed replies do not commit it; the final post-reading reply commits it together with the rest. Only one question of up to 400 characters and a purpose of up to 300 characters are retained, without accumulating context.
 
-## 第二处讨论：问题是否讲清楚，为什么优先它
+Explanations of narrowing or redirecting a problem reuse `reasoning_updates`, `changes.reason`, `revision_reason`, and selection rationale. They identify the closest work's actual coverage and the important difficulty that remains, instead of repeatedly adding special conditions to manufacture novelty or adding a fixed review stage.
 
-保存 `kind=problem` 的版本并暂停。用户可以继续追问、纠正推导、调整重点或提出新问题。对话有具体资料缺口时可补搜/重读；每轮最多两条阅读问题、总共最多两篇来源，随后回答并同步更新当前研究判断。没有必要的缺口就直接讨论。
+## Second discussion: is the problem clear, and why prioritize it?
 
-来源工作和模型答复分别保存。失败后重发同一条消息会使用原消息 ID 和已选资料，继续未完成部分；新的纠正保留在原始对话中。未处理的消息不能被 `/continue` 略过。模型不把“用户问是否合理”记成“用户已认可”。
+Save a version with `kind=problem` and pause. Users can ask further questions, correct reasoning, change emphasis, or introduce a new problem. A specific information gap may trigger new search or rereading: at most two reading questions and two sources per turn, followed by a reply and an updated research judgment. Without a necessary gap, discuss directly.
 
-`/problems` 看当前简明版本，`/problems detail` 看完整推导；每段使用论文名称与链接，原文页行通过 `/evidence` 查看。
+Source work and model replies are saved separately. Resending the same message after failure reuses its ID and selected material to finish the incomplete work. New corrections remain in the original conversation. `/continue` cannot skip an unprocessed message. Asking whether something is reasonable is not recorded as user approval.
 
-## 整理最终问题与动机
+`/problems` shows a concise current version; `/problems detail` shows the full derivation. Paragraphs use paper titles and links; `/evidence` exposes source pages and lines.
 
-`/continue` 后，`frame_question` 使用讨论后的问题、选择理由和有效用户要点组织成文：
+## Frame the final problem and motivation
 
-- **背景：** 大方向中的真实需要。
-- **现有方法：** 几类主要办法的作用与进展，用代表论文支持。
-- **问题：** 在这些进展之后还会怎样遇到困难，为什么，以及对原目标的影响。
-- **动机：** 为什么值得优先研究，弄清它会带来什么重要理解。
-- **一句研究 idea：** 明确要研究什么及其新认识，不写如何解决。
+After `/continue`, `frame_question` uses the discussed problem, priority rationale, and active user notes to write:
 
-正文详细而平实，每一部分承接上一部分，不堆术语、局部修补、泛泛权衡或防御性免责声明。最终报告只呈现这条论证与论文依据。完成后的普通追问重新进入当前问题讨论；再 `/continue` 更新报告。
+- **Background:** the real need in the broader research area.
+- **Existing approaches:** what the main families of methods do and have achieved, supported by representative papers.
+- **Problem:** how difficulties can still arise after that progress, why, and how they affect the original goal.
+- **Motivation:** why this deserves priority and what important understanding it could provide.
+- **One-sentence research idea:** the question and new understanding to pursue, without specifying a solution.
 
-## 原始对话、有效要求和研究版本
+The text is detailed and plain, with each section building on the previous one. Avoid jargon piles, local patches, generic trade-offs, and defensive disclaimers. The final report presents this argument and its paper evidence. Ordinary follow-up after completion returns to the current problem discussion; another `/continue` updates the report.
 
-以下记录保存于 SQLite：
+## Original dialogue, active requirements, and research versions
 
-| 记录 | 用途 |
+SQLite stores:
+
+| Record | Purpose |
 | --- | --- |
-| `chat_messages` | 完整原话、稳定消息 ID、时间及讨论阶段 |
-| `conversation_memory` | 有用户消息出处的现行要求；旧要求保留替换或撤回关系 |
-| `last_turn_changes` | 最近一次成功讨论的实际改动、保留部分、当前重点与消息出处 |
-| `problem_checkpoint` / `discussion_checkpoints` | 当前方向/问题版本、修订与历史阶段记录 |
-| `question_cycle` / `question_brief_provenance` | 当前运行阶段、确认版本以及最终正文来源 |
+| `chat_messages` | Complete original wording, stable message IDs, timestamps, and discussion stage |
+| `conversation_memory` | Active requirements with user-message provenance; replacement and withdrawal links for older requirements |
+| `last_turn_changes` | Actual changes in the latest successful discussion, retained parts, current focus, and message provenance |
+| `problem_checkpoint` / `discussion_checkpoints` | Current direction/problem version, revisions, and historical stages |
+| `question_cycle` / `question_brief_provenance` | Current execution stage, confirmed version, and provenance for final framing |
 
-每次模型输入读取当前有效要求、对应原话、近期对话和相关早期消息，不把全部历史塞进上下文。`/history [关键词]` 检索原始对话，`/memory` 查看现行要求。原始内容一直保留；检索到旧要求不代表它重新生效。
+Each model input reads active requirements, their original wording, recent dialogue, and relevant earlier messages rather than including all history. `/history [keyword]` searches original dialogue; `/memory` shows active requirements. Originals remain stored; retrieving an old requirement does not reactivate it.
 
-自动召回优先保留本轮关键词的前三条匹配，再交替补充当前问题、最近助手回复所关联的用户原话和其他直接匹配，总计仍最多 6 条。查找线索分别标注来源、各不超过 1200 字符；长原话选段也使用相关线索，避免找回记录却截掉纠正所在段落。助手回复只是线索，不成为用户记忆的出处。手动 `/history 关键词` 仍按输入关键词检索。
+Automatic recall reserves priority for the top three matches to this turn's keywords, then alternates relevant user messages located through the current problem, latest assistant reply, and other direct matches, for at most six messages overall. Clues are separately attributed and each limited to 1,200 characters. Long-message excerpts also use those clues so retrieval does not cut off the correction itself. Assistant replies are clues, not provenance for user memory. Manual `/history keyword` searches only the supplied keywords.
 
-每轮答复后，程序根据提交前后的问题稿、用户要点和讨论理由生成 `[update] 本轮修改`。它与该轮记忆和研究版本一起保存，成功提交后才显示，不由模型的答复措辞决定。仅解释时保留原问题稿并明确显示未修改；实际更新时显示改动和当前重点。`/memory` 展开最新完整改动，报告 JSON 也保留该记录。这两项处理不新增模型调用。
+After each successful reply, the program compares the committed before/after problem drafts, user notes, and reasoning to generate `[update]` turn-change output. It is saved with that turn's memory and research version and displayed only after commit; the assistant's wording does not determine whether a change occurred. Explanation-only turns retain the draft and explicitly show no modification. Actual updates show changes and current focus. `/memory` expands the latest full record, also retained in report JSON. These operations add no model calls.
 
-要求分为 `turn`（本轮）、`discussion`（当前阶段）和 `research`（持续研究）。本轮要求在答复成功的同一事务中结束，当前阶段要求由 `/continue` 结束；持续研究范围与明确的长期偏好继续有效。局部字数和格式要求根据原话校正期限，不默认永久保留，过期项在上下文中标为 `turn_expired`，避免历史召回后恢复成长期要求。旧版本误归类的表达要求也按原话校正；原始对话不变。关闭窗口、更换模型保留这些期限和出处。旧阶段要求仍先绑定原阶段，避免进入新讨论。
+Requirements have `turn`, `discussion`, or `research` scope. Turn requirements expire in the same transaction as a successful reply; `/continue` ends discussion-scoped requirements. Lasting research scope and explicit long-term preferences remain active. Local length and formatting requests have their lifetime corrected from the original wording instead of defaulting to permanent preferences. Expired items are marked `turn_expired` in context so history retrieval cannot revive them. Older misclassified presentation requests receive the same correction; original dialogue is unchanged. Closing the window or changing models preserves scope and provenance. Older stage requirements are first bound to their original stage to avoid entering a new discussion.
 
-## 执行、恢复与交付
+## Execution, recovery, and delivery
 
-交互窗口在两处暂停；命令行 `start/run/resume` 对新项目自动完成同一研究问题流程。已通过交互创建的暂停和互动模式会持久保存，批处理不能替用户跳过它。
+The interactive interface pauses twice. For new projects, batch `start/run/resume` automatically completes the same research-question workflow. Pauses and interaction mode established through an interactive session persist; batch commands cannot bypass them on the user's behalf.
 
-成功模型任务按相关输入与后端配置缓存。来源或范围改变时重开方向讨论；已完成阅读可复用。预算不足、中断和模型错误保留已完成工作。调用、讨论、输出修复和服务重试共享预算；等待用户输入不计入运行时间。
+Successful model tasks are cached by relevant inputs and backend configuration. Source or scope changes reopen direction discussion; completed reading remains reusable. Budget exhaustion, interruption, and model errors retain completed work. Research, discussion, output repair, and service retries share the budget; waiting for user input does not count as runtime.
 
-报告输出 Markdown 和 JSON，文件夹为 `idea-时间戳`；`/output` 可改父目录。旧项目的技术方案记录仍可读，新流程不重新生成，也不混入新报告。
+Reports are Markdown and JSON in an `idea-TIMESTAMP` folder; `/output` changes its parent directory. Older technical proposals remain readable but are neither regenerated nor included in new reports.
 
+## Form a coherent problem from different analyses
 
-## 从不同分析形成一个连贯问题
+Comparison may select an independent problem, synthesize related difficulties, or reframe a problem based on the material. Explain their actual relationship, how each user concern enters the current problem, and the reason for focusing or revising. Progress can change a hypothesis without eliminating the goal. Do not isolate one difficulty by assuming another key difficulty is already solved.
 
-比较后可选择独立问题、综合相关困难，或依据材料重构问题。解释它们的真实关系、每项用户关切怎样进入当前问题，以及聚焦或修订的理由。假设可以被已有进展改变，目标不会因此自动消失；不用假定一个关键困难已经解决来孤立另一困难。
+Selection records and all independent analyses are saved together. The final proposition follows the original goal, current problem, core relationship, and discussion revisions rather than simply expanding a selected local case. The same two discussion pauses remain; `/memory` shows the current research intent. Final output remains background, existing approaches, problem, motivation, and research proposition.
 
-选择记录和所有独立分析一起保存。最终主张接续原目标、当前问题、核心关系和讨论修订，不只扩写被选中的局部案例。原有两处讨论保持不变，`/memory` 可以查看当前研究主线；最终仍只写背景、现有方法、问题、动机与研究主张。
+## Abstract coverage and specific questions (2026-11-03)
 
+The question workflow first runs `skim_papers`, covering at most 40 initial papers in batches of eight, then `synthesize_landscape` integrates major approaches and relationships. Records without abstracts remain title clues only. When the overview identifies a missing approach that could change the understanding, it may add at most two queries and 16 candidates within the total budget, then synthesize once more. There is no unbounded loop.
 
-## 摘要视野与具体问题（2026-11-03）
+Supplementary queries distinguish recent `strategy` from foundational `lineage` and reuse existing dynamic date rules. Tracing representative originals in adjacent fields is not mechanically limited to one year; explicit user dates still take precedence.
 
-当前 question 流程先执行 `skim_papers`（首批最多 40 篇、每批 8 篇），再用 `synthesize_landscape` 综合主要思路与关系。缺少摘要的记录只作为标题线索。概览识别到会改变认识的路线缺口时，在总预算内补充最多两个查询、16 篇候选，并综合一次；不做无限循环。
+`literature_landscape` stores original metadata, per-paper short notes, and the overview independently of the `papers` collection selected for body reading. `landscape_work` retains initial sources and completion status; model-task caching resumes each batch. `max_papers` bounds background body reading without reserving old technical-design slots. Papers not selected for body reading still inform discussion and citation resolution; explicit follow-up adds them to the body collection when needed.
 
-补充查询区分近期策略 `strategy` 和基础脉络 `lineage`，沿用现有动态日期规则；追溯相邻领域的代表原作时不会机械卡在一年内，用户明确设置的日期范围仍优先。
+`research_mode` follows `research_intent.mode`: explore compares important problems; refine/assess compares explanations and existing responses for a specific problem. Ordinary discussion still does not advance the stage. Context contains all compact notes and the overview, plus up to six original abstract excerpts selected for the current question. Complete abstracts and text citations are not truncated in storage.
 
-`literature_landscape` 保存原始元数据、逐篇短笔记和概览；它独立于 `papers` 正文选读集合。`landscape_work` 保存首批来源与完成状态，模型任务缓存负责逐批恢复。正文背景阅读用 `max_papers` 上限，不再留出旧技术设计名额。未选正文的论文仍在讨论参考中，引用解析覆盖这些来源；点名补读时才加入正文集合。
+Similar titles and names are retrieval clues, not overlap verdicts. Broad reading acknowledges author progress and permits reasonable new conjectures. Substantive coverage depends on goals, mechanisms, available information, conditions, and contributions. Existing targeted reading supplies decisive missing details. No new scientific score, approval step, or experiment-plan stage is introduced.
 
-`research_mode` 根据现有 `research_intent.mode` 传递：explore 比较重要问题，refine/assess 比较具体问题的不同解释和已有回应。普通讨论仍不推进阶段。上下文包含全部简短笔记、概览，以及按当前问题选择的最多六篇原摘要片段；完整摘要和正文引用不在存储中截断。
-
-标题和名称相似只是召回线索，不是重复结论。泛读承认作者进展，允许提出新的合理猜想；对实质覆盖的判断依赖具体目标、机制、可用信息、条件及贡献，缺少决定性细节时由现有定向阅读补充。没有新增科学评分、审批或实验计划阶段。
-
-`coverage_basis` 保存形成概览时的目标与查询；它不会在普通反馈时自动改写。讨论同时获得当前研究意图，可区分新目标与旧检索范围。沿用 `research_requests` 执行动作：空请求重用材料；只有 `paper_ids` 时读取已有来源；有 `query` 才检索。请求问题说明要解决的分歧，补读结果回到同轮讨论，判断变化由现有 `reasoning_updates` 和讨论版本保存。
+`coverage_basis` saves the goal and queries used to form the overview; ordinary feedback does not automatically rewrite it. Discussion also receives the current intent, allowing a new goal to be distinguished from old search coverage. Existing `research_requests` determine action: empty requests reuse material; `paper_ids` alone read existing sources; a `query` triggers search. The request's question explains the disagreement to resolve. Reading results return to the same discussion turn, and judgment changes are saved in existing `reasoning_updates` and discussion versions.
