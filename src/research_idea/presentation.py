@@ -7,7 +7,7 @@ STAGE_LABELS = {
     'synthesize_landscape': ('analysis', '综合文献 · 梳理主要思路'),
     "read_problem_source": ("read", "读懂已有方法与当前问题的关系"),
     "interpret_research": ("concept", "理解研究目标与关键关切"),
-    "reconsider_problems": ("analysis", "新材料后的方向调整"),
+    "reconsider_problems": ("analysis", "根据补读修订问题论证"),
     'plan_search': ('search', '第一阶段 · 文献构思 · 找论文'),
     'screen_papers': ('search', '第一阶段 · 文献构思 · 选择论文'),
     'extract': ('read', '第一阶段 · 文献构思 · 阅读论文'),
@@ -17,7 +17,7 @@ STAGE_LABELS = {
     'design_transfer': ('design', '第二阶段 · 方案设计 · 这篇论文怎样帮助方案'),
     'audit_claims': ('analysis', '第一阶段 · 文献构思 · 理解实验支持了什么'),
     'explore_problems': ('analysis', '第一阶段 · 探索不同的重要问题'),
-    'plan_problem_reading': ('search', '围绕讨论补充文献与关键依据'),
+    'plan_problem_reading': ('search', '查清问题中的关键疑问'),
     'deepen_problem': ('analysis', '第一阶段 · 深入问题与已有回应'),
     'discuss_direction': ('direction', '讨论并调整调研方向'),
     'discuss_problem': ('problem', '讨论并更新研究问题'),
@@ -270,9 +270,9 @@ def activity_summary(stage, result, citations=None):
         for change in result.get('changes', []):
             add('新材料带来的调整', change['reason'])
         if not result.get('changes'):
-            add('新材料与当前方向', '已重新考虑问题方向，继续深入当前问题。')
+            add('新材料与当前方向', '新阅读未改变当前论证，接下来比较各问题的研究价值。')
         for seed in result['pool']['problem_seeds']:
-            add('接下来深入', seed['question'])
+            add('当前问题', seed['question'])
     elif stage == 'deepen_problem':
         item = result['opportunity']
         section(item['question'])

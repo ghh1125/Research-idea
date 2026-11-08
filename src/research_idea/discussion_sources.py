@@ -45,7 +45,8 @@ def validate_requests(requests, paper_ids):
 def comparison_arguments(problem):
     """Carry the current argument to source selection, not only query words."""
     cases = problem.get('opportunities', problem.get('problem_seeds', [problem]))
-    fields = ('id', 'question', 'entry_reason', 'prior_art_delta', 'research_need')
+    fields = ('id', 'question', 'entry_reason', 'prior_art_delta', 'bottleneck_hypothesis',
+              'derivation', 'why_it_matters', 'research_need', 'closest_work_ids', 'evidence_ids')
     return [{key: case[key] for key in fields if key in case} for case in cases]
 
 
@@ -135,13 +136,14 @@ def research_requests(controller, requests, *, key, reading_context=None):
         controller.phase = previous_phase
 
 
-def investigate_problem(controller, seed):
+def investigate_problem(controller, seed, *, analysis=None):
     if not controller.config['auto_search'] or controller.config['backend'] == 'demo':
         return
     store = controller.store
     plans = store.get('problem_reading_plans', {})
-    fingerprint = digest([seed, _reading_scope(controller), controller.config.get('constraints'),
-                          getattr(controller, 'skill_key', '')])
+    from .prompts import stage_version
+    fingerprint = digest([seed, analysis, _reading_scope(controller), controller.config.get('constraints'),
+                          stage_version('plan_problem_reading'), getattr(controller, 'skill_key', '')])
     if fingerprint not in plans:
         from .citation_discovery import reference_passages, validate_targets
         context = controller.ideation_context(focus=seed.get('question', ''))
@@ -150,7 +152,7 @@ def investigate_problem(controller, seed):
         def check_plan(value):
             validate_requests(value['requests'], {p['id'] for p in context['papers']})
             validate_targets(value.get('citation_targets', []), passages)
-        plan = controller.task('plan_problem_reading', {**context, 'problem_seed': seed,
+        plan = controller.task('plan_problem_reading', {**context, 'problem_seed': seed, 'problem_analysis': analysis,
             'reference_passages': passages}, check_plan, publish=False)
         plans[fingerprint] = plan
         store.set('problem_reading_plans', plans)
@@ -162,4 +164,5 @@ def investigate_problem(controller, seed):
         plans[fingerprint]['resolved_requests'] = requests[:2]
         store.set('problem_reading_plans', plans)
     return research_requests(controller, plans[fingerprint]['resolved_requests'], key=['problem', fingerprint],
-                             reading_context={'problem_arguments': comparison_arguments(seed)})
+                             reading_context={'problem_arguments': comparison_arguments(
+                                 analysis['opportunity'] if analysis else seed)})

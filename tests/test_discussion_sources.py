@@ -226,6 +226,26 @@ class DiscussionSourceTests(unittest.TestCase):
         self.assertEqual(result, first)
         self.assertEqual(restarted.calls, [])
 
+    def test_analysis_guides_planning_selection_and_invalidates_changed_argument(self):
+        seed = {'id': 'p1', 'question': 'Why does useful feedback arrive too late?'}
+        analysis = {'opportunity': dict(seed, prior_art_delta='Feedback already identifies errors.',
+            bottleneck_hypothesis='Actions become irreversible before feedback arrives.',
+            derivation='Accurate retrospective feedback cannot change the prior action.',
+            why_it_matters='Errors affect ongoing decisions.', research_need='Understand timing.'),
+            'response_analysis': [{'effective_response': 'Existing correction changes future actions.'}]}
+        investigate_problem(self.controller, seed, analysis=analysis)
+        plan = next(c[2] for c in self.controller.calls if c[:2] == ('task', 'plan_problem_reading'))
+        self.assertEqual(plan['problem_analysis'], analysis)
+        compared = self.controller.selection_context['reading_context']['problem_arguments'][0]
+        self.assertEqual(compared['bottleneck_hypothesis'], analysis['opportunity']['bottleneck_hypothesis'])
+        self.assertEqual(compared['derivation'], analysis['opportunity']['derivation'])
+        changed = deepcopy(analysis)
+        changed['opportunity']['bottleneck_hypothesis'] = 'Delayed feedback is attributed to the wrong action.'
+        investigate_problem(self.controller, seed, analysis=changed)
+        plans = [c for c in self.controller.calls if c[:2] == ('task', 'plan_problem_reading')]
+        self.assertEqual(len(plans), 2)
+        self.assertEqual(plans[-1][2]['problem_analysis'], changed)
+
     def test_problem_plan_survives_failure_after_selecting_sources(self):
         seed = {'id': 'p1', 'question': '信息变化后已有关系还成立吗？'}
         self.controller.fail_reading = True

@@ -38,7 +38,7 @@ flowchart TD
     J --> B[Search, selection, and text reading]
     B --> C[explore_problems: directions and problem pool]
     C --> D[Discuss and revise directions]
-    D -->|/continue| E[Targeted reading and independent deepen_problem calls]
+    D -->|/continue| E[Independent analysis → targeted reading → affected-argument revision]
     E --> F[map: select, synthesize, or reframe a problem]
     F --> G[Discuss and revise the problem]
     G -->|/continue| H[frame_question: background, approaches, problem, motivation]
@@ -107,3 +107,7 @@ Quotes still undergo source-location validation with one repair attempt. If the 
 When the user changes the goal and requests reading in the same turn, the new goal becomes temporary reading context and participates in cache keys and explanation ownership. The post-reading reply receives this temporary goal, the unchanged persistent goal, and new explanations. The goal change commits only after the final reply succeeds. Retries reuse completed reading without interpreting new explanations under the old goal. Other payload paths for reading and reconsideration retain only sources and progress; explanations pass once through the common bounded view to avoid duplicate injection outside its size budget.
 
 The optional follow-up question is stored in `checkpoint.discussion_focus`, attributed to the assistant and linked to the message it answers. It commits with the successful reply, problem revision, and memory. The next model turn receives only the current question, not an accumulating question list. No follow-up or `/continue` clears it; the complete conversation remains searchable. Older checkpoints and completed but uncommitted replies without the field treat it as empty. See [multi-turn discussion evaluation](discussion-evaluation.md).
+
+## Argument-driven source acquisition
+
+After direction confirmation, `problem_discovery.py` freezes starting material and independently develops each candidate. `discussion_sources.py` receives the complete `problem_analysis`; source selection also carries causes, derivation, and goal impact. One `reconsider_problems` call considers new readings across candidates and returns complete `case_updates` only for affected arguments. Unchanged analyses are reused by the controller. Missing analyses for new/changed directions, invalid IDs, or unrecorded changes use the existing output-repair path; these are structural checks, not scientific scores or title-based vetoes. `problem_development` persists starting inputs, analyses, and reading progress, with a separate fixed revision context. Before/after analyses are included in reports.

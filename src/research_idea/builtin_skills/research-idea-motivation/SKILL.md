@@ -13,8 +13,8 @@ description: Synthesize literature into important research problems and convinci
 - [理解研究主线](references/intent.md)：interpret_research、plan_search，区分目标、假设及关切关系。
 - [摘要泛读与视野](references/landscape.md)：skim_papers、synthesize_landscape，保留候选论文认识、综合主要路线，并按缺失信息补搜。
 - [综合文献](references/synthesis.md)：explore_problems，建立跨论文认识。
-- [比较原因](references/explanations.md)：deepen_problem，推导不同解释与动机。
-- [重新构思](references/reconsider.md)：reconsider_problems，新材料改变方向。
+- [比较原因](references/explanations.md)：deepen_problem，先推导原因与动机，让关键疑问指导随后补读。
+- [重新构思](references/reconsider.md)：reconsider_problems，新材料更新受影响的完整论证，保留其他候选。
 - [讨论与选择](references/discussion.md)：讨论、补读规划及 map，记录判断变化。
 - [最终表达](references/framing.md)：frame_question，说明研究理由。
 - [旧流程](references/legacy.md)：旧版技术构思任务的兼容说明。

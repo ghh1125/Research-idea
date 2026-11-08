@@ -34,7 +34,7 @@ flowchart TD
     A["Broad abstract reading → approach synthesis → relevant background passages"]
     B["Broad topic: compare problems; specific question: compare responses and explanations"]
     D["Direction discussion: question, correct, add, or remove directions"]
-    C["Read relevant details, trace original works, and reconsider directions"]
+    C["Read details that could change the argument; revise affected problems"]
     X["Explore each problem: possible causes → existing responses → remaining difficulty → research value"]
     E["Select, synthesize, or reframe a question; explain its connection to the goal"]
     P["Problem discussion: clarify causes, revise priorities, and add evidence"]
@@ -43,8 +43,8 @@ flowchart TD
     M["Full conversation + active notes + objections and reasons for revisions + stage versions"]
     I["Understand the goal, hypotheses, and relationships among concerns"]
     U --> I --> A --> B --> D
-    D -->|/continue| C
-    C --> X --> E --> P
+    D -->|/continue| X
+    X --> C --> E --> P
     P -->|/continue| O
     D -.clarify.-> R
     P -.clarify.-> R
@@ -86,7 +86,7 @@ Use `/memory` to inspect the current interpretation and its source words. During
 
 **Synthesize across papers and compare competing explanations.** Alongside individual paper analyses, the system records what major approaches rely on, what progress they have enabled, and what might happen when their conditions change. These observations inform problem discovery. Deeper analysis compares possible causes of the same difficulty and existing responses to each, explaining how different causes would change the research focus. It does not force a claim that every approach shares the same weakness when the sources do not support one.
 
-**New reading can change the question; citations can lead to original work.** When targeted reading adds material, the system reconsiders the directions once, allowing rewording, merging, or replacement while recording why. This extra call is skipped when no new reading was added. Reading plans also inspect related work and references for relevant original papers: already discovered papers are reused, and missing ones are searched by full title. Citation tracing and ordinary follow-up search share a limit of two additional papers per direction; older foundational work can use the background tracing window.
+**Analyze first, read for consequential questions, then revise and compare.** After `/continue`, each candidate uses the same starting material to explain how existing methods work, what conditions they rely on, why a difficulty may remain, and how it affects the original goal. Reading plans receive that full analysis and target premises that could change the judgment; sufficient material needs no further search. New readings are considered across all candidates. Only affected explanations, existing-response comparisons, and motivations are updated; other analyses are preserved. Rewording, merging, splitting, and replacement are supported, with complete arguments for new directions in the same revision call. The workflow does not restart every analysis or open another search loop. Initial analyses, reading progress, and revision reasons survive interruption. Both discussions and `/continue` keep their existing behavior.
 
 Search favors short concepts and synonyms. If a long natural-language arXiv query returns few results, the system makes one keyword expansion within the same field and date filters, then ranks by relevance. Explicit query syntax and full-title queries are preserved.
 

@@ -2,6 +2,12 @@
 
 **English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](CHANGELOG.zh-CN.md)
 
+## v1.0.0 problem-discovery update · 2026-11-08
+
+- Independently analyze candidates before planning reading around their causal arguments and existing responses.
+- Revise affected complete arguments once after reading, preserving unchanged candidates; compare current causes, value, and motivation.
+- Persist initial analyses and reading progress for recovery; update built-in guidance and English/Chinese documentation. Both discussion pauses and the final deliverable scope remain unchanged.
+
 ## v1.0.0 documentation update · 2026-11-04
 
 - Public user and developer documentation now has English default pages and complete Simplified Chinese counterparts. Each page offers a language switch, and internal documentation links stay in the selected language. Built-in skill instructions and application behavior are unchanged.

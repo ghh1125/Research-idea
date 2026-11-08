@@ -15,7 +15,7 @@ from research_idea.demo import DemoBackend
 from research_idea.discussion_sources import investigate_problem, research_requests
 from research_idea.local_skills import BUILTIN_ROOT, builtin_skill_paths, load_selected_skills, task_guidance
 from research_idea.problem_dialogue import discuss
-from research_idea.problem_discovery import reconsider_after_reading
+from research_idea.problem_discovery import reconsider_after_reading, develop_problem_pool
 from research_idea.reasoning_memory import reasoning_context, revised_reasoning
 from research_idea.search_scope import config_scope
 from research_idea.store import Store
@@ -86,20 +86,29 @@ class ReasoningTests(unittest.TestCase):
     def test_new_reading_can_replace_direction_once_and_resume_cached(self):
         def hook(task, output):
             if task.stage == 'reconsider_problems':
-                old = output['pool']['problem_seeds'][0]['id']
+                old = [s['id'] for s in output['pool']['problem_seeds']]
                 output['pool']['problem_seeds'] = [dict(output['pool']['problem_seeds'][0],
                     id='new-direction', question='新条件下什么反馈仍有用？')]
-                output['changes'] = [dict(previous_ids=[old], current_ids=['new-direction'],
+                output['changes'] = [dict(previous_ids=old, current_ids=['new-direction'],
                                          reason='已有回应解决了原猜测，重点转向变化条件', evidence_ids=[])]
+                from research_idea.research_context import expand_task_payload
+                case = deepcopy(expand_task_payload(payload(task))['problem_analyses'][0])
+                case['opportunity'].update(id='new-direction', question='新条件下什么反馈仍有用？')
+                case['revision_reason'] = output['changes'][0]['reason']
+                output['case_updates'] = [case]
         backend = RecordingDemo(hook)
         controller = self.controller(backend)
         controller.run_questions(interactive=True)
         pool = deepcopy(self.store.get('problem_checkpoint')['current'])
         work = [{'readings': [{'paper_id': 'synthetic', 'evidence_ids': []}]}]
         context = controller.ideation_context()
-        first = reconsider_after_reading(controller, pool, context, work)
-        second = reconsider_after_reading(controller, pool, context, work)
+        develop_problem_pool(controller, context, lambda _: None, pool=pool)
+        analyses = list(self.store.get('problem_development')['initial'].values())
+        first, first_cases = reconsider_after_reading(controller, pool, context, work, analyses)
+        second, second_cases = reconsider_after_reading(controller, pool, context, work, analyses)
         self.assertEqual(first, second)
+        self.assertEqual(first_cases, second_cases)
+        self.assertEqual(first_cases[0]['opportunity']['id'], 'new-direction')
         self.assertEqual(first['problem_seeds'][0]['id'], 'new-direction')
         self.assertEqual(len([t for t in backend.calls if t.stage == 'reconsider_problems']), 1)
         journal = list(self.store.get('problem_reconsiderations').values())
@@ -111,7 +120,7 @@ class ReasoningTests(unittest.TestCase):
         backend = RecordingDemo()
         pool = {'problem_seeds': []}
         self.assertEqual(reconsider_after_reading(self.controller(backend), pool, {},
-            [{'readings': [], 'search_status': 'completed'}]), pool)
+            [{'readings': [], 'search_status': 'completed'}], []), (pool, []))
         self.assertEqual(backend.calls, [])
 
     def test_reasoning_survives_long_dialogue_and_replacement_preserves_history(self):

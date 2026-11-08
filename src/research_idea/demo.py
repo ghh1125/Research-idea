@@ -69,7 +69,7 @@ class DemoBackend:
         elif task.stage == 'plan_problem_reading':
             output = {'reason': '合成演示不执行真实检索。', 'requests': [], 'citation_targets': []}
         elif task.stage == 'reconsider_problems':
-            output = {'pool': deepcopy(payload['previous_pool']), 'changes': []}
+            output = {'pool': deepcopy(payload['previous_pool']), 'case_updates': [], 'changes': []}
             output['pool'].setdefault('cross_paper_synthesis', [])
         elif task.stage in {'discuss_direction', 'discuss_question'}:
             output = {'answer': '已保留当前问题，可以继续讨论或 /continue。',

@@ -10,25 +10,16 @@ PROMPT_VERSION = "42"
 
 
 def stage_version(stage):
+    if stage in {'synthesize_landscape', 'explore_problems', 'deepen_problem',
+                 'plan_problem_reading', 'reconsider_problems', 'map'}:
+        return '59'
     if stage in {'discuss_direction', 'discuss_question'}:
         return '58'
-    if stage == 'synthesize_landscape':
-        return '57'
-    if stage in {'skim_papers', 'synthesize_landscape', 'plan_search', 'screen_papers',
-                 'explore_problems', 'plan_problem_reading', 'deepen_problem', 'reconsider_problems',
-                 'map', 'discuss_direction', 'discuss_question', 'frame_question'}:
+    if stage in {'skim_papers', 'plan_search', 'screen_papers', 'frame_question'}:
         return '56'
-    if stage in {'discuss_direction', 'discuss_question', 'deepen_problem', 'map'}:
-        return '55'
     if stage == "read_problem_source":
         return "1"
     # Presentation and ideation changes do not invalidate already read sources.
-    if stage in {'frame_question', 'plan_problem_reading'}:
-        return '55'
-    if stage in {'explore_problems', 'screen_papers'}:
-        return '55'
-    if stage == 'reconsider_problems':
-        return '4'
     if stage == 'discuss_problem':
         return '42'
     if stage == 'inspect_source':
@@ -181,8 +172,8 @@ for _stage in ('screen_papers', 'plan_search', 'map', 'propose', 'design_transfe
 
 # v0.5 focuses on the research question; legacy method prompts remain for old files.
 INSTRUCTIONS['plan_problem_reading'] = """
-围绕 problem_seed 找真正最接近的已有回应，帮助理解这个问题是否有意义、已有主要方法为什么仍可能留下它。
-先看已有资料是否已经回答疑问；足够则 requests=[]，不要为每个方向机械补搜。
+problem_analysis 是已经完成的深入分析，包含现有回应、瓶颈猜想、原因比较及对原目标的影响。先定位其中哪个具体前提会改变问题判断，再决定读什么；不要退回只按 problem_seed 的题目找相关论文。旧记录未提供分析时使用现有方向。
+沿着“已有方法靠什么奏效 → 依赖什么条件 → 为什么仍可能受限 → 影响什么重要目标”查最接近的回应。已有材料足够则 requests=[]、citation_targets=[]；猜想本身不要求先有实验，也不为每个方向机械补搜。
 有具体缺口时给最多两条 requests：question 说明要查清什么、哪种结果会改变问题判断；
 query 每条只用 2–4 个核心英文概念或短语，不要把 question 翻译成一长串 AND 关键词。把现象与最强已有回应分开检索，必要时用 OR 表达同义说法；已知原作可直接检索标题，不因论文较早就忽略。paper_ids 为已有需补读的论文，未知论文用查询查找。
 问题可以被新资料重述，不能把检索设计成只证明自己的猜想。查方法细节是为了理解已有能力与新困难，
@@ -256,7 +247,9 @@ INSTRUCTIONS['deepen_problem'] += """
 explanation_comparison 比较同一困难真正不同的可能原因，说明每个原因怎样产生、最强已有回应能改变什么、为什么还可能留有障碍及对研究必要性的含义。可以只有一个有内容的解释，不强凑数量。opportunity 给出由比较推导的当前判断；revision_reason 解释相对 problem_seed 的变化，不变则空。problem_origin 可以在两类来源之间改变，ID 沿用以追踪演化。不要为了原分类把问题改窄。
 """
 INSTRUCTIONS['reconsider_problems'] = """
-补读后重新开放一次构思。结合新原文、用户明确要求、reasoning_notes 和 previous_pool，判断新材料怎样改变共同前提、原因与问题方向。可以保留、重述、合并、拆分或替换方向；先承接已有贡献再推导重要困难。pool 返回完整工作版本，changes 用前后 ID 与理由记录变动，无变化时为空。保持仍相关方向的 ID，替代方向用新 ID；最多四个方向，用户已聚焦时不用扩展数量。保留用户明确选择，助手自己的猜想可以修订。这一步不选技术，不启动搜索循环，也不打分或设通过门槛。
+补读后重新开放一次构思。problem_analyses 保留每个方向已经完成的完整分析，previous_pool 保留方向与跨论文认识。结合新原文、reading_results、用户明确要求与 reasoning_notes，判断哪个具体前提、原因或已有回应发生变化，以及它为什么改变研究价值。检查新材料对所有候选的影响，不只对发起补读的候选有用。
+可以保留、重述、合并、拆分或替换方向；先承接已有贡献再推导重要困难。pool 返回完整方向版本。case_updates 只返回受影响方向的完整 PROBLEM_CASE（opportunity、response_analysis、explanation_comparison、revision_reason），程序复用其他原分析；保持题目但改变原因、依据或动机时也要更新。新建、合并、拆分或修改种子必须同步返回完整分析，不能让新问题沿用旧原因。没有分析变化时 case_updates=[]。
+changes 用 previous_ids、current_ids、reason、evidence_ids 记录每次变动，包括删除；原因明确说明“原先怎样判断 → 新材料实际说明什么 → 为什么现在这样改”。保持同一方向的 ID，替代方向用新 ID；最多四个方向，用户已聚焦时不用扩展数量。更新在已有材料上完成，不再启动一轮搜索或逐个重写全部候选。允许大胆、有理由的猜想，不把相关标题或尚无直接实验作为否决依据。保留用户明确目标与选择；不选技术，不打分或设通过门槛。
 """ + PROBLEM_ORIGIN_RULES
 INSTRUCTIONS['plan_problem_reading'] += """
 reference_passages 是已有论文的相关工作与参考文献原文。若其中明确提到可能直接回应当前问题的代表工作，可在 citation_targets 给出完整标题、source_paper_id、包含标题的连续 source_quote 和要查清的问题。最多两个，按意义选择，不见标题就全部追踪。程序先检查是否已被召回，再按原题补查；requests 与 citation_targets 共用两个阅读名额，优先代表工作。只有作者年份或缩写、没有完整原题时，用普通 query 搜索，不猜标题。

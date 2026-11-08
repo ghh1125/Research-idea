@@ -183,6 +183,7 @@ SCHEMAS['interpret_research'] = RESEARCH_INTENT
 SCHEMAS.update(skim_papers=SKIM_PAPERS, synthesize_landscape=LITERATURE_LANDSCAPE)
 SCHEMAS['read_problem_source'] = PROBLEM_SOURCE
 SCHEMAS['reconsider_problems'] = obj(pool=PROBLEM_POOL,
+    case_updates=array(PROBLEM_CASE),
     changes=array(obj(previous_ids=STRINGS, current_ids=STRINGS, reason=STR, evidence_ids=STRINGS)))
 
 

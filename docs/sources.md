@@ -2,6 +2,10 @@
 
 **English** | [![简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](sources.zh-CN.md)
 
+## ScientistTwo: diagnosis before feedback-driven revision (2026-11-08)
+
+[ScientistTwo v1, §3.1–3.4 and Appendix C](https://arxiv.org/pdf/2609.19644v1) motivates examining how existing methods work and which conditions they rely on, then revising candidates using subsequent feedback. This adaptation uses the paper description, not its system source code. Here, complete problem arguments guide targeted reading, and new material updates only affected analyses. Existing evidence and reasoned conjectures can both motivate candidates. Experiment execution, performance-based acceptance, fixed novelty scores, and repeated automated reviews were not ported. Literature and discussion feedback are not experimental validation.
+
 ## K-Dense scientific-agent-skills: synthesis, ideation, and discussion
 
 These working methods informed state handoffs and recovery in the existing controller, without adding a framework dependency:
